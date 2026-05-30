@@ -1,5 +1,7 @@
 package com.example
 
+import com.example.data.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +31,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import coil.compose.AsyncImage
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
 
 // Format Uang Default
 val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US).apply { maximumFractionDigits = 0 }
@@ -37,7 +49,7 @@ val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US).apply { maximum
 // 1. INVESTING SCREEN (Dashboard Investasi)
 // ==========================================
 @Composable
-fun InvestingScreen(navController: NavHostController) {
+fun InvestingScreen(navController: NavHostController, viewModel: GameViewModel) {
     // Theme Colors
     val bgDark = Color(0xFF121212)
     val cardDark = Color(0xFF1E1E1E)
@@ -48,8 +60,40 @@ fun InvestingScreen(navController: NavHostController) {
     val textGray = Color(0xFFA0A0A0)
     val red = Color(0xFFFF3B30)
 
+    val playerState by viewModel.playerState.collectAsState()
+    val monthProgress by viewModel.monthProgress.collectAsState()
+    val stockList by viewModel.stockList.collectAsState()
+
     var activeTab by remember { mutableStateOf("Stocks") }
     val tabs = listOf("Stocks", "Real Estate", "Crypto", "Startups")
+
+    var showBuyDialog by remember { mutableStateOf(false) }
+    var selectedStockToBuy by remember { mutableStateOf<StockItem?>(null) }
+    var buySharesAmount by remember { mutableStateOf("") }
+    var buySuccessMessage by remember { mutableStateOf<String?>(null) }
+
+    // Calculate real stock portfolio values
+    var totalCostBasis = 0.0
+    var currentStocksValue = 0.0
+    var estimatedYieldPerMonth = 0.0 // Simplified calculation
+
+    playerState.ownedStocks.forEach { owned ->
+        val liveStock = stockList.find { it.ticker == owned.ticker }
+        val livePrice = liveStock?.currentPrice ?: owned.averagePrice
+        currentStocksValue += owned.shares * livePrice
+        totalCostBasis += owned.shares * owned.averagePrice
+        
+        // Let's estimate yield simply based on divYield or just a flat percentage for demonstration
+        if (liveStock != null) {
+            val stats = getMarketStats(liveStock.ticker, liveStock.currentPrice)
+            estimatedYieldPerMonth += (owned.shares * livePrice) * (stats.dividendYield / 100.0 / 12.0)
+        }
+    }
+
+    val profitLoss = currentStocksValue - totalCostBasis
+    val profitLossPct = if (totalCostBasis > 0) (profitLoss / totalCostBasis) * 100 else 0.0
+    val profitColor = if (profitLoss >= 0) neonGreen else red
+    val profitSign = if (profitLoss >= 0) "+" else ""
 
     Scaffold(
         containerColor = bgDark
@@ -116,11 +160,11 @@ fun InvestingScreen(navController: NavHostController) {
                                 Column(modifier = Modifier.padding(24.dp)) {
                                     Text("My stock portfolio", color = textGray, fontSize = 14.sp)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("$ 14,500,200.00", color = neonGreen, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                                    Text("$ ${String.format(Locale.US, "%,.2f", currentStocksValue)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("+ $1.2M (8.5%)", color = neonGreen, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    Text("$profitSign$ ${String.format(Locale.US, "%,.2f", Math.abs(profitLoss))} (${String.format(Locale.US, "%.2f", profitLossPct)}%)", color = profitColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Estimated yield per month", color = textGray, fontSize = 14.sp)
+                                    Text("Estimated yield per month: $ ${String.format(Locale.US, "%,.2f", estimatedYieldPerMonth)}", color = textGray, fontSize = 14.sp)
                                 }
                             }
                         }
@@ -139,20 +183,19 @@ fun InvestingScreen(navController: NavHostController) {
                         }
 
                         item {
-                            val stableIncome = listOf(
-                                Triple("GLBL", "5.32%", Icons.Default.Public),
-                                Triple("INFR", "4.15%", Icons.Default.Domain)
-                            )
+                            val stableIncome = stockList
+                                .filter { it.changePercentage >= 0 }
+                                .sortedBy { it.changePercentage }
+                                .take(2)
                             
-                            val growthPotential = listOf(
-                                Pair("TECHX", "+20.25%"),
-                                Pair("AIINC", "+45.10%")
-                            )
+                            val growthPotential = stockList
+                                .sortedByDescending { it.changePercentage }
+                                .take(2)
 
                             Column {
                                 Text("Stable income", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(12.dp))
-                                stableIncome.forEach { (ticker, yield, icon) ->
+                                stableIncome.forEach { stock ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -161,23 +204,26 @@ fun InvestingScreen(navController: NavHostController) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Surface(shape = CircleShape, color = cardDark, modifier = Modifier.size(40.dp)) {
                                                 Box(contentAlignment = Alignment.Center) {
-                                                    Icon(icon, contentDescription = null, tint = gold, modifier = Modifier.size(20.dp))
+                                                    Icon(Icons.Default.AccountBalance, contentDescription = null, tint = gold, modifier = Modifier.size(20.dp))
                                                 }
                                             }
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
-                                                Text(ticker, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                                Text(yield, color = textGray, fontSize = 12.sp)
+                                                Text("${stock.ticker} - ${stock.name}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+                                                Text(String.format(Locale.US, "$%,.2f (%.2f%%)", stock.currentPrice, stock.changePercentage), color = textGray, fontSize = 12.sp)
                                             }
                                         }
                                         Button(
-                                            onClick = { },
+                                            onClick = { 
+                                                selectedStockToBuy = stock
+                                                showBuyDialog = true
+                                            },
                                             colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black),
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                                             modifier = Modifier.height(32.dp)
                                         ) {
-                                            Text("Buy", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Text("Beli", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -185,24 +231,28 @@ fun InvestingScreen(navController: NavHostController) {
                                 Spacer(modifier = Modifier.height(24.dp))
                                 Text("Growth potential", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(12.dp))
-                                growthPotential.forEach { (ticker, growth) ->
+                                growthPotential.forEach { stock ->
                                      Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column {
-                                            Text(ticker, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                            Text(growth, color = neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("${stock.ticker} - ${stock.name}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+                                            Text(String.format(Locale.US, "$%,.2f (+%.2f%%)", stock.currentPrice, stock.changePercentage), color = neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                                         }
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Button(
-                                            onClick = { },
+                                            onClick = { 
+                                                selectedStockToBuy = stock
+                                                showBuyDialog = true
+                                            },
                                             colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black),
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                                             modifier = Modifier.height(32.dp)
                                         ) {
-                                            Text("Buy", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Text("Beli", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -210,127 +260,10 @@ fun InvestingScreen(navController: NavHostController) {
                         }
                     }
                     "Real Estate" -> {
-                        item {
-                            Column {
-                                Text("$ 14,342,657.42", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("Rental income per month", color = textGray, fontSize = 14.sp)
-                            }
-                        }
-                        
-                        item {
-                            Surface(
-                                color = slateDark,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth().height(150.dp)
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    Icon(Icons.Default.Public, contentDescription = null, tint = Color.White.copy(alpha = 0.05f), modifier = Modifier.align(Alignment.CenterEnd).size(120.dp).offset(x = 20.dp))
-                                    Column(modifier = Modifier.padding(20.dp).align(Alignment.BottomStart)) {
-                                        Text("Real estate market", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Buy properties all over the world...", color = textGray, fontSize = 14.sp)
-                                    }
-                                }
-                            }
-                        }
-
-                        item {
-                            Surface(
-                                color = slateDark,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth().height(150.dp)
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    Icon(Icons.Default.Home, contentDescription = null, tint = Color.White.copy(alpha = 0.05f), modifier = Modifier.align(Alignment.CenterEnd).size(120.dp).offset(x = 20.dp))
-                                    Column(modifier = Modifier.padding(20.dp).align(Alignment.BottomStart)) {
-                                        Text("My property", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("List of my properties", color = textGray, fontSize = 14.sp)
-                                    }
-                                    Surface(
-                                        color = red,
-                                        shape = CircleShape,
-                                        modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(12.dp)
-                                    ) {}
-                                }
-                            }
-                        }
+                        item { com.example.ui.RealEstateScreen(viewModel) }
                     }
                     "Crypto" -> {
-                        item {
-                            Surface(
-                                color = cardDark,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(24.dp)) {
-                                    Text("Total cryptocurrency value", color = textGray, fontSize = 14.sp)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("$ 120,400.00", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("+ $19.6M (3.31%)", color = neonGreen, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Button(
-                                        onClick = { },
-                                        colors = ButtonDefaults.buttonColors(containerColor = slateDark),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                                        modifier = Modifier.height(36.dp)
-                                    ) {
-                                        Text("Trade", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    }
-                                }
-                            }
-                        }
-
-                        item {
-                            val coins = listOf(
-                                Triple("Bitcoin", "500.00 BTC", Pair("$ 20.5 M", "+28.21%")),
-                                Triple("Ethereum", "4500.00 ETH", Pair("$ 12.5 M", "+15.42%")),
-                                Triple("Solana", "10000.00 SOL", Pair("$ 1.5 M", "-5.21%"))
-                            )
-                            
-                            Column {
-                                Text("Coins", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                coins.forEach { (coin, amount, valuePair) ->
-                                    val (fiat, change) = valuePair
-                                    val isGaining = change.startsWith("+")
-                                    val colorIcon = when(coin) {
-                                        "Bitcoin" -> Color(0xFFF7931A)
-                                        "Ethereum" -> Color(0xFF627EEA)
-                                        else -> Color(0xFF14F195)
-                                    }
-                                    
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Surface(shape = CircleShape, color = colorIcon, modifier = Modifier.size(40.dp)) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(Icons.Default.CurrencyBitcoin, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Column {
-                                                Text(coin, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                                Text(amount, color = textGray, fontSize = 12.sp)
-                                            }
-                                        }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(fiat, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(if (isGaining) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown, contentDescription = null, tint = if(isGaining) neonGreen else red, modifier = Modifier.size(16.dp))
-                                                Text(change, color = if(isGaining) neonGreen else red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        item { com.example.ui.CryptoScreen(viewModel) }
                     }
                     "Startups" -> {
                         item {
@@ -391,6 +324,101 @@ fun InvestingScreen(navController: NavHostController) {
                 item { Spacer(modifier = Modifier.height(100.dp)) }
             }
         }
+        
+        // --- Buy Dialog ---
+        if (showBuyDialog && selectedStockToBuy != null) {
+            val stock = selectedStockToBuy!!
+            val isIndo = stock.ticker.contains(".JK")
+            val currentPrice = stock.currentPrice
+            val balanceStr = String.format(Locale.US, "$%,.2f", playerState.cash.toDouble())
+            
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showBuyDialog = false }) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = cardDark,
+                    modifier = Modifier.padding(16.dp).fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text("Beli Saham", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("${stock.name} (${stock.ticker})", color = textGray)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text("Harga per Lembar", color = textGray, fontSize = 12.sp)
+                        Text(String.format(Locale.US, "$%,.2f", currentPrice), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        OutlinedTextField(
+                            value = buySharesAmount,
+                            onValueChange = { buySharesAmount = it },
+                            label = { Text("Jumlah Lembar") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = neonGreen,
+                                unfocusedBorderColor = textGray,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        val quantity = buySharesAmount.toIntOrNull() ?: 0
+                        val totalRequired = quantity * currentPrice
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Biaya:", color = textGray)
+                            Text(String.format(Locale.US, "$%,.2f", totalRequired), color = if (totalRequired > playerState.cash) red else neonGreen)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Saldo Anda:", color = textGray)
+                            Text(balanceStr, color = Color.White)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        val canBuy = quantity > 0 && totalRequired <= playerState.cash
+                        
+                        Button(
+                            onClick = {
+                                viewModel.buyStock(stock.ticker, currentPrice, quantity)
+                                buySuccessMessage = "Berhasil membeli $quantity lembar saham ${stock.ticker}"
+                                buySharesAmount = ""
+                                showBuyDialog = false
+                            },
+                            enabled = canBuy,
+                            colors = ButtonDefaults.buttonColors(containerColor = neonGreen),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            Text("Konfirmasi Beli", color = bgDark, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = { showBuyDialog = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Batal", color = textGray)
+                        }
+                    }
+                }
+            }
+        }
+        
+        // --- Success Snackbar/Dialog (optional if wanted) ---
+        if (buySuccessMessage != null) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { buySuccessMessage = null }) {
+                Surface(shape = RoundedCornerShape(12.dp), color = neonGreen.copy(alpha = 0.2f), border = BorderStroke(1.dp, neonGreen)) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(buySuccessMessage!!, color = Color.White, textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { buySuccessMessage = null }, colors = ButtonDefaults.buttonColors(containerColor = neonGreen)) {
+                            Text("OK", color = bgDark)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -409,6 +437,18 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
             totalProjectedIncome += rev
         }
     }
+
+    val stockList by viewModel.stockList.collectAsState()
+    var estimatedStockYield = 0.0
+    playerState.ownedStocks.forEach { owned ->
+        val liveStock = stockList.find { it.ticker == owned.ticker }
+        if (liveStock != null) {
+            val stats = getMarketStats(liveStock.ticker, liveStock.currentPrice)
+            estimatedStockYield += (owned.shares * liveStock.currentPrice) * (stats.dividendYield / 100.0 / 12.0)
+        }
+    }
+
+    val totalMonthlyIncome = totalProjectedIncome + estimatedStockYield.toLong()
 
     Scaffold(
         containerColor = Color.Transparent // 1. SCREEN BACKGROUND
@@ -471,15 +511,15 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Text(
-                            text = currencyFormat.format(totalProjectedIncome),
+                            text = currencyFormat.format(totalMonthlyIncome),
                             fontSize = 32.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Total pendapatan per bulan",
-                            fontSize = 14.sp,
+                            text = "Total pendapatan per bulan (termasuk Dividen: ${currencyFormat.format(estimatedStockYield)})",
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
@@ -872,6 +912,7 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
 @Composable
 fun EarningsScreen(viewModel: GameViewModel) {
     val playerState by viewModel.playerState.collectAsState()
+    val monthProgress by viewModel.monthProgress.collectAsState()
     
     // Hitung estimasi (Projected)
     var projectedIncome = 0L
@@ -901,7 +942,7 @@ fun EarningsScreen(viewModel: GameViewModel) {
             Text("Progres ke Payday (Akhir Bulan):", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             Spacer(modifier = Modifier.height(4.dp))
             LinearProgressIndicator(
-                progress = { playerState.monthProgress },
+                progress = monthProgress,
                 modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1196,10 +1237,115 @@ fun ItemsScreen() {
 // ==========================================
 // 5. PROFILE SCREEN (Ringkasan Pemain)
 // ==========================================
+fun parseSvgPath(pathStr: String): Path {
+    val path = Path()
+    try {
+        val tokens = pathStr.trim().split(Regex("[\\s,]+"))
+        var idx = 0
+        while (idx < tokens.size) {
+            val token = tokens[idx].uppercase()
+            if (token.isEmpty()) {
+                idx++
+                continue
+            }
+            when (token) {
+                "M" -> {
+                    if (idx + 2 < tokens.size) {
+                        val x = tokens[idx + 1].toFloatOrNull() ?: 0f
+                        val y = tokens[idx + 2].toFloatOrNull() ?: 0f
+                        path.moveTo(x, y)
+                        idx += 3
+                    } else {
+                        idx++
+                    }
+                }
+                "L" -> {
+                    if (idx + 2 < tokens.size) {
+                        val x = tokens[idx + 1].toFloatOrNull() ?: 0f
+                        val y = tokens[idx + 2].toFloatOrNull() ?: 0f
+                        path.lineTo(x, y)
+                        idx += 3
+                    } else {
+                        idx++
+                    }
+                }
+                "C" -> {
+                    if (idx + 6 < tokens.size) {
+                        val x1 = tokens[idx + 1].toFloatOrNull() ?: 0f
+                        val y1 = tokens[idx + 2].toFloatOrNull() ?: 0f
+                        val x2 = tokens[idx + 3].toFloatOrNull() ?: 0f
+                        val y2 = tokens[idx + 4].toFloatOrNull() ?: 0f
+                        val x3 = tokens[idx + 5].toFloatOrNull() ?: 0f
+                        val y3 = tokens[idx + 6].toFloatOrNull() ?: 0f
+                        path.cubicTo(x1, y1, x2, y2, x3, y3)
+                        idx += 7
+                    } else {
+                        idx++
+                    }
+                }
+                "Z" -> {
+                    path.close()
+                    idx++
+                }
+                else -> {
+                    idx++
+                }
+            }
+        }
+    } catch (e: Exception) {
+        path.reset()
+        path.moveTo(50f, 10f)
+        path.lineTo(90f, 95f)
+        path.lineTo(10f, 95f)
+        path.close()
+    }
+    return path
+}
+
+@Composable
+fun SvgLogoPreview(
+    svgPathStr: String,
+    tintColorHex: String,
+    modifier: Modifier = Modifier
+) {
+    val logoColor = remember(tintColorHex) {
+        try {
+            Color(android.graphics.Color.parseColor(tintColorHex))
+        } catch (e: Exception) {
+            Color(0xFFFFD700)
+        }
+    }
+    
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val scaleX = size.width / 100f
+        val scaleY = size.height / 100f
+        
+        val composePath = parseSvgPath(svgPathStr)
+        
+        drawContext.canvas.save()
+        drawContext.canvas.scale(scaleX, scaleY)
+        
+        drawPath(
+            path = composePath,
+            color = logoColor,
+            style = androidx.compose.ui.graphics.drawscope.Fill
+        )
+        
+        drawPath(
+            path = composePath,
+            color = Color.White.copy(alpha = 0.3f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+        )
+        
+        drawContext.canvas.restore()
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(viewModel: GameViewModel) {
     val player by viewModel.playerState.collectAsState()
+    var showSettingsDialog by remember { mutableStateOf(false) }
     
     // Theme Colors
     val bgDark = Color(0xFF121212)
@@ -1209,6 +1355,31 @@ fun ProfileScreen(viewModel: GameViewModel) {
     val neonGreen = Color(0xFF00FF00)
     val textGray = Color(0xFFA0A0A0)
     val dividerColor = Color(0xFF333333)
+ 
+    val companyLogoSvgPath by viewModel.companyLogoSvgPath.collectAsState()
+    val companyLogoFillColorHex by viewModel.companyLogoFillColorHex.collectAsState()
+    val difficulty by viewModel.gameDifficulty.collectAsState()
+    val stockList by viewModel.stockList.collectAsState()
+    val cryptoList by viewModel.cryptoList.collectAsState()
+    val realEstateMarket by viewModel.realEstateMarket.collectAsState()
+
+    val stocksValue = player.ownedStocks.sumOf { owned ->
+        val livePrice = stockList.find { it.ticker == owned.ticker }?.currentPrice ?: owned.averagePrice
+        (owned.shares * livePrice).toLong()
+    }
+    
+    val cryptoValue = player.ownedCrypto.sumOf { owned ->
+        val livePrice = cryptoList.find { it.symbol == owned.symbol }?.currentPrice ?: owned.averagePrice
+        (owned.amount * livePrice).toLong()
+    }
+    
+    val realEstateValue = player.ownedProperties.sumOf { owned ->
+        val prop = realEstateMarket.find { it.id == owned.propertyId }
+        prop?.basePrice ?: owned.purchasedPrice
+    }
+    
+    val businessValue = player.ownedBusinesses.sumOf { it.level * 5000L } // Rough estimation
+    val totalWealth = player.cash + stocksValue + businessValue + cryptoValue + realEstateValue
 
     Scaffold(
         containerColor = bgDark
@@ -1258,13 +1429,48 @@ fun ProfileScreen(viewModel: GameViewModel) {
                 }
             }
 
+            // 1.5 COMPANIES BRAND IDENTITY (Dynamic SVG Player Branding)
+            item {
+                Surface(
+                    color = cardDark,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, gold.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = bgDark,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(10.dp)) {
+                                SvgLogoPreview(
+                                    svgPathStr = companyLogoSvgPath,
+                                    tintColorHex = companyLogoFillColorHex,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("META CONGLOMERATE CORP", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Scenario Mode: $difficulty", color = gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Custom SVG Branding Active", color = textGray, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+ 
             // 2. FORTUNE & PORTFOLIO DISTRIBUTION
             item {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "$ 3.9 B", 
+                        text = currencyFormat.format(totalWealth), 
                         color = neonGreen,
-                        fontSize = 40.sp,
+                        fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
@@ -1281,11 +1487,18 @@ fun ProfileScreen(viewModel: GameViewModel) {
                             .height(12.dp)
                             .clip(RoundedCornerShape(6.dp))
                     ) {
-                        Box(modifier = Modifier.weight(0.3f).fillMaxHeight().background(Color(0xFF2196F3)))
-                        Box(modifier = Modifier.weight(0.4f).fillMaxHeight().background(Color(0xFFF44336)))
-                        Box(modifier = Modifier.weight(0.15f).fillMaxHeight().background(Color(0xFF9C27B0)))
-                        Box(modifier = Modifier.weight(0.1f).fillMaxHeight().background(Color(0xFFFF9800)))
-                        Box(modifier = Modifier.weight(0.05f).fillMaxHeight().background(Color(0xFF4CAF50)))
+                        val barWeights = mutableListOf(
+                            Pair(Math.max(1f, (player.cash.toFloat() / totalWealth.toFloat())), Color(0xFF2196F3)),
+                            Pair(Math.max(0f, (stocksValue.toFloat() / totalWealth.toFloat())), Color(0xFFFF9800)),
+                            Pair(Math.max(0f, (businessValue.toFloat() / totalWealth.toFloat())), Color(0xFFF44336)),
+                            Pair(Math.max(0f, (realEstateValue.toFloat() / totalWealth.toFloat())), Color(0xFF9C27B0)),
+                            Pair(Math.max(0f, (cryptoValue.toFloat() / totalWealth.toFloat())), Color(0xFFE91E63))
+                        )
+                        barWeights.forEach { (w, color) ->
+                            if (w > 0f) {
+                                Box(modifier = Modifier.weight(w).fillMaxHeight().background(color))
+                            }
+                        }
                     }
                 }
             }
@@ -1294,13 +1507,13 @@ fun ProfileScreen(viewModel: GameViewModel) {
             item {
                 val wealthItems = listOf(
                     Triple("Balance", currencyFormat.format(player.cash), Color(0xFF2196F3)),
-                    Triple("Businesses", "$ 1.2 B", Color(0xFFF44336)),
-                    Triple("Stocks", "$ 450.0 M", Color(0xFFFF9800)),
-                    Triple("Real estate", "$ 800.0 M", Color(0xFF9C27B0)),
-                    Triple("Crypto", "$ 210.3 M", Color(0xFFE91E63)),
-                    Triple("Collections", "$ 180.0 M", Color(0xFF00BCD4)),
-                    Triple("Vehicles", "$ 40.0 M", Color(0xFF4CAF50)),
-                    Triple("Banks", "$ 154.2 M", Color(0xFFFFC107))
+                    Triple("Businesses", currencyFormat.format(businessValue), Color(0xFFF44336)),
+                    Triple("Stocks", currencyFormat.format(stocksValue), Color(0xFFFF9800)),
+                    Triple("Real estate", currencyFormat.format(realEstateValue), Color(0xFF9C27B0)),
+                    Triple("Crypto", currencyFormat.format(cryptoValue), Color(0xFFE91E63)),
+                    Triple("Collections", "$0 (Not Dev)", Color(0xFF00BCD4)),
+                    Triple("Vehicles", "$0 (Not Dev)", Color(0xFF4CAF50)),
+                    Triple("Banks", "$0 (Not Dev)", Color(0xFFFFC107))
                 )
                 
                 // Chunk into rows of 2
@@ -1452,7 +1665,9 @@ fun ProfileScreen(viewModel: GameViewModel) {
                     Surface(
                         color = cardDark,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showSettingsDialog = true }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(16.dp)) {
                             Text("Help & Settings", color = gold, fontWeight = FontWeight.Bold)
@@ -1486,252 +1701,525 @@ fun ProfileScreen(viewModel: GameViewModel) {
             item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
-}
 
-// ==========================================
-// 6. GLOBAL STOCK MARKET SCREEN
-// ==========================================
-data class StockItem(
-    val id: String,
-    val ticker: String,
-    val name: String,
-    val currentPrice: Double,
-    val changeAbsolute: Double,
-    val changePercentage: Double,
-    val sector: String
-)
+    if (showSettingsDialog) {
+        val isNotificationEnabled by viewModel.isNotificationEnabled.collectAsState()
+        val isDarkModeSimulated by viewModel.isDarkModeSimulated.collectAsState()
+        val soundVolume by viewModel.soundVolume.collectAsState()
+        val gameDifficulty by viewModel.gameDifficulty.collectAsState()
+        
+        val monthDurationSeconds by viewModel.monthDurationSeconds.collectAsState()
+        val stockIntervalSeconds by viewModel.stockIntervalSeconds.collectAsState()
+        val marketVolatilityFactor by viewModel.marketVolatilityFactor.collectAsState()
+        
+        val companyLogoSvgPath by viewModel.companyLogoSvgPath.collectAsState()
+        val companyLogoFillColorHex by viewModel.companyLogoFillColorHex.collectAsState()
+        
+        var selectedTab by remember { mutableStateOf(0) } // 0: Umum, 1: Advanced
+        
+        // Modal copy values
+        var localSvgPath by remember { mutableStateOf(companyLogoSvgPath) }
+        var localColorHex by remember { mutableStateOf(companyLogoFillColorHex) }
+        
+        var localNotification by remember { mutableStateOf(isNotificationEnabled) }
+        var localDarkTheme by remember { mutableStateOf(isDarkModeSimulated) }
+        var localVolume by remember { mutableStateOf(soundVolume) }
+        var localDifficulty by remember { mutableStateOf(gameDifficulty) }
+        
+        var localMonthDuration by remember { mutableStateOf(monthDurationSeconds) }
+        var localStockInterval by remember { mutableStateOf(stockIntervalSeconds) }
+        var localVolatility by remember { mutableStateOf(marketVolatilityFactor) }
+        
+        var showResetProgressConfirm by remember { mutableStateOf(false) }
 
-fun generateStockData(): List<StockItem> {
-    val coreList = listOf(
-        StockItem("1", "AAPL", "Apple Inc.", 175.50, 1.20, 0.68, "Technology"),
-        StockItem("2", "MSFT", "Microsoft Corp.", 330.12, 2.50, 0.76, "Technology"),
-        StockItem("3", "GOOGL", "Alphabet Inc.", 135.40, -1.10, -0.80, "Technology"),
-        StockItem("4", "NVDA", "NVIDIA Corp.", 450.20, 15.30, 3.50, "Technology"),
-        StockItem("5", "TSLA", "Tesla Inc.", 240.10, -5.20, -2.10, "Automotive"),
-        StockItem("6", "BBCA.JK", "Bank Central Asia", 60.50, 0.50, 0.83, "Finance"),
-        StockItem("7", "BBRI.JK", "Bank Raky. Indo.", 40.20, 0.20, 0.50, "Finance"),
-        StockItem("8", "GOTO.JK", "GoTo Gojek Toko", 5.50, -0.10, -1.80, "Technology"),
-        StockItem("9", "TLKM.JK", "Telkom Indonesia", 30.10, 0.15, 0.50, "Communication"),
-        StockItem("10", "TM", "Toyota Motor", 160.00, 1.20, 0.75, "Automotive"),
-        StockItem("11", "RACE", "Ferrari N.V.", 300.50, 3.40, 1.10, "Automotive"),
-        StockItem("12", "MC.PA", "LVMH", 800.00, 12.00, 1.50, "Luxury"),
-        StockItem("13", "META", "Meta Platforms", 300.00, 5.00, 1.60, "Technology"),
-        StockItem("14", "AMZN", "Amazon.com Inc.", 140.20, -0.50, -0.35, "Retail"),
-        StockItem("15", "JPM", "JPMorgan Chase", 150.00, 1.10, 0.70, "Finance"),
-        StockItem("16", "BAC", "Bank of America", 28.50, -0.20, -0.70, "Finance"),
-        StockItem("17", "WMT", "Walmart Inc.", 160.00, 0.50, 0.30, "Retail"),
-        StockItem("18", "JNJ", "Johnson & Johnson", 165.00, -1.00, -0.60, "Healthcare"),
-        StockItem("19", "V", "Visa Inc.", 240.00, 2.00, 0.80, "Finance"),
-        StockItem("20", "PG", "Procter & Gamble", 155.00, 0.80, 0.50, "Consumer"),
-        StockItem("21", "MA", "Mastercard Inc.", 400.00, 3.50, 0.80, "Finance"),
-        StockItem("22", "HD", "Home Depot Inc.", 330.00, -2.00, -0.60, "Retail"),
-        StockItem("23", "CVX", "Chevron Corp.", 160.00, 1.50, 0.90, "Energy"),
-        StockItem("24", "LLY", "Eli Lilly", 500.00, 4.00, 0.80, "Healthcare"),
-        StockItem("25", "ABBV", "AbbVie Inc.", 150.00, -1.50, -1.00, "Healthcare"),
-        StockItem("26", "MRK", "Merck & Co.", 110.00, 0.50, 0.40, "Healthcare"),
-        StockItem("27", "PEP", "PepsiCo Inc.", 180.00, 1.00, 0.50, "Consumer"),
-        StockItem("28", "KO", "Coca-Cola Co.", 60.00, 0.20, 0.30, "Consumer"),
-        StockItem("29", "AVGO", "Broadcom Inc.", 850.00, 10.00, 1.10, "Technology"),
-        StockItem("30", "ASML", "ASML Holding", 650.00, -5.00, -0.70, "Technology"),
-        StockItem("31", "TTE", "TotalEnergies", 60.00, 0.50, 0.80, "Energy"),
-        StockItem("32", "NVO", "Novo Nordisk", 100.00, 2.00, 2.00, "Healthcare"),
-        StockItem("33", "NVS", "Novartis AG", 100.00, 1.00, 1.00, "Healthcare"),
-        StockItem("34", "AZN", "AstraZeneca", 70.00, -0.50, -0.70, "Healthcare"),
-        StockItem("35", "SHEL", "Shell plc", 65.00, 0.80, 1.20, "Energy"),
-        StockItem("36", "TMUS", "T-Mobile US", 140.00, 1.50, 1.00, "Communication"),
-        StockItem("37", "CMCSA", "Comcast Corp.", 45.00, -0.20, -0.40, "Communication"),
-        StockItem("38", "DIS", "Walt Disney Co", 80.00, -1.00, -1.20, "Communication"),
-        StockItem("39", "NFLX", "Netflix Inc.", 400.00, 5.00, 1.25, "Communication"),
-        StockItem("40", "ADBE", "Adobe Inc.", 520.00, 6.00, 1.10, "Technology")
-    )
-    val list = mutableListOf<StockItem>()
-    list.addAll(coreList)
-    
-    // Auto generate to reach 200 items (realistic proxy)
-    var idCounter = 41
-    for (i in 1..4) {
-        coreList.forEach { stock ->
-            val randomFactor = 1.0 + (Math.random() * 0.2 - 0.1) // +/- 10%
-            val newPrice = stock.currentPrice * randomFactor
-            val newChange = stock.changeAbsolute * randomFactor * (if (Math.random() > 0.5) 1 else -1)
-            val newChangePct = (newChange / newPrice) * 100
-            
-            list.add(
-                stock.copy(
-                    id = idCounter.toString(),
-                    ticker = "${stock.ticker}.R$i",
-                    name = "${stock.name} Rg$i",
-                    currentPrice = newPrice,
-                    changeAbsolute = newChange,
-                    changePercentage = newChangePct
-                )
-            )
-            idCounter++
-        }
-    }
-    return list.take(200)
-}
+        // States for Adding Real Estate
+        var customPropName by remember { mutableStateOf("") }
+        var customPropLocation by remember { mutableStateOf("") }
+        var customPropPrice by remember { mutableStateOf("") }
+        var customPropRent by remember { mutableStateOf("") }
 
-@Composable
-fun GlobalStockMarketScreen(navController: NavHostController) {
-    // Theme Colors
-    val bgDark = Color(0xFF121212)
-    val cardDark = Color(0xFF1E1E1E)
-    val dividerColor = Color(0xFF333333)
-    val logoBg = Color(0xFF2A2A2A)
-    val gold = Color(0xFFFFD700)
-    val textGray = Color(0xFFA0A0A0)
-    val neonGreen = Color(0xFF00FF00)
-    val red = Color(0xFFFF3B30)
 
-    val filters = listOf("All", "Top Gainers", "Top Losers", "US Tech", "IDX Bluechips", "Dividends")
-    var activeFilter by remember { mutableStateOf("All") }
-
-    val stockData = remember { generateStockData() }
-
-    Scaffold(
-        containerColor = bgDark,
-        topBar = {
-            Surface(color = bgDark, modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(16.dp).statusBarsPadding()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.clickable { navController.navigateUp() }
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text("Global Stock Market", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp)
-                }
-            }
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            // Filter Chips
-            Row(
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showSettingsDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.85f)
+                    .clip(RoundedCornerShape(24.dp)),
+                color = Color(0xFF15181F),
+                border = BorderStroke(1.dp, Color(0xFF2C3240))
             ) {
-                filters.forEach { filter ->
-                    val isSelected = activeFilter == filter
-                    Surface(
-                        color = if (isSelected) bgDark else cardDark,
-                        shape = RoundedCornerShape(20.dp),
-                        border = if (isSelected) BorderStroke(1.dp, gold) else null,
-                        modifier = Modifier.clickable { activeFilter = filter }
-                    ) {
-                        Text(
-                            text = filter,
-                            color = if (isSelected) gold else textGray,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
-            
-            // Stock List
-            val filteredStocks = stockData.filter { 
-                when(activeFilter) {
-                    "Top Gainers" -> it.changeAbsolute > 0
-                    "Top Losers" -> it.changeAbsolute < 0
-                    "US Tech" -> it.sector == "Technology" && !it.ticker.contains(".JK")
-                    "IDX Bluechips" -> it.ticker.contains(".JK")
-                    "Dividends" -> it.sector == "Finance" // proxy for dividend stocks
-                    else -> true
-                }
-            }
-
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(filteredStocks) { stock ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Header Area
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .background(Color(0xFF1F2430))
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Logo Placeholder
-                        Surface(
-                            shape = CircleShape,
-                            color = logoBg,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = stock.name.take(1).uppercase(Locale.ROOT),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Settings, contentDescription = null, tint = gold, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Help & Settings", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(onClick = { showSettingsDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                        }
+                    }
+                    
+                    // Tabs
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = Color(0xFF1A1F2B),
+                        contentColor = gold
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Settings, contentDescription = null, tint = if (selectedTab == 0) gold else textGray, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Umum", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }},
+                            selectedContentColor = gold,
+                            unselectedContentColor = textGray
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Tune, contentDescription = null, tint = if (selectedTab == 1) gold else textGray, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Advanced Settings", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }},
+                            selectedContentColor = gold,
+                            unselectedContentColor = textGray
+                        )
+                    }
+
+                    // Content Scrollable
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        if (selectedTab == 0) {
+                            Text("PENGATURAN UMUM", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                            // simulated dark mode
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Simulated Dark Theme", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("Mengaktifkan tema gelap kustom premium", color = textGray, fontSize = 11.sp)
+                                }
+                                Switch(
+                                    checked = localDarkTheme,
+                                    onCheckedChange = { 
+                                        localDarkTheme = it
+                                        viewModel.updateGeneralSettings(localNotification, localDarkTheme, localVolume, localDifficulty, localVolatility)
+                                    },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = gold, checkedTrackColor = gold.copy(alpha = 0.5f))
                                 )
                             }
-                        }
-                        
-                        // Middle Info
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 12.dp)
-                        ) {
-                            Text(
-                                text = stock.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                maxLines = 1
+
+                            HorizontalDivider(color = dividerColor.copy(alpha = 0.5f))
+
+                            // warning alerts
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Transaction Warnings", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("Dapatkan konfirmasi peringatan transaksi beresiko tinggi", color = textGray, fontSize = 11.sp)
+                                }
+                                Switch(
+                                    checked = localNotification,
+                                    onCheckedChange = { 
+                                        localNotification = it
+                                        viewModel.updateGeneralSettings(localNotification, localDarkTheme, localVolume, localDifficulty, localVolatility)
+                                    },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = gold, checkedTrackColor = gold.copy(alpha = 0.5f))
+                                )
+                            }
+
+                            HorizontalDivider(color = dividerColor.copy(alpha = 0.5f))
+
+                            // SFX volume slider
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("System Sound & SFX Volume", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("${(localVolume * 100).toInt()}%", color = gold, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                }
+                                Slider(
+                                    value = localVolume,
+                                    onValueChange = { 
+                                        localVolume = it
+                                        viewModel.updateGeneralSettings(localNotification, localDarkTheme, localVolume, localDifficulty, localVolatility)
+                                    },
+                                    valueRange = 0f..1f,
+                                    colors = SliderDefaults.colors(thumbColor = gold, activeTrackColor = gold)
+                                )
+                            }
+
+                            HorizontalDivider(color = dividerColor.copy(alpha = 0.5f))
+
+                            // Game preset scenario simulation modes
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("SKENARIO GAMEPLAY", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                
+                                val difficulties = listOf(
+                                    "Easy" to "Wirausaha Pemula (Peluang modal besar, krisis 0%)",
+                                    "Normal" to "Konglomerat (Standard multiplier)",
+                                    "Hard" to "Krisis Finansial (-15% profit bisnis secara berkala)",
+                                    "Elite Tycoon" to "Krisis Ekonomi Global (Uang disusut inflasi 2.5% per tahun)"
+                                )
+                                
+                                difficulties.forEach { (diff, desc) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { 
+                                                localDifficulty = diff
+                                                viewModel.updateGeneralSettings(localNotification, localDarkTheme, localVolume, localDifficulty, localVolatility)
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = localDifficulty == diff,
+                                            onClick = { 
+                                                localDifficulty = diff
+                                                viewModel.updateGeneralSettings(localNotification, localDarkTheme, localVolume, localDifficulty, localVolatility)
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = gold, unselectedColor = textGray)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(diff, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text(desc, color = textGray, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // ==========================================
+                            // TAB 1: ADVANCED SETTINGS (EXPERIMENT MINI GAME)
+                            // ==========================================
+                            Text("EXPERIMENT: CORPORATE BRAND LOGO (CUSTOM SVG)", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF0F1218), RoundedCornerShape(12.dp))
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    color = Color(0xFF1D222E),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.size(80.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(12.dp)) {
+                                        SvgLogoPreview(
+                                            svgPathStr = localSvgPath,
+                                            tintColorHex = localColorHex,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text("Logo ID Preview (Canvas)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("Diskalakan dinamis range (0,0) s.d (100,100)", color = textGray, fontSize = 11.sp)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Logo Color Tint: $localColorHex", color = gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            
+                            // Presets grid (2 Columns / row structure)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Pilih Preset Desain Bawaan:", color = textGray, fontSize = 12.sp)
+                                val presets = listOf(
+                                    "Crown" to "M 10 90 L 10 30 L 35 60 L 50 20 L 65 60 L 90 30 L 90 90 Z",
+                                    "Star" to "M 50 5 L 63 33 L 94 38 L 71 61 L 76 92 L 50 78 L 24 92 L 29 61 L 6 38 L 37 33 Z",
+                                    "Diamond" to "M 50 5 L 85 40 L 50 95 L 15 40 Z",
+                                    "Shield" to "M 50 5 L 90 20 L 90 60 C 90 85 50 98 50 98 C 50 98 10 85 10 60 L 10 20 Z",
+                                    "Rocket" to "M 50 5 C 65 25 70 50 70 80 Q 60 75 50 95 Q 40 75 30 80 C 30 50 35 25 50 5 Z"
+                                )
+                                
+                                presets.chunked(3).forEach { rowItems ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        rowItems.forEach { (name, path) ->
+                                            Surface(
+                                                color = if (localSvgPath.trim() == path.trim()) gold else Color(0xFF222834),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clickable { 
+                                                        localSvgPath = path
+                                                        viewModel.updateCompanyLogo(localSvgPath, localColorHex)
+                                                    }
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                                    Text(
+                                                        text = name,
+                                                        color = if (localSvgPath.trim() == path.trim()) Color.Black else Color.White,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        if (rowItems.size < 3) {
+                                            repeat(3 - rowItems.size) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Custom Path Text Entry
+                            OutlinedTextField(
+                                value = localSvgPath,
+                                onValueChange = { 
+                                    localSvgPath = it
+                                    viewModel.updateCompanyLogo(localSvgPath, localColorHex)
+                                },
+                                label = { Text("Custom SVG Path Data", color = gold) },
+                                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = gold,
+                                    unfocusedBorderColor = Color(0xFF2C3240)
+                                )
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            
+                            // Tint Color Code Entry
+                            OutlinedTextField(
+                                value = localColorHex,
+                                onValueChange = { 
+                                    localColorHex = it
+                                    viewModel.updateCompanyLogo(localSvgPath, localColorHex)
+                                },
+                                label = { Text("Warna Logo (Hex Code, misal: #FFD700)", color = gold) },
+                                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 13.sp),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = gold,
+                                    unfocusedBorderColor = Color(0xFF2C3240)
+                                )
+                            )
+
+                            HorizontalDivider(color = dividerColor.copy(alpha = 0.5f))
+
+                            Text("EXPERIMENT: LOOP DURATION CYCLES", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                            // Slider: Month game cycle speed rate
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Kecepatan Durasi 1 Bulan Game", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("${localMonthDuration.toInt()} Detik", color = gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Slider(
+                                    value = localMonthDuration,
+                                    onValueChange = { 
+                                        localMonthDuration = it
+                                        viewModel.updateMonthDuration(localMonthDuration)
+                                    },
+                                    valueRange = 5f..300f,
+                                    colors = SliderDefaults.colors(thumbColor = gold, activeTrackColor = gold)
+                                )
                                 Text(
-                                    text = stock.ticker,
+                                    text = "Mengatur seberapa lama (dalam detik nyata) satu siklus bulan pendapatan bisnis Anda berganti.",
                                     color = textGray,
-                                    fontSize = 12.sp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stock.sector,
-                                    color = textGray.copy(alpha = 0.7f),
-                                    fontSize = 12.sp
+                                    fontSize = 11.sp
                                 )
                             }
-                        }
-                        
-                        // Right Price Info
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "$ ${String.format(Locale.US, "%.2f", stock.currentPrice)}",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                            val isPositive = stock.changeAbsolute >= 0
-                            val changeColor = if (isPositive) neonGreen else red
-                            val sign = if (isPositive) "+" else "-"
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = if (isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                                    contentDescription = null,
-                                    tint = changeColor,
-                                    modifier = Modifier.size(14.dp)
+                            
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Slider: Stock fluctuating frequency
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Rentang Fluktuasi Pasar Saham", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("${String.format(Locale.US, "%.1f", localStockInterval)} Detik", color = gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Slider(
+                                    value = localStockInterval,
+                                    onValueChange = { 
+                                        localStockInterval = it
+                                        viewModel.updateStockInterval(localStockInterval)
+                                    },
+                                    valueRange = 1.0f..15.0f,
+                                    colors = SliderDefaults.colors(thumbColor = gold, activeTrackColor = gold)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "$sign $${String.format(Locale.US, "%.2f", Math.abs(stock.changeAbsolute))} (${String.format(Locale.US, "%.2f", Math.abs(stock.changePercentage))}%)",
-                                    color = changeColor,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = "Kecepatan waktu delay refresh pergeseran harga saham naik/turun di tab bursa investasi.",
+                                    color = textGray,
+                                    fontSize = 11.sp
                                 )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Slider: Volatility
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Intensitas Volatilitas Pasar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("${String.format(Locale.US, "%.1f", localVolatility)}x", color = gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Slider(
+                                    value = localVolatility,
+                                    onValueChange = { 
+                                        localVolatility = it
+                                        viewModel.updateGeneralSettings(localNotification, localDarkTheme, localVolume, localDifficulty, localVolatility)
+                                    },
+                                    valueRange = 0.1f..5.0f,
+                                    colors = SliderDefaults.colors(thumbColor = gold, activeTrackColor = gold)
+                                )
+                                Text(
+                                    text = "Memperkuat efek naik turun grafik/harga saham. Nilai tinggi membuat bursa kian liar (Sangat Spekulatif!).",
+                                    color = textGray,
+                                    fontSize = 11.sp
+                                )
+                            }
+
+                            HorizontalDivider(color = dividerColor.copy(alpha = 0.5f))
+
+                            // Custom Real Estate entry
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("TAMBAH PROPERTI KUSTOM", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                OutlinedTextField(
+                                    value = customPropName,
+                                    onValueChange = { customPropName = it },
+                                    label = { Text("Nama Properti", color = textGray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = gold, unfocusedBorderColor = textGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = customPropLocation,
+                                    onValueChange = { customPropLocation = it },
+                                    label = { Text("Lokasi", color = textGray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = gold, unfocusedBorderColor = textGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = customPropPrice,
+                                    onValueChange = { customPropPrice = it.filter { char -> char.isDigit() } },
+                                    label = { Text("Harga Beli ($)", color = textGray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = gold, unfocusedBorderColor = textGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = customPropRent,
+                                    onValueChange = { customPropRent = it.filter { char -> char.isDigit() } },
+                                    label = { Text("Sewa Bulanan ($)", color = textGray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = gold, unfocusedBorderColor = textGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                    singleLine = true
+                                )
+                                Button(
+                                    onClick = {
+                                        val price = customPropPrice.toLongOrNull()
+                                        val rent = customPropRent.toLongOrNull()
+                                        if (customPropName.isNotBlank() && customPropLocation.isNotBlank() && price != null && rent != null) {
+                                            viewModel.addProperty(customPropName, customPropLocation, price, rent)
+                                            customPropName = ""
+                                            customPropLocation = ""
+                                            customPropPrice = ""
+                                            customPropRent = ""
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                                ) {
+                                    Text("Simpan ke Pasar", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            
+                            HorizontalDivider(color = dividerColor.copy(alpha = 0.5f))
+
+                            // Reset Progression controls
+                            Text("DANGER ZONE", color = Color(0xFFFF3B30), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            
+                            Button(
+                                onClick = { showResetProgressConfirm = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Reset Seluruh Progress Game", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
-                    HorizontalDivider(color = dividerColor)
                 }
             }
         }
+        
+        // Reset Confirmation dialogues
+        if (showResetProgressConfirm) {
+            AlertDialog(
+                onDismissRequest = { showResetProgressConfirm = false },
+                containerColor = Color(0xFF1E222D),
+                title = { Text("Hapus Semua Progress?", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = { Text("Apakah Anda yakin ingin mengatur ulang profil konglomerat Anda ke kondisi awal awal ($5,000)? Semua sejarah, portofolio, dan kepemilikan bisnis akan dihapus.", color = textGray) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.resetGameProgress()
+                            showResetProgressConfirm = false
+                            showSettingsDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30))
+                    ) {
+                        Text("Reset Permanen", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetProgressConfirm = false }) {
+                        Text("Batal", color = Color.White)
+                    }
+                }
+            )
+        }
     }
 }
+
+// ==========================================
