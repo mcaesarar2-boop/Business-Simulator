@@ -1,5 +1,7 @@
 package com.example
 
+import com.example.viewmodel.GameViewModel
+
 import com.example.data.*
 import com.example.ui.formatMarketCap
 
@@ -109,7 +111,7 @@ data class MarketNews(
 )
 
 @Composable
-fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameViewModel) {
+fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameViewModel, initialTicker: String? = null) {
     // Theme Colors
     val bgDark = Color(0xFF121212)
     val cardDark = Color(0xFF1E1E1E)
@@ -123,18 +125,24 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
     val stockInterval by viewModel.stockIntervalSeconds.collectAsState()
     val marketVolatilityFactor by viewModel.marketVolatilityFactor.collectAsState()
 
-    val filters = listOf("All", "Indonesia", "Global/US", "Top Gainers", "Top Losers", "US Tech", "IDX Bluechips", "Dividends")
+    val filters = listOf("All", "Indonesia", "Global/US", "Top Gainers", "Top Losers", "US Tech", "IDX Bluechips", "Dividends", "Highest Dividend", "Lowest Dividend", "Highest Market Cap", "Lowest Market Cap")
     var activeFilter by remember { mutableStateOf("All") }
     var searchQuery by remember { mutableStateOf("") }
 
     // Simulation State
-    val stockListState by viewModel.stockList.collectAsState()
+    val rawStockListState by viewModel.stockList.collectAsState()
     val newsFeed by viewModel.newsFeed.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
+    
+    val stockListState = rawStockListState.map { stock ->
+        val newName = playerState.rebrandedCompanies[stock.ticker]
+        if (newName != null) stock.copy(name = newName) else stock
+    }
+    
     val usdBalance = playerState.cash.toDouble()
     
     // Interactive Detail Selection States
-    var selectedStockTicker by remember { mutableStateOf<String?>(null) }
+    var selectedStockTicker by remember { mutableStateOf<String?>(initialTicker) }
     var chartInterval by remember { mutableStateOf("1D") }
     
     // Virtual Portfolio is now ownedStocks
@@ -145,6 +153,10 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
     var buySharesAmount by remember { mutableStateOf("") }
     var buySuccessMessage by remember { mutableStateOf<String?>(null) }
     var showNewsHistoryDialog by remember { mutableStateOf(false) }
+    
+    // Hostile Takeover States
+    var showRebrandDialog by remember { mutableStateOf(false) }
+    var rebrandNameInput by remember { mutableStateOf("") }
 
     if (showNewsHistoryDialog) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { showNewsHistoryDialog = false }) {
@@ -361,8 +373,10 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                 matchesFilter && matchesSearch
             }
 
+            val displayedStocks = viewModel.getSortedStocks(filteredStocks, activeFilter)
+            
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(filteredStocks) { stock ->
+                items(displayedStocks) { stock ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -380,7 +394,7 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 if (domain != null) {
                                     coil.compose.SubcomposeAsyncImage(
-                                        model = "https://logo.clearbit.com/$domain?size=120",
+                                        model = stock.logoUrl,
                                         contentDescription = stock.name,
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -419,14 +433,16 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                         }
                         
                         // Middle Info
+                        val acquiredDataList = playerState.ownedBusinesses.find { it.acquiredStockTicker == stock.ticker }
+                        val displayTitle = acquiredDataList?.customName ?: stock.name
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 12.dp)
                         ) {
                             Text(
-                                text = stock.name,
-                                color = Color.White,
+                                text = displayTitle,
+                                color = if (acquiredDataList != null) gold else Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 maxLines = 1
@@ -438,22 +454,26 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                                     fontSize = 12.sp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stock.sector,
-                                    color = textGray.copy(alpha = 0.7f),
-                                    fontSize = 12.sp
-                                )
+                                if (acquiredDataList != null) {
+                                    Text(
+                                        text = "👑 [Milik Pribadi]",
+                                        color = gold,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                } else {
+                                    Text(
+                                        text = stock.sector,
+                                        color = textGray.copy(alpha = 0.7f),
+                                        fontSize = 12.sp
+                                    )
+                                }
                             }
                         }
                         
                         // Right Price Info
                         Column(horizontalAlignment = Alignment.End) {
-                            val isIndo = stock.ticker.contains(".JK")
-                            val priceStr = if (isIndo) {
-                                "Rp ${String.format(Locale.US, "%,.0f", stock.currentPrice)}"
-                            } else {
-                                "$ ${String.format(Locale.US, "%.2f", stock.currentPrice)}"
-                            }
+                            val priceStr = "$ ${String.format(Locale.US, "%.2f", stock.currentPrice)}"
                             Text(
                                 text = priceStr,
                                 color = Color.White,
@@ -464,11 +484,7 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                             val changeColor = if (isPositive) neonGreen else red
                             val sign = if (isPositive) "+" else "-"
                             
-                            val changeStr = if (isIndo) {
-                                "Rp ${String.format(Locale.US, "%,.0f", Math.abs(stock.changeAbsolute))}"
-                            } else {
-                                "$ ${String.format(Locale.US, "%.2f", Math.abs(stock.changeAbsolute))}"
-                            }
+                            val changeStr = "$ ${String.format(Locale.US, "%.2f", Math.abs(stock.changeAbsolute))}"
                             
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -495,40 +511,40 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
 
     // Interactive details overlay dialog
     val selectedStock = stockListState.find { it.ticker == selectedStockTicker }
+    val acquiredDataDetail = if (selectedStock != null) playerState.ownedBusinesses.find { it.acquiredStockTicker == selectedStock.ticker } else null
+
     if (selectedStock != null) {
-        val stats = getMarketStats(selectedStock.ticker, selectedStock.currentPrice)
-        val isIndo = selectedStock.ticker.contains(".JK")
-        val symbolPrefix = if (isIndo) "Rp" else "$"
-        val historyPoints = getSimulatedHistory(selectedStock.ticker, selectedStock.currentPrice, chartInterval)
+        val stats = getMarketStats(selectedStock)
+        val symbolPrefix = "$"
+        val baseHistory = if (selectedStock.priceHistory.size > 2) selectedStock.priceHistory else getSimulatedHistory(selectedStock.ticker, selectedStock.currentPrice, chartInterval)
+        
+        // Simulasikan variasi chart interval dengan menggunakan sub-list atau padding secara visual
+        val historyPoints = when (chartInterval) {
+            "1D" -> baseHistory.takeLast(10)
+            "1W" -> baseHistory.takeLast(20)
+            else -> baseHistory
+        }.ifEmpty { listOf(selectedStock.currentPrice, selectedStock.currentPrice) }
         
         val maxOfHistory = historyPoints.maxOrNull() ?: selectedStock.currentPrice
         val minOfHistory = historyPoints.minOrNull() ?: selectedStock.currentPrice
         
         val formatPrice: (Double) -> String = { p ->
-            val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.GERMANY)
-            if (isIndo) {
-                formatter.maximumFractionDigits = 0
-                "Rp ${formatter.format(p)}"
-            } else {
-                formatter.minimumFractionDigits = 2
-                formatter.maximumFractionDigits = 2
-                "$ ${formatter.format(p)}"
-            }
+            val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.US)
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = 2
+            "$ ${formatter.format(p)}"
         }
+
+        val formatPriceWithUsd = formatPrice
 
         val isPositive = selectedStock.changeAbsolute >= 0
         val changeColor = if (isPositive) neonGreen else red
         val sign = if (isPositive) "+" else "-"
-        val diffStr = if (isIndo) {
-            val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.GERMANY).apply { maximumFractionDigits = 0 }
-            "Rp ${formatter.format(Math.abs(selectedStock.changeAbsolute))}"
-        } else {
-            val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.GERMANY).apply {
-                minimumFractionDigits = 2
-                maximumFractionDigits = 2
-            }
-            "$ ${formatter.format(Math.abs(selectedStock.changeAbsolute))}"
+        val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply {
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
         }
+        val diffStr = "$ ${formatter.format(Math.abs(selectedStock.changeAbsolute))}"
 
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { selectedStockTicker = null },
@@ -554,16 +570,34 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                         ) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = Color.White)
                         }
-                        Text(
-                            text = selectedStock.name,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                            textAlign = TextAlign.Start
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (selectedStock.logoUrl != null) {
+                                        coil.compose.SubcomposeAsyncImage(
+                                            model = selectedStock.logoUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize().padding(2.dp)
+                                        )
+                                    } else {
+                                        Text(selectedStock.name.take(1).uppercase(java.util.Locale.ROOT), color = Color.Black, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = acquiredDataDetail?.customName ?: selectedStock.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = selectedStock.ticker,
                             color = gold,
@@ -590,7 +624,7 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                                 Text("Current Share Price", color = textGray, fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = formatPrice(selectedStock.currentPrice),
+                                    text = formatPriceWithUsd(selectedStock.currentPrice),
                                     color = Color.White,
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.Black,
@@ -725,13 +759,14 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text("Current worth", color = textGray, fontSize = 12.sp)
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text(formatPrice(currentWorth), color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    Text(formatPriceWithUsd(currentWorth), color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                         }
 
                         // Buy shares broad action buttons
+                        val accentColor = if (selectedStock.changePercentage >= 0) Color(0xFF4CAF50) else Color(0xFF29B6F6)
                         Button(
                             onClick = { showBuyDialog = true },
                             modifier = Modifier
@@ -739,19 +774,67 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                                 .padding(horizontal = 24.dp)
                                 .height(54.dp)
                                 .testTag("buy_shares_button"),
-                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (selectedStock.changePercentage >= 0) neonGreen else Color(0xFF3B82F6)
-                            )
+                                containerColor = Color.White.copy(alpha = 0.05f),
+                                contentColor = accentColor
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.AddBusiness, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.AddBusiness, contentDescription = null, tint = accentColor)
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "Buy shares",
-                                color = Color.White,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 16.sp
                             )
+                        }
+
+                        val ownershipPct = (ownedShares.toDouble() / stats.sharesOutstanding.toDouble()) * 100.0
+                        if (acquiredDataDetail != null) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { },
+                                enabled = false,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .height(54.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    disabledContainerColor = Color(0xFF333333),
+                                    disabledContentColor = Color.LightGray
+                                )
+                            ) {
+                                Text(
+                                    text = "👑 Perusahaan Telah Diakuisisi (Milik Anda)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        } else if (ownershipPct >= 70.0) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { 
+                                    rebrandNameInput = selectedStock.name
+                                    showRebrandDialog = true 
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .height(54.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = gold
+                                )
+                            ) {
+                                Text(
+                                    text = "👑 Akuisisi & Rebrand Perusahaan",
+                                    color = bgDark,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -776,14 +859,14 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                                 .padding(horizontal = 24.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                DetailItem(label = "Share price", value = formatPrice(selectedStock.currentPrice), subValue = "$sign $diffStr (${String.format(Locale.US, "%.2f", Math.abs(selectedStock.changePercentage))}%)", subValueColor = changeColor)
+                                DetailItem(label = "Share price", value = formatPriceWithUsd(selectedStock.currentPrice), subValue = "$sign $diffStr (${String.format(Locale.US, "%.2f", Math.abs(selectedStock.changePercentage))}%)", subValueColor = changeColor)
                                 HorizontalDivider(color = dividerColor.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 10.dp))
                                 
                                 DetailItem(label = "Dividend yield in the period*", value = "${String.format(Locale.US, "%.2f", stats.dividendYield)} %", subValue = "*Period = 12 months")
                                 HorizontalDivider(color = dividerColor.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 10.dp))
                                 
                                 val marketCapVal = stats.sharesOutstanding * selectedStock.currentPrice
-                                val marketCapFormatted = formatMarketCap(marketCapVal, isIndo)
+                                val marketCapFormatted = formatMarketCap(marketCapVal)
                                 DetailItem(label = "Company capitalization", value = marketCapFormatted)
                                 HorizontalDivider(color = dividerColor.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 10.dp))
                                 
@@ -794,7 +877,7 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                                 DetailItem(label = "P/E Ratio", value = "${String.format(Locale.US, "%.1f", stats.peRatio)}x")
                                 HorizontalDivider(color = dividerColor.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 10.dp))
                                 
-                                DetailItem(label = "High / Low Today", value = "${formatPrice(stats.highToday)} / ${formatPrice(stats.lowToday)}")
+                                DetailItem(label = "High / Low Today", value = "${formatPriceWithUsd(stats.highToday)} / ${formatPriceWithUsd(stats.lowToday)}")
                                 HorizontalDivider(color = dividerColor.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 10.dp))
                                 
                                 DetailItem(label = "Sector", value = selectedStock.sector)
@@ -808,11 +891,103 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
         }
     }
 
+    // Hostile Takeover Rebrand Dialog
+    if (showRebrandDialog && selectedStock != null) {
+        val originalStock = rawStockListState.find { it.ticker == selectedStock.ticker }
+        val oldName = originalStock?.name ?: selectedStock.name
+        
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showRebrandDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = cardDark,
+                modifier = Modifier.padding(16.dp).fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "💎 Hostile Takeover",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = gold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Anda sekarang adalah pemilik mayoritas dari $oldName. Anda memiliki hak penuh untuk merestrukturisasi perusahaan ini.",
+                        fontSize = 13.sp,
+                        color = textGray
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    OutlinedTextField(
+                        value = rebrandNameInput,
+                        onValueChange = { rebrandNameInput = it },
+                        label = { Text("Nama Baru Perusahaan", color = textGray) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = gold,
+                            unfocusedBorderColor = dividerColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    val canRebrand = rebrandNameInput.isNotBlank()
+                    Button(
+                        onClick = {
+                            if (canRebrand) {
+                                viewModel.rebrandCompany(selectedStock.ticker, oldName, rebrandNameInput)
+                                buySuccessMessage = "Berhasil mengubah nama secara publik $oldName menjadi $rebrandNameInput!"
+                                showRebrandDialog = false
+                            }
+                        },
+                        enabled = canRebrand,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = gold,
+                            contentColor = bgDark,
+                            disabledContainerColor = textGray.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Biarkan Independen (Hanya Rebrand)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            if (canRebrand) {
+                                viewModel.integrateStockToHolding(selectedStock.ticker, rebrandNameInput)
+                                buySuccessMessage = "$oldName telah diintegrasikan menjadi anak usaha: $rebrandNameInput!"
+                                showRebrandDialog = false
+                            }
+                        },
+                        enabled = canRebrand,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF00C853),
+                            contentColor = bgDark,
+                            disabledContainerColor = textGray.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Integrasi ke Mega Holding", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { showRebrandDialog = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Batal", color = textGray)
+                    }
+                }
+            }
+        }
+    }
+
     // Transaction Buying Secondary Dialog
     if (showBuyDialog && selectedStock != null) {
-        val isIndo = selectedStock.ticker.contains(".JK")
         val currentPrice = selectedStock.currentPrice
         val balanceStr = "$ ${String.format(Locale.US, "%,.2f", usdBalance)}"
+        val stats = getMarketStats(selectedStock)
         
         androidx.compose.ui.window.Dialog(onDismissRequest = { showBuyDialog = false }) {
             Surface(
@@ -863,17 +1038,27 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                         modifier = Modifier.fillMaxWidth().testTag("buy_shares_input")
                     )
                     
-                    val quantity = buySharesAmount.toIntOrNull() ?: 0
+                    val quantity = buySharesAmount.toLongOrNull() ?: 0L
                     val totalCost = quantity * currentPrice
-                    val requiredUsd = if (isIndo) totalCost / 15000.0 else totalCost
+                    val requiredUsd = totalCost
                     
-                    val totalCostStr = if (isIndo) {
-                        "Rp ${String.format(Locale.US, "%,.0f", totalCost)} (~$ ${String.format(Locale.US, "%.2f", requiredUsd)})"
-                    } else {
-                        "$ ${String.format(Locale.US, "%.2f", totalCost)}"
-                    }
+                    val outstandingShares = stats.sharesOutstanding
+                    val ownedShares = playerState.ownedStocks.find { it.ticker == selectedStock.ticker }?.shares ?: 0L
+                    val remainingSharesToBuy = maxOf(0L, outstandingShares - ownedShares)
+                    
+                    val maxByCash = (usdBalance / currentPrice).toLong()
+                    val maxShares = minOf(maxByCash, remainingSharesToBuy)
+                    
+                    val totalCostStr = "$ ${String.format(Locale.US, "%.2f", totalCost)}"
                     
                     Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Maks yang bisa dibeli: %,d lembar".format(Locale.US, maxShares), color = textGray, fontSize = 12.sp)
+                        TextButton(onClick = { buySharesAmount = maxShares.toString() }, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
+                            Text("MAX", fontSize = 13.sp, color = gold, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -884,7 +1069,7 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                     
                     Spacer(modifier = Modifier.height(20.dp))
                     
-                    val canSubmit = quantity > 0 && requiredUsd <= usdBalance
+                    val canSubmit = quantity > 0 && requiredUsd <= usdBalance && quantity <= remainingSharesToBuy
                     Button(
                         onClick = {
                             viewModel.buyStock(selectedStock.ticker, currentPrice, quantity)
@@ -894,14 +1079,17 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                         },
                         enabled = canSubmit,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = neonGreen,
-                            disabledContainerColor = textGray.copy(alpha = 0.3f)
+                            containerColor = Color.White.copy(alpha = 0.05f),
+                            contentColor = Color(0xFF4CAF50),
+                            disabledContainerColor = Color.White.copy(alpha = 0.05f),
+                            disabledContentColor = Color.Gray
                         ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("buy_submit_button")
                     ) {
                         Text(
                             text = if (requiredUsd > usdBalance) "Virtual Balance Tidak Cukup" else "Konfirmasi Pembelian", 
-                            color = if (canSubmit) Color.White else Color.White.copy(alpha = 0.5f),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -954,10 +1142,19 @@ fun GlobalStockMarketScreen(navController: NavHostController, viewModel: GameVie
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = { buySuccessMessage = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = gold),
-                        modifier = Modifier.fillMaxWidth().testTag("success_dismiss_button")
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(),
+                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("success_dismiss_button")
                     ) {
-                        Text("Selesai", color = bgDark, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(
+                                androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000))), 
+                                RoundedCornerShape(12.dp)
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) { 
+                            Text("Selesai", color = Color.Black, fontWeight = FontWeight.Bold) 
+                        }
                     }
                 }
             }

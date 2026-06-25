@@ -1,7 +1,12 @@
 package com.example.ui
 
+import com.example.viewmodel.GameViewModel
+
+import com.example.data.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -16,7 +21,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.GameViewModel
 import coil.compose.AsyncImage
 import java.text.NumberFormat
 import java.util.Locale
@@ -100,9 +104,12 @@ fun CryptoScreen(viewModel: GameViewModel) {
         Spacer(modifier = Modifier.height(16.dp))
         
         cryptoList.forEach { crypto ->
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = cardDark)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .background(Color(0xFF1E1E1E), RoundedCornerShape(12.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
             ) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     AsyncImage(
@@ -125,9 +132,10 @@ fun CryptoScreen(viewModel: GameViewModel) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Button(
                         onClick = { selectedCrypto = crypto; showBuyDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.05f), contentColor = Color(0xFFFFD700)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         modifier = Modifier.height(32.dp)
                     ) {
                         Text("Beli", fontWeight = FontWeight.Bold, fontSize = 12.sp)

@@ -7,10 +7,15 @@ data class StockItem(
     val currentPrice: Double,
     val changeAbsolute: Double,
     val changePercentage: Double,
-    val sector: String
+    val sector: String,
+    val priceHistory: List<Double> = emptyList(),
+    val sharesOutstanding: Long = 0L
 ) {
     val logoDomain: String?
         get() = getDomainForTicker(ticker)
+        
+    val logoUrl: String?
+        get() = logoDomain?.let { "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://$it&size=128" }
 }
 
 data class StockStats(
