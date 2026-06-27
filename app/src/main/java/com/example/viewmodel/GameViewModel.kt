@@ -67,6 +67,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun patchFoundations(list: List<com.example.data.FoundationEntity>?): List<com.example.data.FoundationEntity> {
+        return (list ?: emptyList()).map { f ->
+            f.copy(
+                facilities = f.facilities ?: emptyList(),
+                educationInstitutions = f.educationInstitutions ?: emptyList()
+            )
+        }
+    }
+
     private val _monthProgress = kotlinx.coroutines.flow.MutableStateFlow(0f)
     private fun loadState(): PlayerState {
         val json = prefs.getString("player_state", null)
@@ -103,7 +112,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         state.travelDestinations
                     },
-                    totalTripsTaken = state.totalTripsTaken
+                    totalTripsTaken = state.totalTripsTaken,
+                    foundations = patchFoundations(state.foundations)
                 )
                 
                 // Simpan pembaruan jika ini adalah migrasi sukses
@@ -140,7 +150,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 } ?: emptyList()
                 val finalState = importedState.copy(
                     ownedBusinesses = patchedBusinesses,
-                    holdingCompanies = patchedHoldings
+                    holdingCompanies = patchedHoldings,
+                    foundations = patchFoundations(importedState.foundations)
                 )
                 _playerState.value = finalState
                 
@@ -4748,7 +4759,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val nextEduInstitutions = if (f.type == com.example.data.FoundationType.EDUCATION && nextIsLegalized) {
-                f.educationInstitutions.map { inst ->
+                (f.educationInstitutions ?: emptyList()).map { inst ->
                     val addedPoints = (inst.facilityLevel * 0.5) + (inst.prestigeScore * 0.1)
                     val beforePoints = inst.accreditationPoints
                     val nextPoints = Math.min(100, (beforePoints + addedPoints).toInt())
@@ -4777,7 +4788,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             } else {
-                f.educationInstitutions
+                f.educationInstitutions ?: emptyList()
             }
 
             f.copy(
@@ -8477,51 +8488,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val state = _playerState.value
         if (state.privateBalance < type.legalCost) return false
 
-        val defaultEduInstitutions = if (type == com.example.data.FoundationType.EDUCATION) {
-            listOf(
-                com.example.data.EducationInstitution(
-                    level = "TK",
-                    curriculumType = "Nasional",
-                    facilityLevel = 1,
-                    accreditationPoints = 0,
-                    monthlyOperationalCost = 10000L,
-                    prestigeScore = 5
-                ),
-                com.example.data.EducationInstitution(
-                    level = "SD",
-                    curriculumType = "Nasional",
-                    facilityLevel = 1,
-                    accreditationPoints = 0,
-                    monthlyOperationalCost = 30000L,
-                    prestigeScore = 15
-                ),
-                com.example.data.EducationInstitution(
-                    level = "SMA",
-                    curriculumType = "Nasional",
-                    facilityLevel = 1,
-                    accreditationPoints = 0,
-                    monthlyOperationalCost = 100000L,
-                    prestigeScore = 40
-                ),
-                com.example.data.EducationInstitution(
-                    level = "UNIV",
-                    curriculumType = "Nasional",
-                    facilityLevel = 1,
-                    accreditationPoints = 0,
-                    monthlyOperationalCost = 400000L,
-                    prestigeScore = 100
-                )
-            )
-        } else {
-            emptyList()
-        }
-
         val newFoundation = com.example.data.FoundationEntity(
             name = name,
             type = type,
             constructionMonthsLeft = type.setupMonths,
             isLegalized = false,
-            educationInstitutions = defaultEduInstitutions
+            educationInstitutions = emptyList()
         )
         val nextFoundations = state.foundations + newFoundation
         val reducedState = state.copy(
@@ -8595,10 +8567,82 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
+    fun buildEducationInstitution(foundationId: String, name: String, level: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        if (!foundation.isLegalized) return false
+        
+        val cost = when (level) {
+            "TK" -> 200000L
+            "SD" -> 500000L
+            "SMA" -> 1500000L
+            "UNIV" -> 5000000L
+            else -> 200000L
+        }
+        
+        if (foundation.endowmentFund < cost) return false
+        
+        val basePrestige = when (level) {
+            "TK" -> 5
+            "SD" -> 15
+            "SMA" -> 40
+            "UNIV" -> 100
+            else -> 5
+        }
+        
+        val newInst = com.example.data.EducationInstitution(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name,
+            level = level,
+            curriculumType = "Nasional",
+            facilityLevel = 1,
+            accreditationPoints = 0,
+            monthlyOperationalCost = com.example.data.calculateEduOperationalCost(level, 1, "Nasional"),
+            prestigeScore = basePrestige,
+            imageUrl = ""
+        )
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    endowmentFund = f.endowmentFund - cost,
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()) + newInst
+                )
+            } else {
+                f
+            }
+        }
+        
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateEducationInstitutionProfile(foundationId: String, institutionId: String, newName: String, newImageUrl: String): Boolean {
+        val state = _playerState.value
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                val updatedInstitutions = (f.educationInstitutions ?: emptyList()).map { inst ->
+                    if (inst.id == institutionId) {
+                        inst.copy(name = newName, imageUrl = newImageUrl)
+                    } else {
+                        inst
+                    }
+                }
+                f.copy(educationInstitutions = updatedInstitutions)
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
     fun upgradeEduFacility(foundationId: String, institutionId: String): Boolean {
         val state = _playerState.value
         val foundation = state.foundations.find { it.id == foundationId } ?: return false
-        val inst = foundation.educationInstitutions.find { it.id == institutionId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
         if (inst.facilityLevel >= 5) return false
 
         val baseUpgradeCost = when (inst.level) {
@@ -8633,7 +8677,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (f.id == foundationId) {
                 f.copy(
                     endowmentFund = f.endowmentFund - cost,
-                    educationInstitutions = f.educationInstitutions.map { if (it.id == institutionId) updatedInst else it }
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
                 )
             } else {
                 f
@@ -8647,7 +8691,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun changeEduCurriculum(foundationId: String, institutionId: String, newCurriculum: String): Boolean {
         val state = _playerState.value
         val foundation = state.foundations.find { it.id == foundationId } ?: return false
-        val inst = foundation.educationInstitutions.find { it.id == institutionId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
 
         val nextOps = com.example.data.calculateEduOperationalCost(inst.level, inst.facilityLevel, newCurriculum)
         val updatedInst = inst.copy(
@@ -8658,7 +8702,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val nextFoundations = state.foundations.map { f ->
             if (f.id == foundationId) {
                 f.copy(
-                    educationInstitutions = f.educationInstitutions.map { if (it.id == institutionId) updatedInst else it }
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
                 )
             } else {
                 f

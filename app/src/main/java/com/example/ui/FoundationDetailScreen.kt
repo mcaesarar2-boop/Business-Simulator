@@ -57,6 +57,10 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
     var customFacilityName by remember { mutableStateOf("") }
     var buildError by remember { mutableStateOf<String?>(null) }
 
+    var showEduBuildDialog by remember { mutableStateOf(false) }
+    var selectedEduLevel by remember { mutableStateOf("TK") }
+    var customEduName by remember { mutableStateOf("") }
+
     var showCurriculumDialog by remember { mutableStateOf(false) }
     var curriculumTargetInstitution by remember { mutableStateOf<com.example.data.EducationInstitution?>(null) }
 
@@ -192,11 +196,17 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                                 
                                 Button(
                                     onClick = {
-                                        selectedBlueprint = FoundationBlueprints.blueprints[foundation.type]?.firstOrNull()
-                                        selectedTier = FoundationBlueprints.tiers[0]
-                                        customFacilityName = ""
-                                        buildError = null
-                                        showBuildDialog = true
+                                        if (foundation.type == FoundationType.EDUCATION) {
+                                            selectedEduLevel = "TK"
+                                            buildError = null
+                                            showEduBuildDialog = true
+                                        } else {
+                                            selectedBlueprint = FoundationBlueprints.blueprints[foundation.type]?.firstOrNull()
+                                            selectedTier = FoundationBlueprints.tiers[0]
+                                            customFacilityName = ""
+                                            buildError = null
+                                            showBuildDialog = true
+                                        }
                                     },
                                     modifier = Modifier.weight(1f),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37))
@@ -221,7 +231,7 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                         )
                     }
 
-                    val eduList = foundation.educationInstitutions
+                    val eduList = foundation.educationInstitutions ?: emptyList()
                     if (eduList.isNotEmpty()) {
                         val chunks = eduList.chunked(2)
                         chunks.forEach { pair ->
@@ -241,6 +251,18 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                                                 onChangeCurriculum = {
                                                     curriculumTargetInstitution = inst
                                                     showCurriculumDialog = true
+                                                },
+                                                onCardClick = {
+                                                    val route = when (inst.level) {
+                                                        "TK" -> "kindergarten_dashboard/${foundation.id}/${inst.id}"
+                                                        "SD" -> "primary_school_dashboard/${foundation.id}/${inst.id}"
+                                                        "SMA" -> "high_school_dashboard/${foundation.id}/${inst.id}"
+                                                        "UNIV" -> "university_dashboard/${foundation.id}/${inst.id}"
+                                                        else -> ""
+                                                    }
+                                                    if (route.isNotEmpty()) {
+                                                        navController.navigate(route)
+                                                    }
                                                 }
                                             )
                                         }
@@ -253,7 +275,38 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                         }
                     } else {
                         item {
-                            Text("Tidak ada data institusi pendidikan.", color = Color.Gray, fontSize = 12.sp)
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.HomeWork,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Belum ada fasilitas dibangun.",
+                                        color = Color.LightGray,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = "Klik tombol \"Bangun Fasilitas\" di atas untuk mendirikan sekolah atau kampus riset.",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
                         }
                     }
                 } else {
@@ -641,6 +694,136 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
             }
         )
     }
+
+    if (showEduBuildDialog) {
+        AlertDialog(
+            onDismissRequest = { showEduBuildDialog = false },
+            title = { Text("Bangun Institusi Pendidikan", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Pilih jenjang sekolah atau kampus riset yang ingin didirikan di bawah naungan yayasan Anda. Semua institusi baru akan menggunakan Kurikulum Nasional secara default.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+
+                    OutlinedTextField(
+                        value = customEduName,
+                        onValueChange = { customEduName = it },
+                        label = { Text("Nama Institusi", color = Color.Gray) },
+                        placeholder = { Text("Cth: Sekolah Tunas Bangsa", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFD4AF37),
+                            unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f),
+                            focusedLabelColor = Color(0xFFD4AF37),
+                            unfocusedLabelColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true
+                    )
+
+                    Text("Pilih Jenjang Pendidikan:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+
+                    val levels = listOf(
+                        Triple("TK", "Taman Kanak-Kanak", 200_000L),
+                        Triple("SD", "Sekolah Dasar", 500_000L),
+                        Triple("SMA", "Sekolah Menengah Atas", 1_500_000L),
+                        Triple("UNIV", "Universitas & Riset", 5_000_000L)
+                    )
+
+                    levels.forEach { (lvl, label, cost) ->
+                        val isSel = selectedEduLevel == lvl
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedEduLevel = lvl }
+                                .border(
+                                    width = if (isSel) 2.dp else 1.dp,
+                                    color = if (isSel) Color(0xFFD4AF37) else Color.Gray.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSel) Color(0xFF10223D) else Color.Transparent
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = label, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                                    Text(text = "Jenjang: $lvl", color = Color.Gray, fontSize = 11.sp)
+                                }
+                                Text(
+                                    text = com.example.ui.formatCurrency(cost),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isSel) Color(0xFFD4AF37) else Color.White,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+
+                    if (buildError != null) {
+                        Text(text = buildError!!, color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val cost = when (selectedEduLevel) {
+                            "TK" -> 200000L
+                            "SD" -> 500000L
+                            "SMA" -> 1500000L
+                            "UNIV" -> 5000000L
+                            else -> 200000L
+                        }
+
+                        if (customEduName.isBlank()) {
+                            buildError = "Nama institusi tidak boleh kosong!"
+                            return@Button
+                        }
+
+                        if (foundation.endowmentFund < cost) {
+                            buildError = "Dana Abadi Yayasan kurang! Butuh ${com.example.ui.formatCurrency(cost)}"
+                            return@Button
+                        }
+
+                        val success = viewModel.buildEducationInstitution(
+                            foundationId = foundation.id,
+                            name = customEduName,
+                            level = selectedEduLevel
+                        )
+                        if (success) {
+                            showEduBuildDialog = false
+                        } else {
+                            buildError = "Gagal mendirikan institusi pendidikan."
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37))
+                ) {
+                    Text("Mulai Bangun", color = Color(0xFF0F1E36), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEduBuildDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -740,7 +923,8 @@ fun EducationInstitutionCard(
     inst: com.example.data.EducationInstitution,
     endowmentFund: Long,
     onUpgrade: () -> Unit,
-    onChangeCurriculum: () -> Unit
+    onChangeCurriculum: () -> Unit,
+    onCardClick: () -> Unit
 ) {
     val levelLabel = when (inst.level) {
         "TK" -> "TK/TKA"
@@ -763,7 +947,8 @@ fun EducationInstitutionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp)),
+            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+            .clickable { onCardClick() },
         colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -806,13 +991,13 @@ fun EducationInstitutionCard(
 
             // Level & Name
             Text(
-                text = levelLabel,
+                text = inst.name,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 fontSize = 14.sp
             )
             Text(
-                text = "Level Fasilitas: ${inst.facilityLevel} / 5",
+                text = "$levelLabel | Level ${inst.facilityLevel}/5",
                 color = Color.LightGray,
                 fontSize = 11.sp
             )

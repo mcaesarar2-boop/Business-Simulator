@@ -10,12 +10,14 @@ enum class FoundationType(val label: String, val legalCost: Long, val setupMonth
 
 data class EducationInstitution(
     val id: String = UUID.randomUUID().toString(),
+    val name: String,
     val level: String, // TK, SD, SMA, UNIV
     val curriculumType: String, // Merdeka, K13, Cambridge, IB, dsb.
     val facilityLevel: Int, // 1 - 5 (Upgrade fasilitas)
     val accreditationPoints: Int, // 0 - 100
     val monthlyOperationalCost: Long, // Biaya bakar duit per bulan
-    val prestigeScore: Int
+    val prestigeScore: Int,
+    val imageUrl: String = "" // <-- Tambahan baru
 )
 
 data class FoundationEntity(
