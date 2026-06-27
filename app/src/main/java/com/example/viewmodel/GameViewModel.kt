@@ -68,11 +68,41 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun patchFoundations(list: List<com.example.data.FoundationEntity>?): List<com.example.data.FoundationEntity> {
-        return (list ?: emptyList()).map { f ->
-            f.copy(
-                facilities = f.facilities ?: emptyList(),
-                educationInstitutions = f.educationInstitutions ?: emptyList()
-            )
+        return try {
+            (list ?: emptyList()).map { f ->
+                val safeInstitutions = try {
+                    (f.educationInstitutions ?: emptyList()).map { inst ->
+                        com.example.data.EducationInstitution(
+                            id = inst.id ?: java.util.UUID.randomUUID().toString(),
+                            name = inst.name ?: "Institusi Lama",
+                            level = inst.level ?: "SD",
+                            curriculumType = inst.curriculumType ?: "Merdeka",
+                            facilityLevel = if (inst.facilityLevel <= 0) 1 else inst.facilityLevel,
+                            accreditationPoints = if (inst.accreditationPoints < 0) 0 else inst.accreditationPoints,
+                            monthlyOperationalCost = if (inst.monthlyOperationalCost < 0L) 100000L else inst.monthlyOperationalCost,
+                            prestigeScore = if (inst.prestigeScore < 0) 0 else inst.prestigeScore,
+                            imageUrl = inst.imageUrl ?: ""
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AppDebug", "Error patching educationInstitutions, fallback to empty: ${e.message}")
+                    emptyList()
+                }
+
+                com.example.data.FoundationEntity(
+                    id = f.id ?: java.util.UUID.randomUUID().toString(),
+                    name = f.name ?: "Yayasan Tanpa Nama",
+                    type = f.type ?: com.example.data.FoundationType.EDUCATION,
+                    isLegalized = f.isLegalized,
+                    constructionMonthsLeft = f.constructionMonthsLeft,
+                    endowmentFund = f.endowmentFund,
+                    facilities = f.facilities ?: emptyList(),
+                    educationInstitutions = safeInstitutions
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AppDebug", "Error patching foundations, fallback to empty: ${e.message}")
+            emptyList()
         }
     }
 
@@ -8501,6 +8531,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             foundations = nextFoundations
         )
         _playerState.value = logToPrivateLedger(reducedState, "Mendirikan Yayasan: $name (${type.label})", type.legalCost, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun deletePrivateFoundation(foundationId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val nextFoundations = state.foundations.filter { it.id != foundationId }
+        val updatedState = state.copy(
+            foundations = nextFoundations
+        )
+        _playerState.value = logToPrivateLedger(updatedState, "Menghibahkan Yayasan: ${foundation.name}", 0L, false)
         saveState(_playerState.value)
         return true
     }

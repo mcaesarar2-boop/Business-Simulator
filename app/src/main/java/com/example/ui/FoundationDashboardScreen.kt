@@ -41,6 +41,9 @@ fun FoundationDashboardScreen(navController: NavHostController, viewModel: GameV
     var selectedType by remember { mutableStateOf(FoundationType.EDUCATION) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var foundationToDelete by remember { mutableStateOf<com.example.data.FoundationEntity?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -196,6 +199,10 @@ fun FoundationDashboardScreen(navController: NavHostController, viewModel: GameV
                         foundation = foundation,
                         onClick = {
                             navController.navigate("private_foundation_detail/${foundation.id}")
+                        },
+                        onDeleteClick = {
+                            foundationToDelete = foundation
+                            showDeleteConfirmDialog = true
                         }
                     )
                 }
@@ -315,10 +322,43 @@ fun FoundationDashboardScreen(navController: NavHostController, viewModel: GameV
             }
         )
     }
+
+    if (showDeleteConfirmDialog) {
+        val f = foundationToDelete
+        if (f != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmDialog = false },
+                title = { Text("Hibahkan & Tutup Yayasan?", fontWeight = FontWeight.Bold, color = Color.White) },
+                text = {
+                    Text(
+                        "Apakah Anda yakin ingin menghibahkan yayasan '${f.name}' ke pemerintah? Seluruh Dana Abadi dan aset di dalamnya akan dilepaskan secara permanen. Operasional bulanan akan dihentikan.",
+                        color = Color.LightGray
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deletePrivateFoundation(f.id)
+                            showDeleteConfirmDialog = false
+                            foundationToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                    ) {
+                        Text("Ya, Hibahkan", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                        Text("Batal", color = Color.Gray)
+                    }
+                }
+            )
+        }
+    }
 }
 
 @Composable
-fun FoundationCard(foundation: FoundationEntity, onClick: () -> Unit) {
+fun FoundationCard(foundation: FoundationEntity, onClick: () -> Unit, onDeleteClick: () -> Unit) {
     val icon = when (foundation.type) {
         FoundationType.EDUCATION -> Icons.Default.School
         FoundationType.HEALTHCARE -> Icons.Default.LocalHospital
@@ -344,7 +384,7 @@ fun FoundationCard(foundation: FoundationEntity, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -370,23 +410,39 @@ fun FoundationCard(foundation: FoundationEntity, onClick: () -> Unit) {
                     }
                 }
                 
-                if (foundation.isLegalized) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text("RESMI", color = Color(0xFF4CAF50), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (foundation.isLegalized) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("RESMI", color = Color(0xFF4CAF50), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFE65100).copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("LEGALITAS", color = Color(0xFFFF9800), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFFE65100).copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    IconButton(
+                        onClick = { onDeleteClick() },
+                        modifier = Modifier.size(28.dp)
                     ) {
-                        Text("LEGALITAS", color = Color(0xFFFF9800), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Hibahkan",
+                            tint = Color.Red.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
