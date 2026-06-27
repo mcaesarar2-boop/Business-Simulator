@@ -558,6 +558,57 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate("private_foundation_dashboard") }
+                            .border(2.dp, Color(0xFFD4AF37).copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🏛️ Private Foundation & Legacy",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Bangun institusi nirlaba, sumbangkan kekayaan pribadi, dan abadikan nama Anda.",
+                                    color = Color(0xFFE0E0E0),
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
+                                )
+                                if (playerState.foundationLegacyPoints > 0) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Reputasi Abadi: ${playerState.foundationLegacyPoints} Prestige Points",
+                                        color = Color(0xFFD4AF37),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                // Note: we can use a simpler line if we want.
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.Default.AccountBalance,
+                                contentDescription = null,
+                                tint = Color(0xFFD4AF37),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }

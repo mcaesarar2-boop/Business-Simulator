@@ -279,5 +279,10 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
         composable("tax_and_audit") { com.example.ui.TaxAndAuditScreen(navController, viewModel) }
         composable("private_lifestyle") { com.example.ui.lifestyle.LifestyleDashboardScreen(navController, viewModel) }
         composable("private_travel_concierge") { com.example.ui.lifestyle.TravelConciergeScreen(navController, viewModel) }
+        composable("private_foundation_dashboard") { com.example.ui.FoundationDashboardScreen(navController, viewModel) }
+        composable("private_foundation_detail/{foundationId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            com.example.ui.FoundationDetailScreen(navController, viewModel, foundationId)
+        }
     }
 }

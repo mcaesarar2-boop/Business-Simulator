@@ -197,7 +197,9 @@ data class PlayerState(
     val travelHistory: Int = 0,
     val totalCharityDonated: Long = 0L,
     val travelDestinations: List<TravelDestination> = defaultTravelDestinations,
-    val totalTripsTaken: Int = 0
+    val totalTripsTaken: Int = 0,
+    val foundationLegacyPoints: Long = 0L,
+    val foundations: List<com.example.data.FoundationEntity> = emptyList()
 )
 
 fun getBusinessStats(owned: OwnedBusiness, catalog: BusinessCatalogItem, playerState: PlayerState? = null): Pair<Long, Long> {

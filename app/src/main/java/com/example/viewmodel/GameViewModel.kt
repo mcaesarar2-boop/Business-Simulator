@@ -4689,6 +4689,77 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             _newsFeed.value = (foNews + _newsFeed.value).take(20)
         }
 
+        // ----------------------------------------------------
+        // PRIVATE FOUNDATION & LEGACY TICK
+        // ----------------------------------------------------
+        var totalLegacyReward = 0L
+        val updatedFoundations = currentState.foundations.map { f ->
+            var nextConstructionMonthsLeft = f.constructionMonthsLeft
+            var nextIsLegalized = f.isLegalized
+            if (!f.isLegalized && f.constructionMonthsLeft > 0) {
+                nextConstructionMonthsLeft -= 1
+                if (nextConstructionMonthsLeft <= 0) {
+                    nextIsLegalized = true
+                    foNews.add(MarketNews(
+                        id = "foundation_legalized_${System.currentTimeMillis()}_${f.id}",
+                        text = "🏛️ YAYASAN LEGAL: Proses legalitas '${f.name}' (${f.type.label}) selesai. Anda sekarang bisa menyuntikkan dana abadi dan membangun fasilitas!",
+                        type = "BULL"
+                    ))
+                }
+            }
+
+            var nextEndowmentFund = f.endowmentFund
+            val nextFacilities = f.facilities.map { fac ->
+                var nextBuildMonthsLeft = fac.buildMonthsLeft
+                var nextIsOperational = fac.isOperational
+                if (fac.buildMonthsLeft > 0) {
+                    nextBuildMonthsLeft -= 1
+                    if (nextBuildMonthsLeft <= 0) {
+                        nextIsOperational = true
+                        foNews.add(MarketNews(
+                            id = "facility_built_${System.currentTimeMillis()}_${fac.id}",
+                            text = "🏗️ FASILITAS SELESAI: Fasilitas '${fac.name}' di Yayasan ${f.name} telah selesai dibangun dan siap beroperasi!",
+                            type = "BULL"
+                        ))
+                    }
+                }
+
+                if (nextIsOperational) {
+                    if (nextEndowmentFund >= fac.monthlyOperationalCost) {
+                        nextEndowmentFund -= fac.monthlyOperationalCost
+                        totalLegacyReward += fac.prestigeReward
+                        fac.copy(
+                            buildMonthsLeft = 0,
+                            isOperational = true
+                        )
+                    } else {
+                        // Mangkrak / Tutup Sementara
+                        fac.copy(
+                            buildMonthsLeft = 0,
+                            isOperational = false
+                        )
+                    }
+                } else {
+                    fac.copy(
+                        buildMonthsLeft = nextBuildMonthsLeft,
+                        isOperational = false
+                    )
+                }
+            }
+
+            f.copy(
+                constructionMonthsLeft = nextConstructionMonthsLeft,
+                isLegalized = nextIsLegalized,
+                endowmentFund = nextEndowmentFund,
+                facilities = nextFacilities
+            )
+        }
+        val nextLegacyPoints = currentState.foundationLegacyPoints + totalLegacyReward
+
+        if (foNews.isNotEmpty()) {
+            _newsFeed.value = (foNews + _newsFeed.value).take(20)
+        }
+
         // Append monthly ledger records to privateLedgerHistory with a max of 200 items (FIFO)
         var updatedLedgerHistory = currentState.privateLedgerHistory + monthlyLedgerRecords
         if (updatedLedgerHistory.size > 200) {
@@ -4735,7 +4806,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             isSptReportedThisYear = isSptReportedThisYearVal,
             consecutiveUnreportedSpt = consecutiveUnreportedSptVal,
             financialHistory = financialHistoryVal,
-            privateLedgerHistory = updatedLedgerHistory
+            privateLedgerHistory = updatedLedgerHistory,
+            foundations = updatedFoundations,
+            foundationLegacyPoints = nextLegacyPoints
         )
         _playerState.value = syncTvValuation(_playerState.value)
         if(!isOffline) saveState(_playerState.value)
@@ -8362,6 +8435,88 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             totalCharityDonated = state.totalCharityDonated + amount
         )
         _playerState.value = logToPrivateLedger(reducedState, "Donasi Amal Kemanusiaan", amount, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun createPrivateFoundation(name: String, type: com.example.data.FoundationType): Boolean {
+        val state = _playerState.value
+        if (state.privateBalance < type.legalCost) return false
+
+        val newFoundation = com.example.data.FoundationEntity(
+            name = name,
+            type = type,
+            constructionMonthsLeft = type.setupMonths,
+            isLegalized = false
+        )
+        val nextFoundations = state.foundations + newFoundation
+        val reducedState = state.copy(
+            privateBalance = state.privateBalance - type.legalCost,
+            foundations = nextFoundations
+        )
+        _playerState.value = logToPrivateLedger(reducedState, "Mendirikan Yayasan: $name (${type.label})", type.legalCost, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun injectEndowmentFund(foundationId: String, amount: Long): Boolean {
+        val state = _playerState.value
+        if (state.privateBalance < amount || amount <= 0) return false
+
+        val nextFoundations = state.foundations.map {
+            if (it.id == foundationId) {
+                it.copy(endowmentFund = it.endowmentFund + amount)
+            } else {
+                it
+            }
+        }
+        val reducedState = state.copy(
+            privateBalance = state.privateBalance - amount,
+            foundations = nextFoundations
+        )
+        val fName = state.foundations.find { it.id == foundationId }?.name ?: "Yayasan"
+        _playerState.value = logToPrivateLedger(reducedState, "Suntik Dana Abadi: $fName", amount, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun buildFoundationFacility(
+        foundationId: String,
+        name: String,
+        category: String,
+        tier: String,
+        buildCost: Long,
+        buildMonths: Int,
+        monthlyOps: Long,
+        prestigeReward: Long
+    ): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        if (!foundation.isLegalized) return false
+        if (foundation.endowmentFund < buildCost) return false
+
+        val newFacility = com.example.data.FoundationFacility(
+            name = name,
+            category = category,
+            tier = tier,
+            buildCost = buildCost,
+            buildMonthsLeft = buildMonths,
+            monthlyOperationalCost = monthlyOps,
+            prestigeReward = prestigeReward,
+            isOperational = false
+        )
+        
+        val nextFoundations = state.foundations.map {
+            if (it.id == foundationId) {
+                it.copy(
+                    endowmentFund = it.endowmentFund - buildCost,
+                    facilities = it.facilities + newFacility
+                )
+            } else {
+                it
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
         saveState(_playerState.value)
         return true
     }
