@@ -8295,6 +8295,30 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         saveState(_playerState.value)
     }
 
+    fun deleteTravelDestination(destinationId: String) {
+        val state = _playerState.value
+        val nextDestinations = state.travelDestinations.filter { it.id != destinationId }
+        _playerState.value = state.copy(
+            travelDestinations = nextDestinations
+        )
+        saveState(_playerState.value)
+    }
+
+    fun editTravelDestinationImageUrl(destinationId: String, newImageUrl: String) {
+        val state = _playerState.value
+        val nextDestinations = state.travelDestinations.map {
+            if (it.id == destinationId) {
+                it.copy(imageUrl = newImageUrl)
+            } else {
+                it
+            }
+        }
+        _playerState.value = state.copy(
+            travelDestinations = nextDestinations
+        )
+        saveState(_playerState.value)
+    }
+
     fun purchaseTechGadget(name: String, price: Long): Boolean {
         val state = _playerState.value
         if (state.privateBalance < price) return false
