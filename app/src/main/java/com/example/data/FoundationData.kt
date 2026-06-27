@@ -8,6 +8,16 @@ enum class FoundationType(val label: String, val legalCost: Long, val setupMonth
     HUMANITARIAN("Badan Amal & Kemanusiaan Terpadu", 2_000_000L, 2)
 }
 
+data class EducationInstitution(
+    val id: String = UUID.randomUUID().toString(),
+    val level: String, // TK, SD, SMA, UNIV
+    val curriculumType: String, // Merdeka, K13, Cambridge, IB, dsb.
+    val facilityLevel: Int, // 1 - 5 (Upgrade fasilitas)
+    val accreditationPoints: Int, // 0 - 100
+    val monthlyOperationalCost: Long, // Biaya bakar duit per bulan
+    val prestigeScore: Int
+)
+
 data class FoundationEntity(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -15,7 +25,8 @@ data class FoundationEntity(
     val isLegalized: Boolean = false,
     val constructionMonthsLeft: Int,
     val endowmentFund: Long = 0L, // Dana abadi yayasan
-    val facilities: List<FoundationFacility> = emptyList()
+    val facilities: List<FoundationFacility> = emptyList(),
+    val educationInstitutions: List<EducationInstitution> = emptyList()
 )
 
 data class FoundationFacility(
@@ -74,3 +85,21 @@ data class FacilityTier(
     val prestigeMultiplier: Double,
     val description: String
 )
+
+fun calculateEduOperationalCost(level: String, facilityLevel: Int, curriculumType: String): Long {
+    val baseOps = when (level) {
+        "TK" -> 10000L
+        "SD" -> 30000L
+        "SMA" -> 100000L
+        "UNIV" -> 400000L
+        else -> 10000L
+    }
+    val multiplier = when (curriculumType) {
+        "Montessori", "Waldorf" -> 1.5
+        "Agama Terpadu" -> 1.75
+        "Cambridge", "IB" -> 3.0
+        "Internasional" -> 6.0
+        else -> 1.0
+    }
+    return (baseOps * facilityLevel * multiplier).toLong()
+}

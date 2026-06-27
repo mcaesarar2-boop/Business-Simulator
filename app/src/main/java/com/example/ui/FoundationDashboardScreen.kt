@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -104,7 +105,7 @@ fun FoundationDashboardScreen(navController: NavHostController, viewModel: GameV
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Kas Pribadi (CEO)", color = Color.LightGray, fontSize = 11.sp)
                                 Text(
-                                    text = "$${com.example.ui.formatCurrency(playerState.privateBalance)}",
+                                    text = com.example.ui.formatCurrency(playerState.privateBalance),
                                     color = Color(0xFF2E7D32),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
@@ -243,29 +244,37 @@ fun FoundationDashboardScreen(navController: NavHostController, viewModel: GameV
                             ),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
                                         text = type.label,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) Color(0xFFD4AF37) else Color.White
+                                        color = if (isSelected) Color(0xFFFFD700) else Color.White,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "$${com.example.ui.formatCurrencyRingkas(type.legalCost, false)}",
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF2E7D32),
-                                        fontSize = 13.sp
+                                        text = "Masa Legalitas: ${type.setupMonths} Bulan",
+                                        color = Color.LightGray,
+                                        fontSize = 12.sp
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                Spacer(modifier = Modifier.width(16.dp))
                                 Text(
-                                    text = "Masa Legalitas: ${type.setupMonths} Bulan",
-                                    color = Color.LightGray,
-                                    fontSize = 11.sp
+                                    text = com.example.ui.formatCurrency(type.legalCost),
+                                    color = Color(0xFF4CAF50),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.End
                                 )
                             }
                         }
@@ -284,7 +293,7 @@ fun FoundationDashboardScreen(navController: NavHostController, viewModel: GameV
                             return@Button
                         }
                         if (playerState.privateBalance < selectedType.legalCost) {
-                            errorMessage = "Kas Pribadi Anda tidak cukup! Dibutuhkan $${com.example.ui.formatCurrency(selectedType.legalCost)}"
+                            errorMessage = "Kas Pribadi Anda tidak cukup! Dibutuhkan ${com.example.ui.formatCurrency(selectedType.legalCost)}"
                             return@Button
                         }
                         val success = viewModel.createPrivateFoundation(newFoundationName.trim(), selectedType)
@@ -413,7 +422,7 @@ fun FoundationCard(foundation: FoundationEntity, onClick: () -> Unit) {
                     Column {
                         Text("Dana Abadi (Endowment)", color = Color.Gray, fontSize = 11.sp)
                         Text(
-                            text = "$${com.example.ui.formatCurrency(foundation.endowmentFund)}",
+                            text = com.example.ui.formatCurrency(foundation.endowmentFund),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp

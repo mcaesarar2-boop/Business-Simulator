@@ -4747,11 +4747,45 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            val nextEduInstitutions = if (f.type == com.example.data.FoundationType.EDUCATION && nextIsLegalized) {
+                f.educationInstitutions.map { inst ->
+                    val addedPoints = (inst.facilityLevel * 0.5) + (inst.prestigeScore * 0.1)
+                    val beforePoints = inst.accreditationPoints
+                    val nextPoints = Math.min(100, (beforePoints + addedPoints).toInt())
+
+                    var isOperational = false
+                    if (nextEndowmentFund >= inst.monthlyOperationalCost) {
+                        nextEndowmentFund -= inst.monthlyOperationalCost
+                        isOperational = true
+                        totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                    }
+
+                    if (beforePoints < 90 && nextPoints >= 90) {
+                        foNews.add(MarketNews(
+                            id = "edu_prestasi_nasional_${System.currentTimeMillis()}_${inst.id}",
+                            text = "🎓 PRESTASI NASIONAL: Fasilitas ${inst.level} di Yayasan ${f.name} memperoleh Akreditasi Unggul! Hibah Riset & Subsidi Negara senilai +$${com.example.ui.formatCurrencyRingkas(250000.0, false)}/bln ditambahkan ke Dana Abadi.",
+                            type = "BULL"
+                        ))
+                    }
+
+                    if (nextPoints >= 90 && isOperational) {
+                        nextEndowmentFund += 250000L
+                    }
+
+                    inst.copy(
+                        accreditationPoints = nextPoints
+                    )
+                }
+            } else {
+                f.educationInstitutions
+            }
+
             f.copy(
                 constructionMonthsLeft = nextConstructionMonthsLeft,
                 isLegalized = nextIsLegalized,
                 endowmentFund = nextEndowmentFund,
-                facilities = nextFacilities
+                facilities = nextFacilities,
+                educationInstitutions = nextEduInstitutions
             )
         }
         val nextLegacyPoints = currentState.foundationLegacyPoints + totalLegacyReward
@@ -8443,11 +8477,51 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val state = _playerState.value
         if (state.privateBalance < type.legalCost) return false
 
+        val defaultEduInstitutions = if (type == com.example.data.FoundationType.EDUCATION) {
+            listOf(
+                com.example.data.EducationInstitution(
+                    level = "TK",
+                    curriculumType = "Nasional",
+                    facilityLevel = 1,
+                    accreditationPoints = 0,
+                    monthlyOperationalCost = 10000L,
+                    prestigeScore = 5
+                ),
+                com.example.data.EducationInstitution(
+                    level = "SD",
+                    curriculumType = "Nasional",
+                    facilityLevel = 1,
+                    accreditationPoints = 0,
+                    monthlyOperationalCost = 30000L,
+                    prestigeScore = 15
+                ),
+                com.example.data.EducationInstitution(
+                    level = "SMA",
+                    curriculumType = "Nasional",
+                    facilityLevel = 1,
+                    accreditationPoints = 0,
+                    monthlyOperationalCost = 100000L,
+                    prestigeScore = 40
+                ),
+                com.example.data.EducationInstitution(
+                    level = "UNIV",
+                    curriculumType = "Nasional",
+                    facilityLevel = 1,
+                    accreditationPoints = 0,
+                    monthlyOperationalCost = 400000L,
+                    prestigeScore = 100
+                )
+            )
+        } else {
+            emptyList()
+        }
+
         val newFoundation = com.example.data.FoundationEntity(
             name = name,
             type = type,
             constructionMonthsLeft = type.setupMonths,
-            isLegalized = false
+            isLegalized = false,
+            educationInstitutions = defaultEduInstitutions
         )
         val nextFoundations = state.foundations + newFoundation
         val reducedState = state.copy(
@@ -8514,6 +8588,80 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } else {
                 it
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun upgradeEduFacility(foundationId: String, institutionId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = foundation.educationInstitutions.find { it.id == institutionId } ?: return false
+        if (inst.facilityLevel >= 5) return false
+
+        val baseUpgradeCost = when (inst.level) {
+            "TK" -> 150000L
+            "SD" -> 400000L
+            "SMA" -> 1200000L
+            "UNIV" -> 4000000L
+            else -> 150000L
+        }
+        val cost = baseUpgradeCost * inst.facilityLevel
+
+        if (foundation.endowmentFund < cost) return false
+
+        val nextLevel = inst.facilityLevel + 1
+        val basePrestige = when (inst.level) {
+            "TK" -> 5
+            "SD" -> 15
+            "SMA" -> 40
+            "UNIV" -> 100
+            else -> 5
+        }
+        val nextPrestige = basePrestige * nextLevel
+        val nextOps = com.example.data.calculateEduOperationalCost(inst.level, nextLevel, inst.curriculumType)
+
+        val updatedInst = inst.copy(
+            facilityLevel = nextLevel,
+            prestigeScore = nextPrestige,
+            monthlyOperationalCost = nextOps
+        )
+
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    endowmentFund = f.endowmentFund - cost,
+                    educationInstitutions = f.educationInstitutions.map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun changeEduCurriculum(foundationId: String, institutionId: String, newCurriculum: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = foundation.educationInstitutions.find { it.id == institutionId } ?: return false
+
+        val nextOps = com.example.data.calculateEduOperationalCost(inst.level, inst.facilityLevel, newCurriculum)
+        val updatedInst = inst.copy(
+            curriculumType = newCurriculum,
+            monthlyOperationalCost = nextOps
+        )
+
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = f.educationInstitutions.map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
             }
         }
         _playerState.value = state.copy(foundations = nextFoundations)

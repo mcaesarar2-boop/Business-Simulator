@@ -57,6 +57,9 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
     var customFacilityName by remember { mutableStateOf("") }
     var buildError by remember { mutableStateOf<String?>(null) }
 
+    var showCurriculumDialog by remember { mutableStateOf(false) }
+    var curriculumTargetInstitution by remember { mutableStateOf<com.example.data.EducationInstitution?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -156,7 +159,7 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "$${com.example.ui.formatCurrency(foundation.endowmentFund)}",
+                                text = com.example.ui.formatCurrency(foundation.endowmentFund),
                                 color = Color.White,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.ExtraBold
@@ -207,54 +210,102 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                     }
                 }
 
-                // Title: Built Facilities
-                item {
-                    Text(
-                        text = "Fasilitas & Layanan Sosial",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-
-                if (foundation.facilities.isEmpty()) {
+                if (foundation.type == FoundationType.EDUCATION) {
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.HomeWork,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Belum ada fasilitas dibangun.",
-                                    color = Color.LightGray,
-                                    fontSize = 13.sp,
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = "Gunakan tombol di atas untuk mendirikan sekolah, klinik, atau panti.",
-                                    color = Color.Gray,
-                                    fontSize = 11.sp,
-                                    textAlign = TextAlign.Center
-                                )
+                        Text(
+                            text = "Cetak Biru Institusi Pendidikan & Riset",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+
+                    val eduList = foundation.educationInstitutions
+                    if (eduList.isNotEmpty()) {
+                        val chunks = eduList.chunked(2)
+                        chunks.forEach { pair ->
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    pair.forEach { inst ->
+                                        Box(modifier = Modifier.weight(1.0f)) {
+                                            EducationInstitutionCard(
+                                                inst = inst,
+                                                endowmentFund = foundation.endowmentFund,
+                                                onUpgrade = {
+                                                    viewModel.upgradeEduFacility(foundation.id, inst.id)
+                                                },
+                                                onChangeCurriculum = {
+                                                    curriculumTargetInstitution = inst
+                                                    showCurriculumDialog = true
+                                                }
+                                            )
+                                        }
+                                    }
+                                    if (pair.size < 2) {
+                                        Spacer(modifier = Modifier.weight(1.0f))
+                                    }
+                                }
                             }
+                        }
+                    } else {
+                        item {
+                            Text("Tidak ada data institusi pendidikan.", color = Color.Gray, fontSize = 12.sp)
                         }
                     }
                 } else {
-                    items(foundation.facilities) { facility ->
-                        FacilityItemCard(facility = facility)
+                    // Title: Built Facilities
+                    item {
+                        Text(
+                            text = "Fasilitas & Layanan Sosial",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    if (foundation.facilities.isEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.HomeWork,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Belum ada fasilitas dibangun.",
+                                        color = Color.LightGray,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = "Gunakan tombol di atas untuk mendirikan sekolah, klinik, atau panti.",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(foundation.facilities) { facility ->
+                            FacilityItemCard(facility = facility)
+                        }
                     }
                 }
             }
@@ -302,13 +353,13 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                                 modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                             ) {
-                                Text("$${com.example.ui.formatCurrencyRingkas(quickAmt, false)}", fontSize = 11.sp, color = Color.White)
+                                Text(com.example.ui.formatCurrencyRingkas(quickAmt, false), fontSize = 11.sp, color = Color.White)
                             }
                         }
                     }
 
                     Text(
-                        text = "Saldo Pribadi Anda: $${com.example.ui.formatCurrency(playerState.privateBalance)}",
+                        text = "Saldo Pribadi Anda: ${com.example.ui.formatCurrency(playerState.privateBalance)}",
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2E7D32),
                         fontSize = 12.sp
@@ -439,11 +490,11 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Biaya Pembangunan:", fontSize = 11.sp, color = Color.LightGray)
-                                    Text("$${com.example.ui.formatCurrency(cost)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(com.example.ui.formatCurrency(cost), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Operasional Bulanan:", fontSize = 11.sp, color = Color.LightGray)
-                                    Text("$${com.example.ui.formatCurrency(ops)} / Bulan", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("${com.example.ui.formatCurrency(ops)} / Bulan", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Legacy Bulanan:", fontSize = 11.sp, color = Color.LightGray)
@@ -479,7 +530,7 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                         val prestige = (bp.basePrestige * selectedTier.prestigeMultiplier).toLong()
 
                         if (foundation.endowmentFund < cost) {
-                            buildError = "Dana Abadi Yayasan kurang! Butuh $${com.example.ui.formatCurrency(cost)}"
+                            buildError = "Dana Abadi Yayasan kurang! Butuh ${com.example.ui.formatCurrency(cost)}"
                             return@Button
                         }
 
@@ -506,6 +557,85 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
             },
             dismissButton = {
                 TextButton(onClick = { showBuildDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showCurriculumDialog && curriculumTargetInstitution != null) {
+        val inst = curriculumTargetInstitution!!
+        val options = when (inst.level) {
+            "TK" -> listOf("Nasional", "Montessori", "Waldorf")
+            "SD" -> listOf("Nasional", "Agama Terpadu")
+            "SMA" -> listOf("Nasional", "Cambridge", "IB")
+            "UNIV" -> listOf("Nasional", "Internasional")
+            else -> listOf("Nasional")
+        }
+
+        AlertDialog(
+            onDismissRequest = { showCurriculumDialog = false },
+            title = { Text("Pilih Kurikulum - ${if (inst.level == "TK") "TK/TKA" else if (inst.level == "SD") "SD/MI" else if (inst.level == "SMA") "SMA/SMK" else "Universitas"}", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Memilih kurikulum khusus meningkatkan kualitas akreditasi, namun meningkatkan biaya operasional bulanan secara signifikan.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    options.forEach { option ->
+                        val costMultiplier = when (option) {
+                            "Montessori", "Waldorf" -> "+50% Ops"
+                            "Agama Terpadu" -> "+75% Ops"
+                            "Cambridge", "IB" -> "+200% Ops"
+                            "Internasional" -> "+500% Ops"
+                            else -> "Biaya Standar"
+                        }
+                        
+                        val isSelected = inst.curriculumType == option
+                        
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.changeEduCurriculum(foundation.id, inst.id, option)
+                                    showCurriculumDialog = false
+                                }
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.05f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) Color(0xFF1B2C3F) else Color(0xFF101B2B)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(text = option, fontWeight = FontWeight.Bold, color = if (isSelected) Color(0xFFD4AF37) else Color.White, fontSize = 13.sp)
+                                    Text(text = costMultiplier, color = Color.LightGray, fontSize = 11.sp)
+                                }
+                                if (isSelected) {
+                                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showCurriculumDialog = false }) {
                     Text("Batal")
                 }
             }
@@ -584,7 +714,7 @@ fun FacilityItemCard(facility: FoundationFacility) {
                     Column {
                         Text("Biaya Operasional", color = Color.Gray, fontSize = 11.sp)
                         Text(
-                            text = "$${com.example.ui.formatCurrency(facility.monthlyOperationalCost)} / bln",
+                            text = "${com.example.ui.formatCurrency(facility.monthlyOperationalCost)} / bln",
                             color = Color.LightGray,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -599,6 +729,159 @@ fun FacilityItemCard(facility: FoundationFacility) {
                             fontSize = 12.sp
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EducationInstitutionCard(
+    inst: com.example.data.EducationInstitution,
+    endowmentFund: Long,
+    onUpgrade: () -> Unit,
+    onChangeCurriculum: () -> Unit
+) {
+    val levelLabel = when (inst.level) {
+        "TK" -> "TK/TKA"
+        "SD" -> "SD/MI"
+        "SMA" -> "SMA/SMK"
+        "UNIV" -> "Universitas & Riset"
+        else -> inst.level
+    }
+
+    val baseUpgradeCost = when (inst.level) {
+        "TK" -> 150000L
+        "SD" -> 400000L
+        "SMA" -> 1200000L
+        "UNIV" -> 4000000L
+        else -> 150000L
+    }
+    val upgradeCost = baseUpgradeCost * inst.facilityLevel
+    val canUpgrade = inst.facilityLevel < 5 && endowmentFund >= upgradeCost
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Accreditation Points Progress
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Akreditasi: ${inst.accreditationPoints}/100",
+                    color = if (inst.accreditationPoints >= 90) Color(0xFF4CAF50) else Color.LightGray,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (inst.accreditationPoints >= 90) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("UNGGUL", color = Color(0xFF4CAF50), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { inst.accreditationPoints / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = if (inst.accreditationPoints >= 90) Color(0xFF4CAF50) else Color(0xFFD4AF37),
+                trackColor = Color.White.copy(alpha = 0.1f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Level & Name
+            Text(
+                text = levelLabel,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                fontSize = 14.sp
+            )
+            Text(
+                text = "Level Fasilitas: ${inst.facilityLevel} / 5",
+                color = Color.LightGray,
+                fontSize = 11.sp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Info Details
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Kurikulum:", color = Color.Gray, fontSize = 11.sp)
+                Text(inst.curriculumType, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Ops Bulanan:", color = Color.Gray, fontSize = 11.sp)
+                Text(
+                    text = com.example.ui.formatCurrency(inst.monthlyOperationalCost),
+                    color = Color.LightGray,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Buttons
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Button Upgrade
+                Button(
+                    onClick = onUpgrade,
+                    enabled = canUpgrade,
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD4AF37),
+                        contentColor = Color(0xFF050C1A),
+                        disabledContainerColor = Color.White.copy(alpha = 0.05f),
+                        disabledContentColor = Color.Gray
+                    ),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    val btnText = if (inst.facilityLevel >= 5) {
+                        "Max Level (5)"
+                    } else {
+                        "Upgrade (${com.example.ui.formatCurrencyRingkas(upgradeCost, true)})"
+                    }
+                    Text(btnText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Button Curriculum Change
+                OutlinedButton(
+                    onClick = onChangeCurriculum,
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Ganti Kurikulum", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
