@@ -272,7 +272,7 @@ fun MegaHoldingsBoardConfig(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Berdasarkan ${String.format("%.1f", requestSliderValue)}% dari Laba Holding Monthly",
+                                text = "Berdasarkan ${String.format(java.util.Locale.US, "%.1f", requestSliderValue)}% dari Laba Holding Monthly",
                                 color = textGray,
                                 fontSize = 11.sp
                             )
@@ -388,7 +388,8 @@ fun MegaHoldingsBoardConfig(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val estimasiDividendPayout = (playerState.retainedEarnings * (requestDividendSliderValue / 100.0)).toLong()
+                        val labaEnamBulanTerakhir = playerState.financialHistory.takeLast(6).sumOf { it.netIncome }
+                        val estimasiDividendPayout = (labaEnamBulanTerakhir * (requestDividendSliderValue / 100.0)).toLong()
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "Pool Dividen: ${formatCurrencyRingkas(estimasiDividendPayout.toDouble(), false)}",
@@ -399,14 +400,14 @@ fun MegaHoldingsBoardConfig(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Total Laba Ditahan Perusahaan: ${formatCurrencyRingkas(playerState.retainedEarnings.toDouble(), false)}",
+                                text = "Total Laba 6 Bulan Terakhir: ${formatCurrencyRingkas(labaEnamBulanTerakhir.toDouble(), false)}",
                                 color = textGray,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
-                            )
+                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Persentase Usulan: ${String.format("%.1f", requestDividendSliderValue)}% dari Laba Ditahan",
+                                text = "Persentase Usulan: ${String.format(java.util.Locale.US, "%.1f", requestDividendSliderValue)}% dari Laba 6 Bulan Terakhir",
                                 color = textGray,
                                 fontSize = 11.sp
                             )
@@ -500,7 +501,7 @@ fun MegaHoldingsBoardConfig(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Laba Bersih 12 Bln Terakhir: ${formatCurrencyRingkas(historyAnnualProfit.toDouble(), false)} (Usulan: ${String.format("%.1f", requestTantiemSliderValue)}%)",
+                                text = "Laba Bersih 12 Bln Terakhir: ${formatCurrencyRingkas(historyAnnualProfit.toDouble(), false)} (Usulan: ${String.format(java.util.Locale.US, "%.1f", requestTantiemSliderValue)}%)",
                                 color = textGray,
                                 fontSize = 11.sp
                             )

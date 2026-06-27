@@ -278,5 +278,6 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
         composable("private_ledger") { com.example.ui.PrivateLedgerScreen(navController, viewModel) }
         composable("tax_and_audit") { com.example.ui.TaxAndAuditScreen(navController, viewModel) }
         composable("private_lifestyle") { com.example.ui.lifestyle.LifestyleDashboardScreen(navController, viewModel) }
+        composable("private_travel_concierge") { com.example.ui.lifestyle.TravelConciergeScreen(navController, viewModel) }
     }
 }

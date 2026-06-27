@@ -84,7 +84,7 @@ fun FinancialHistoryScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Total Laba Ditahan (Retained Earnings):\n\$${formatCurrencyRingkas(playerState.retainedEarnings.toDouble(), false)}",
+                            text = "Total Laba Ditahan (Retained Earnings):\n${formatCurrencyRingkas(playerState.retainedEarnings.toDouble(), false)}",
                             color = neonGreen,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -117,7 +117,7 @@ fun FinancialHistoryScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "\$\$${formatCurrencyRingkas(currentYearNetIncome.toDouble(), false)}",
+                            text = "${formatCurrencyRingkas(currentYearNetIncome.toDouble(), false)}",
                             color = neonGreen,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
@@ -160,7 +160,7 @@ fun FinancialHistoryScreen(
                         items(reversedHistory) { item ->
                             val isPositive = item.netIncome >= 0
                             val netColor = if (isPositive) neonGreen else red
-                            val netSign = if (isPositive) "+\$" else "-\$"
+                            val netSign = if (isPositive) "+" else "-"
                             val netIncomeValue = Math.abs(item.netIncome)
 
                             Card(
@@ -181,13 +181,21 @@ fun FinancialHistoryScreen(
                                             text = "Bulan ke-${item.monthTick}",
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "Laba Bersih: $netSign${formatCurrencyRingkas(netIncomeValue.toDouble(), false)}",
                                             color = netColor,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.End,
+                                            modifier = Modifier.weight(1.2f)
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(6.dp))
@@ -197,14 +205,22 @@ fun FinancialHistoryScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Pendapatan: +\$${formatCurrencyRingkas(item.totalRevenue.toDouble(), false)}",
+                                            text = "Pendapatan: +${formatCurrencyRingkas(item.totalRevenue.toDouble(), false)}",
                                             color = textGray,
-                                            fontSize = 11.sp
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Pengeluaran: -\$${formatCurrencyRingkas(item.totalExpense.toDouble(), false)}",
+                                            text = "Pengeluaran: -${formatCurrencyRingkas(item.totalExpense.toDouble(), false)}",
                                             color = textGray,
-                                            fontSize = 11.sp
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.End,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
                                 }

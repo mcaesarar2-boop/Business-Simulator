@@ -69,6 +69,68 @@ data class MegaHoldingState(
     val ownershipPercentage: Double = 100.0
 )
 
+data class LifestyleItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val tabCategory: String, // "langganan", "gadget", "ekspedisi", "wellness", "filantropi", dll.
+    var sectionName: String, // Contoh: "Entertainment", "Productivity", "Vehicles"
+    var name: String,
+    var price: Long,
+    var imgUrl: String, // Menyimpan link URL gambar (PNG/SVG/JPG)
+    var desc: String, // Deskripsi item
+    var isActive: Boolean = false, // Untuk sistem toggle/langganan
+    var isOwned: Boolean = false, // Untuk sistem one-time purchase
+    val isCustom: Boolean = false // Penanda jika ini buatan pemain
+)
+
+data class TravelDestination(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val region: String,
+    val pricePerDay: Long, // Harga dasar per hari
+    val imageUrl: String,
+    val isCustom: Boolean = false
+)
+
+val defaultTravelDestinations = listOf(
+    TravelDestination(name = "Disneyland VIP Tour", region = "Orlando, USA", pricePerDay = 2000L, imageUrl = "https://images.unsplash.com/photo-1545231027-63b3f1626a5e?auto=format&fit=crop&w=500&q=80"),
+    TravelDestination(name = "Maldives Private Island Retreat", region = "Maldives", pricePerDay = 5000L, imageUrl = "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&w=500&q=80"),
+    TravelDestination(name = "Alps Luxury Ski Chalet", region = "Zermatt, Switzerland", pricePerDay = 8000L, imageUrl = "https://images.unsplash.com/photo-1502784444187-359ac186c5bb?auto=format&fit=crop&w=500&q=80"),
+    TravelDestination(name = "Necker Island Sanctuary", region = "British Virgin Islands", pricePerDay = 15000L, imageUrl = "https://images.unsplash.com/photo-1548574505-5e239809ee19?auto=format&fit=crop&w=500&q=80"),
+    TravelDestination(name = "Kyoto Imperial Villa Retreat", region = "Kyoto, Japan", pricePerDay = 4000L, imageUrl = "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=500&q=80")
+)
+
+val defaultLifestyleItems = listOf(
+    // LANGGANAN
+    LifestyleItem(tabCategory = "langganan", sectionName = "Entertainment", name = "Spotify Premium", price = 10L, imgUrl = "", desc = "Dengarkan musik resolusi tinggi tanpa gangguan."),
+    LifestyleItem(tabCategory = "langganan", sectionName = "Entertainment", name = "YouTube Premium", price = 15L, imgUrl = "", desc = "Nonton offline & bebas iklan untuk video tech startup."),
+    LifestyleItem(tabCategory = "langganan", sectionName = "Entertainment", name = "Disney+ & Netflix Bundle", price = 30L, imgUrl = "", desc = "Paket hiburan film akhir pekan 4K HDR."),
+    LifestyleItem(tabCategory = "langganan", sectionName = "Entertainment", name = "Apple TV+", price = 15L, imgUrl = "", desc = "Katalog serial orisinal kualitas sinematik terbaik."),
+    LifestyleItem(tabCategory = "langganan", sectionName = "Productivity", name = "Adobe Creative Cloud & CapCut Pro", price = 60L, imgUrl = "", desc = "Aset pengeditan video startup marketing."),
+    LifestyleItem(tabCategory = "langganan", sectionName = "Productivity", name = "Google One 30TB", price = 150L, imgUrl = "", desc = "Penyimpanan cloud raksasa untuk data & sasis kecerdasan buatan."),
+
+    // GADGET
+    LifestyleItem(tabCategory = "gadget", sectionName = "Mobile", name = "Smartphone Lipat", price = 2000L, imgUrl = "", desc = "Layar ganda fleksibel terkini untuk mobilitas level eksekutif."),
+    LifestyleItem(tabCategory = "gadget", sectionName = "Mobile", name = "Smartwatch Titanium", price = 1000L, imgUrl = "", desc = "Pelacak kebugaran berlapis titanium dengan sinkronisasi satelit."),
+    LifestyleItem(tabCategory = "gadget", sectionName = "Work", name = "Laptop Pribadi", price = 5000L, imgUrl = "", desc = "Grafis termutakhir dengan prosesor kustom ultra hemat daya."),
+    LifestyleItem(tabCategory = "gadget", sectionName = "Entertainment", name = "Computer Gaming Super", price = 15000L, imgUrl = "", desc = "Pendingin cairan dual-loop dengan sasis pencahayaan RGB kustom."),
+    LifestyleItem(tabCategory = "gadget", sectionName = "Infrastructure", name = "Computer AI & Server", price = 45000L, imgUrl = "", desc = "Server cluster modular mandiri berisi 4 kartu akselerator AI."),
+
+    // EKSPEDISI
+    LifestyleItem(tabCategory = "ekspedisi", sectionName = "Leisure", name = "Couples Private Getaway", price = 50000L, imgUrl = "", desc = "Resor pulau tropis terpencil ultra mewah dengan pelayan pribadi 24 jam."),
+    LifestyleItem(tabCategory = "ekspedisi", sectionName = "Leisure", name = "First-Class Europe Trip", price = 120000L, imgUrl = "", desc = "Terbang first-class ke 5 ibu kota monarki Eropa & menginap di istana kastel orisinal."),
+    LifestyleItem(tabCategory = "ekspedisi", sectionName = "High-End Adventure", name = "Multi-Country Overland Expedition", price = 300000L, imgUrl = "", desc = "Perjalanan konvoi helikopter kustom menyusuri dataran tinggi bersalju & gurun murni."),
+
+    // WELLNESS
+    LifestyleItem(tabCategory = "wellness", sectionName = "Health", name = "Personal Trainer & Chef", price = 15000L, imgUrl = "", desc = "Kombinasi nutrisi kustom organik bernutrisi tinggi & latihan kardio personal harian."),
+    LifestyleItem(tabCategory = "wellness", sectionName = "Health", name = "Private Doctor On-Call", price = 20000L, imgUrl = "", desc = "Tim medis klinis elit pribadi yang siaga 24 jam dengan peralatan diagnostik portabel canggih."),
+    LifestyleItem(tabCategory = "wellness", sectionName = "Security", name = "Tim Bodyguard Elite", price = 50000L, imgUrl = "", desc = "Rejimen penjaga bersenjata bersertifikasi militer yang mengamankan rute perjalanan & kediaman holding."),
+
+    // FILANTROPI
+    LifestyleItem(tabCategory = "filantropi", sectionName = "Social Impact", name = "Yayasan Sosial CEO", price = 100000L, imgUrl = "", desc = "Mendirikan yayasan kesejahteraan masyarakat untuk mengurangi kemiskinan perkotaan."),
+    LifestyleItem(tabCategory = "filantropi", sectionName = "Education", name = "Beasiswa Global Muda", price = 250000L, imgUrl = "", desc = "Program beasiswa penuh universitas top dunia bagi talenta lokal berprestasi."),
+    LifestyleItem(tabCategory = "filantropi", sectionName = "Healthcare", name = "Pusat Riset Medis", price = 1000000L, imgUrl = "", desc = "Mendanai laboratorium penelitian obat langka dan terapi mutakhir.")
+)
+
 data class PlayerState(
     val lastSavedTimeMs: Long = System.currentTimeMillis(),
     val cash: Long = 5000,
@@ -129,10 +191,13 @@ data class PlayerState(
     val privateLedgerHistory: List<PrivateLedgerRecord> = emptyList(),
     val financialHistory: List<com.example.data.MonthlyFinancialRecord> = emptyList(),
     val activeSubscriptions: List<String> = emptyList(),
+    val allSubscriptions: List<LifestyleItem> = defaultLifestyleItems,
     val monthlyLifestyleCost: Long = 0L,
     val ownedGadgets: List<String> = emptyList(),
     val travelHistory: Int = 0,
-    val totalCharityDonated: Long = 0L
+    val totalCharityDonated: Long = 0L,
+    val travelDestinations: List<TravelDestination> = defaultTravelDestinations,
+    val totalTripsTaken: Int = 0
 )
 
 fun getBusinessStats(owned: OwnedBusiness, catalog: BusinessCatalogItem, playerState: PlayerState? = null): Pair<Long, Long> {

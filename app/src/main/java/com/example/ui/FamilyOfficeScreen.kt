@@ -577,25 +577,28 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                         // 1. CEO Salary Card
                         val pendingText = if (playerState.pendingCeoSalaryPercent != null) "\n⏳ Menunggu Keputusan RUPS..." else ""
                         val estimasiGaji = (megaHoldingMonthlyProfit * (playerState.currentCeoSalaryPercent / 100.0)).toLong()
-                        val formattedGaji = if (estimasiGaji > 0) "$" + formatCurrencyRingkas(estimasiGaji.toDouble(), false) else "$0"
+                        val formattedGaji = if (estimasiGaji > 0) formatCurrencyRingkas(estimasiGaji.toDouble(), false) else "$0"
+                        val formattedGajiPercent = String.format(java.util.Locale.US, "%.1f", playerState.currentCeoSalaryPercent)
                         LiquidityCard(
                             title = "💼 Executive Salary & Remuneration",
                             subtitle = "Mencairkan laba holding reguler masuk ke saku pribadi secara berkala tiap bulan.${pendingText}",
                             indicator = "$formattedGaji / bln",
-                            percentageText = "Porsi Gaji: ${playerState.currentCeoSalaryPercent}% dari Laba Holding",
+                            percentageText = "Porsi Gaji: $formattedGajiPercent% dari Laba Holding",
                             onClick = null
                         )
 
                         // 2. Dividends Card
                         val dividendPendingText = if (playerState.pendingDividendPercent != null) "\n⏳ Menunggu RUPS..." else ""
-                        val estimasiDividenPool = (playerState.retainedEarnings * (playerState.currentDividendPercent / 100.0)).toLong()
+                        val labaEnamBulanTerakhir = playerState.financialHistory.takeLast(6).sumOf { it.netIncome }
+                        val estimasiDividenPool = (labaEnamBulanTerakhir * (playerState.currentDividendPercent / 100.0)).toLong()
                         val playerDividenBagian = (estimasiDividenPool * (playerState.companyOwnershipPercent / 100.0)).toLong()
-                        val formattedDividen = if (playerDividenBagian > 0) "$" + formatCurrencyRingkas(playerDividenBagian.toDouble(), false) else "$0"
+                        val formattedDividen = if (playerDividenBagian > 0) formatCurrencyRingkas(playerDividenBagian.toDouble(), false) else "$0"
+                        val formattedDividendPercent = String.format(java.util.Locale.US, "%.1f", playerState.currentDividendPercent)
                         LiquidityCard(
                             title = "📈 Corporate Dividends",
                             subtitle = "Mencairkan kas mengendap (treasury) perusahaan ke saku pribadi secara otomatis.${dividendPendingText}",
                             indicator = "$formattedDividen / 6 bln",
-                            percentageText = "Persentase Dividen: ${playerState.currentDividendPercent}% dari Laba Ditahan",
+                            percentageText = "Persentase Dividen: $formattedDividendPercent% dari Laba 6 Bulan Terakhir",
                             onClick = null
                         )
 
@@ -603,10 +606,11 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                         val tantiemPendingText = if (playerState.pendingTantiemPercent != null) "\n⏳ Menunggu Keputusan RUPS..." else ""
                         val historyAnnualProfit = playerState.financialHistory.takeLast(12).sumOf { it.netIncome }
                         val estimasiTantiemPayout = (historyAnnualProfit * (playerState.currentTantiemPercent / 100.0)).toLong()
-                        val formattedTantiem = if (estimasiTantiemPayout > 0) "$" + formatCurrencyRingkas(estimasiTantiemPayout.toDouble(), false) else "$0"
+                        val formattedTantiem = if (estimasiTantiemPayout > 0) formatCurrencyRingkas(estimasiTantiemPayout.toDouble(), false) else "$0"
+                        val formattedTantiemPercent = String.format(java.util.Locale.US, "%.1f", playerState.currentTantiemPercent)
                         LiquidityCard(
                             title = "🎁 Annual Bonus (Tantiem)",
-                            subtitle = "Bonus kinerja akhir tahun (Disetujui: ${playerState.currentTantiemPercent}%). Pencairan setiap siklus 12 bulan.${tantiemPendingText}",
+                            subtitle = "Bonus kinerja akhir tahun (Disetujui: $formattedTantiemPercent%). Pencairan setiap siklus 12 bulan.${tantiemPendingText}",
                             indicator = "$formattedTantiem / thn",
                             percentageText = "Estimasi Bonus (Berdasarkan Kinerja 12 Bln Terakhir): $formattedTantiem",
                             onClick = null
@@ -614,7 +618,7 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
 
                         // 2c. Corporate Perks Card
                         val monthlyPerksValue = (businessValue * 0.000005).toLong()
-                        val formattedPerks = if (monthlyPerksValue > 0) "$" + formatCurrencyRingkas(monthlyPerksValue.toDouble(), false) else "$0"
+                        val formattedPerks = if (monthlyPerksValue > 0) formatCurrencyRingkas(monthlyPerksValue.toDouble(), false) else "$0"
                         LiquidityCard(
                             title = "🛩️ Corporate Perks & Allowances",
                             subtitle = "Tunjangan fasilitas Natura otomatis dari perusahaan (Asuransi VVIP, Akomodasi, Keamanan, dsb) yang menyesuaikan dengan Valuasi Holding Anda.",

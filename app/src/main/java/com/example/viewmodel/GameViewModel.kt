@@ -86,7 +86,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     rebrandedCompanies = state.rebrandedCompanies ?: emptyMap(),
                     megaHolding = state.megaHolding ?: com.example.data.MegaHoldingState(),
                     ownedBusinesses = patchedBusinesses,
-                    holdingCompanies = patchedHoldings
+                    holdingCompanies = patchedHoldings,
+                    allSubscriptions = if (state.allSubscriptions.isNullOrEmpty()) {
+                        com.example.data.defaultLifestyleItems.map { defaultItem ->
+                            val isActive = state.activeSubscriptions?.contains(defaultItem.name) == true
+                            val isOwned = state.ownedGadgets?.contains(defaultItem.name) == true
+                            defaultItem.copy(isActive = isActive, isOwned = isOwned)
+                        }
+                    } else {
+                        val currentNames = state.allSubscriptions.map { it.name }.toSet()
+                        val missingDefaults = com.example.data.defaultLifestyleItems.filterNot { currentNames.contains(it.name) }
+                        state.allSubscriptions + missingDefaults
+                    },
+                    travelDestinations = if (state.travelDestinations.isNullOrEmpty()) {
+                        com.example.data.defaultTravelDestinations
+                    } else {
+                        state.travelDestinations
+                    },
+                    totalTripsTaken = state.totalTripsTaken
                 )
                 
                 // Simpan pembaruan jika ini adalah migrasi sukses
@@ -8095,9 +8112,185 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             state.monthlyLifestyleCost + monthlyCost
         }
+        val nextAllSubs = state.allSubscriptions.map { sub ->
+            if (sub.name == name) {
+                sub.copy(isActive = !isCurrentlyActive)
+            } else {
+                sub
+            }
+        }
         _playerState.value = state.copy(
             activeSubscriptions = nextSubscriptions,
+            allSubscriptions = nextAllSubs,
             monthlyLifestyleCost = nextCost
+        )
+        saveState(_playerState.value)
+    }
+
+    fun addLifestyleItem(tabCategory: String, sectionName: String, name: String, price: Long, imgUrl: String, desc: String) {
+        val state = _playerState.value
+        val newItem = com.example.data.LifestyleItem(
+            id = java.util.UUID.randomUUID().toString(),
+            tabCategory = tabCategory,
+            sectionName = sectionName,
+            name = name,
+            price = price,
+            imgUrl = imgUrl,
+            desc = desc,
+            isActive = false,
+            isOwned = false,
+            isCustom = true
+        )
+        val nextAllItems = state.allSubscriptions + newItem
+        _playerState.value = state.copy(
+            allSubscriptions = nextAllItems
+        )
+        saveState(_playerState.value)
+    }
+
+    fun updateLifestyleItem(id: String, name: String, price: Long, sectionName: String, desc: String, imgUrl: String) {
+        val state = _playerState.value
+        val nextAllItems = state.allSubscriptions.map { item ->
+            if (item.id == id) {
+                val priceDiff = price - item.price
+                if (item.isActive && (item.tabCategory == "langganan" || item.tabCategory == "wellness")) {
+                    val nextCost = (state.monthlyLifestyleCost + priceDiff).coerceAtLeast(0L)
+                    _playerState.value = _playerState.value.copy(monthlyLifestyleCost = nextCost)
+                }
+                item.copy(name = name, price = price, sectionName = sectionName, desc = desc, imgUrl = imgUrl)
+            } else {
+                item
+            }
+        }
+        _playerState.value = _playerState.value.copy(
+            allSubscriptions = nextAllItems
+        )
+        saveState(_playerState.value)
+    }
+
+    fun deleteLifestyleItem(id: String) {
+        val state = _playerState.value
+        val itemToDelete = state.allSubscriptions.find { it.id == id } ?: return
+        
+        val nextCost = if (itemToDelete.isActive && (itemToDelete.tabCategory == "langganan" || itemToDelete.tabCategory == "wellness")) {
+            (state.monthlyLifestyleCost - itemToDelete.price).coerceAtLeast(0L)
+        } else {
+            state.monthlyLifestyleCost
+        }
+        
+        val nextAllItems = state.allSubscriptions.filter { it.id != id }
+        _playerState.value = state.copy(
+            allSubscriptions = nextAllItems,
+            monthlyLifestyleCost = nextCost
+        )
+        saveState(_playerState.value)
+    }
+
+    fun toggleLifestyleItemActive(id: String) {
+        val state = _playerState.value
+        val nextAllItems = state.allSubscriptions.map { item ->
+            if (item.id == id) {
+                val nextActive = !item.isActive
+                val costDiff = if (nextActive) item.price else -item.price
+                val nextCost = (state.monthlyLifestyleCost + costDiff).coerceAtLeast(0L)
+                
+                val nextActiveSubs = if (nextActive) {
+                    state.activeSubscriptions + item.name
+                } else {
+                    state.activeSubscriptions.filter { it != item.name }
+                }
+                
+                _playerState.value = _playerState.value.copy(
+                    activeSubscriptions = nextActiveSubs,
+                    monthlyLifestyleCost = nextCost
+                )
+                item.copy(isActive = nextActive)
+            } else {
+                item
+            }
+        }
+        _playerState.value = _playerState.value.copy(
+            allSubscriptions = nextAllItems
+        )
+        saveState(_playerState.value)
+    }
+
+    fun purchaseLifestyleItemOwned(id: String): Boolean {
+        val state = _playerState.value
+        val item = state.allSubscriptions.find { it.id == id } ?: return false
+        if (state.privateBalance < item.price) return false
+        
+        val reducedState = state.copy(
+            privateBalance = state.privateBalance - item.price,
+            ownedGadgets = if (item.tabCategory == "gadget") state.ownedGadgets + item.name else state.ownedGadgets,
+            totalCharityDonated = if (item.tabCategory == "filantropi") state.totalCharityDonated + item.price else state.totalCharityDonated
+        )
+        
+        val nextAllItems = reducedState.allSubscriptions.map { itm ->
+            if (itm.id == id) {
+                itm.copy(isOwned = true)
+            } else {
+                itm
+            }
+        }
+        
+        val finalState = reducedState.copy(allSubscriptions = nextAllItems)
+        val ledgerTitle = when (item.tabCategory) {
+            "gadget" -> "Beli Gadget: ${item.name}"
+            "filantropi" -> "Donasi Filantropi: ${item.name}"
+            else -> "Beli Item: ${item.name}"
+        }
+        _playerState.value = logToPrivateLedger(finalState, ledgerTitle, item.price, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun goOnLifestyleExpedition(id: String): Boolean {
+        val state = _playerState.value
+        val item = state.allSubscriptions.find { it.id == id } ?: return false
+        if (state.privateBalance < item.price) return false
+        
+        val reducedState = state.copy(
+            privateBalance = state.privateBalance - item.price,
+            travelHistory = state.travelHistory + 1
+        )
+        
+        val ledgerTitle = "Pergi Liburan: ${item.name}"
+        _playerState.value = logToPrivateLedger(reducedState, ledgerTitle, item.price, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun bookPrivateTravel(destinationId: String, days: Int, totalCost: Long, extraDetails: String): Boolean {
+        val state = _playerState.value
+        val destination = state.travelDestinations.find { it.id == destinationId } ?: return false
+        if (state.privateBalance < totalCost) return false
+        
+        val reducedState = state.copy(
+            privateBalance = state.privateBalance - totalCost,
+            travelHistory = state.travelHistory + 1,
+            totalTripsTaken = state.totalTripsTaken + 1
+        )
+        
+        val ledgerTitle = "Travel Concierge: ${destination.name} ($days Hari - $extraDetails)"
+        _playerState.value = logToPrivateLedger(reducedState, ledgerTitle, totalCost, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun addCustomTravelDestination(name: String, region: String, pricePerDay: Long, imageUrl: String) {
+        val state = _playerState.value
+        val newDestination = com.example.data.TravelDestination(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name,
+            region = region,
+            pricePerDay = pricePerDay,
+            imageUrl = imageUrl,
+            isCustom = true
+        )
+        val nextDestinations = state.travelDestinations + newDestination
+        _playerState.value = state.copy(
+            travelDestinations = nextDestinations
         )
         saveState(_playerState.value)
     }
@@ -8111,7 +8304,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             privateBalance = state.privateBalance - price,
             ownedGadgets = nextGadgets
         )
-        _playerState.value = logToPrivateLedger(reducedState, "Beli Gadget: $name", price, false)
+        val nextAllSubs = reducedState.allSubscriptions.map { sub ->
+            if (sub.name == name) {
+                sub.copy(isOwned = true)
+            } else {
+                sub
+            }
+        }
+        _playerState.value = logToPrivateLedger(reducedState.copy(allSubscriptions = nextAllSubs), "Beli Gadget: $name", price, false)
         saveState(_playerState.value)
         return true
     }
