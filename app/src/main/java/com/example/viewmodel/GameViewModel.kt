@@ -81,7 +81,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             accreditationPoints = if (inst.accreditationPoints < 0) 0 else inst.accreditationPoints,
                             monthlyOperationalCost = if (inst.monthlyOperationalCost < 0L) 100000L else inst.monthlyOperationalCost,
                             prestigeScore = if (inst.prestigeScore < 0) 0 else inst.prestigeScore,
-                            imageUrl = inst.imageUrl ?: ""
+                            imageUrl = inst.imageUrl ?: "",
+                            monthlySpp = inst.monthlySpp,
+                            currentStudents = inst.currentStudents,
+                            buildingGrade = inst.buildingGrade ?: "Grade A",
+                            baseMaintenanceCost = inst.baseMaintenanceCost,
+                            additionalFacilities = inst.additionalFacilities ?: emptyList(),
+                            constructionMonthsTotal = inst.constructionMonthsTotal,
+                            constructionMonthsLeft = inst.constructionMonthsLeft
                         )
                     }
                 } catch (e: Exception) {
@@ -4790,32 +4797,107 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
             val nextEduInstitutions = if (f.type == com.example.data.FoundationType.EDUCATION && nextIsLegalized) {
                 (f.educationInstitutions ?: emptyList()).map { inst ->
-                    val addedPoints = (inst.facilityLevel * 0.5) + (inst.prestigeScore * 0.1)
-                    val beforePoints = inst.accreditationPoints
-                    val nextPoints = Math.min(100, (beforePoints + addedPoints).toInt())
+                    if (inst.constructionMonthsLeft > 0) {
+                        inst.copy(
+                            constructionMonthsLeft = inst.constructionMonthsLeft - 1
+                        )
+                    } else {
+                        val addedPoints = (inst.facilityLevel * 0.5) + (inst.prestigeScore * 0.1)
+                        val beforePoints = inst.accreditationPoints
+                        val nextPoints = Math.min(100, (beforePoints + addedPoints).toInt())
 
-                    var isOperational = false
-                    if (nextEndowmentFund >= inst.monthlyOperationalCost) {
-                        nextEndowmentFund -= inst.monthlyOperationalCost
-                        isOperational = true
-                        totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                        val curriculumMultiplier = if (inst.level == "SMA") {
+                            when (inst.curriculumType) {
+                                "Nasional" -> 1.2
+                                "Kejuruan (SMK)" -> 1.5
+                                "Cambridge (A-Level)" -> 2.5
+                                "IB (International Baccalaureate)" -> 3.0
+                                else -> 1.0
+                            }
+                        } else if (inst.level == "UNIV") {
+                            when (inst.curriculumType) {
+                                "Nasional (Teaching Univ)" -> 1.5
+                                "Internasional (Double Degree)" -> 3.0
+                                "World-Class Research Univ" -> 5.0
+                                else -> 1.0
+                            }
+                        } else {
+                            when (inst.curriculumType) {
+                                "Montessori", "Waldorf" -> 1.5
+                                "Agama Terpadu" -> if (inst.level == "SD") 1.2 else 1.75
+                                "Nasional Plus (Bilingual)" -> 1.8
+                                "Cambridge Primary" -> 2.5
+                                "Cambridge", "IB" -> 3.0
+                                "Internasional" -> 6.0
+                                else -> 1.0
+                            }
+                        }
+                        // 1. Kurangi waktu konstruksi fasilitas tambahan
+                        val updatedFacilities = (inst.additionalFacilities ?: emptyList()).map { fac ->
+                            if (fac.constructionLeftMonths > 0) {
+                                fac.copy(constructionLeftMonths = fac.constructionLeftMonths - 1)
+                            } else {
+                                fac
+                            }
+                        }
+
+                        // 2. Kalkulasi biaya Ops HANYA untuk fasilitas yang sudah jadi
+                        val totalActiveFacilityMaint = updatedFacilities
+                            .filter { it.constructionLeftMonths <= 0 }
+                            .sumOf { it.maintenanceCost }
+
+                        val baseCost = if (inst.baseMaintenanceCost > 0L) {
+                            inst.baseMaintenanceCost + totalActiveFacilityMaint
+                        } else {
+                            inst.monthlyOperationalCost
+                        }
+                        val opsCost = (baseCost * curriculumMultiplier).toLong()
+                        val monthlyRevenue = inst.currentStudents * inst.monthlySpp
+                        val netIncome = monthlyRevenue - opsCost
+
+                        var isOperational = false
+                        if (netIncome < 0) {
+                            val deficit = kotlin.math.abs(netIncome)
+                            if (nextEndowmentFund >= deficit) {
+                                nextEndowmentFund -= deficit
+                                isOperational = true
+                                totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                            } else {
+                                // Dana abadi habis, potong dari KAS PRIBADI CEO sebagai bailout darurat!
+                                val remainingDeficit = deficit - nextEndowmentFund
+                                nextEndowmentFund = 0L
+                                if (familyOfficePrivateBalanceVal >= remainingDeficit) {
+                                    familyOfficePrivateBalanceVal -= remainingDeficit
+                                    isOperational = true
+                                    totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                } else {
+                                    familyOfficePrivateBalanceVal = 0L
+                                }
+                            }
+                        } else {
+                            // Yayasan Surplus (Mandiri)
+                            nextEndowmentFund += netIncome
+                            isOperational = true
+                            totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                        }
+
+                        if (beforePoints < 90 && nextPoints >= 90) {
+                            foNews.add(MarketNews(
+                                id = "edu_prestasi_nasional_${System.currentTimeMillis()}_${inst.id}",
+                                text = "🎓 PRESTASI NASIONAL: Fasilitas ${inst.level} di Yayasan ${f.name} memperoleh Akreditasi Unggul! Hibah Riset & Subsidi Negara senilai +$${com.example.ui.formatCurrencyRingkas(250000.0, false)}/bln ditambahkan ke Dana Abadi.",
+                                type = "BULL"
+                            ))
+                        }
+
+                        if (nextPoints >= 90 && isOperational) {
+                            nextEndowmentFund += 250000L
+                        }
+
+                        inst.copy(
+                            accreditationPoints = nextPoints,
+                            additionalFacilities = updatedFacilities
+                        )
                     }
-
-                    if (beforePoints < 90 && nextPoints >= 90) {
-                        foNews.add(MarketNews(
-                            id = "edu_prestasi_nasional_${System.currentTimeMillis()}_${inst.id}",
-                            text = "🎓 PRESTASI NASIONAL: Fasilitas ${inst.level} di Yayasan ${f.name} memperoleh Akreditasi Unggul! Hibah Riset & Subsidi Negara senilai +$${com.example.ui.formatCurrencyRingkas(250000.0, false)}/bln ditambahkan ke Dana Abadi.",
-                            type = "BULL"
-                        ))
-                    }
-
-                    if (nextPoints >= 90 && isOperational) {
-                        nextEndowmentFund += 250000L
-                    }
-
-                    inst.copy(
-                        accreditationPoints = nextPoints
-                    )
                 }
             } else {
                 f.educationInstitutions ?: emptyList()
@@ -8610,6 +8692,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun buildEducationInstitution(foundationId: String, name: String, level: String): Boolean {
+        return buildEducationInstitution(foundationId, name, level, "Grade A", 0L)
+    }
+
+    fun buildEducationInstitution(
+        foundationId: String,
+        name: String,
+        level: String,
+        buildingGrade: String,
+        baseMaintenanceCost: Long
+    ): Boolean {
         val state = _playerState.value
         val foundation = state.foundations.find { it.id == foundationId } ?: return false
         if (!foundation.isLegalized) return false
@@ -8632,16 +8724,34 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             else -> 5
         }
         
+        val defaultCurriculum = if (level == "UNIV") "Nasional (Teaching Univ)" else "Nasional"
+        
+        val gradeObj = com.example.data.BUILDING_GRADES.find { it.name == buildingGrade }
+        val duration = gradeObj?.constructionMonths ?: 0
+
         val newInst = com.example.data.EducationInstitution(
             id = java.util.UUID.randomUUID().toString(),
             name = name,
             level = level,
-            curriculumType = "Nasional",
+            curriculumType = defaultCurriculum,
             facilityLevel = 1,
             accreditationPoints = 0,
-            monthlyOperationalCost = com.example.data.calculateEduOperationalCost(level, 1, "Nasional"),
+            monthlyOperationalCost = com.example.data.calculateEduOperationalCost(level, 1, defaultCurriculum),
             prestigeScore = basePrestige,
-            imageUrl = ""
+            imageUrl = "",
+            currentStudents = when (level) {
+                "TK" -> (100..300).random()
+                "SD" -> (200..600).random()
+                "SMA" -> (300..800).random()
+                "UNIV" -> (5000..15000).random()
+                else -> 0
+            },
+            monthlySpp = 0L,
+            buildingGrade = buildingGrade,
+            baseMaintenanceCost = baseMaintenanceCost,
+            additionalFacilities = emptyList(),
+            constructionMonthsTotal = duration,
+            constructionMonthsLeft = duration
         )
         
         val nextFoundations = state.foundations.map { f ->
@@ -8735,10 +8845,45 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val foundation = state.foundations.find { it.id == foundationId } ?: return false
         val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
 
+        val nextStudents = if (inst.level == "TK") {
+            when (newCurriculum) {
+                "Nasional" -> (100..300).random()
+                "Montessori" -> (60..90).random()
+                "Waldorf" -> (30..40).random()
+                else -> (100..300).random()
+            }
+        } else if (inst.level == "SD") {
+            when (newCurriculum) {
+                "Nasional" -> (200..600).random()
+                "Agama Terpadu" -> (150..450).random()
+                "Nasional Plus (Bilingual)" -> (100..300).random()
+                "Cambridge Primary" -> (80..200).random()
+                else -> (200..600).random()
+            }
+        } else if (inst.level == "SMA") {
+            when (newCurriculum) {
+                "Nasional" -> (300..800).random()
+                "Kejuruan (SMK)" -> (250..600).random()
+                "Cambridge (A-Level)" -> (150..400).random()
+                "IB (International Baccalaureate)" -> (100..300).random()
+                else -> (300..800).random()
+            }
+        } else if (inst.level == "UNIV") {
+            when (newCurriculum) {
+                "Nasional (Teaching Univ)" -> (5000..15000).random()
+                "Internasional (Double Degree)" -> (3000..8000).random()
+                "World-Class Research Univ" -> (1000..4000).random()
+                else -> (5000..15000).random()
+            }
+        } else {
+            inst.currentStudents
+        }
+
         val nextOps = com.example.data.calculateEduOperationalCost(inst.level, inst.facilityLevel, newCurriculum)
         val updatedInst = inst.copy(
             curriculumType = newCurriculum,
-            monthlyOperationalCost = nextOps
+            monthlyOperationalCost = nextOps,
+            currentStudents = nextStudents
         )
 
         val nextFoundations = state.foundations.map { f ->
@@ -8751,6 +8896,141 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun deleteEducationInstitution(foundationId: String, institutionId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).filter { it.id != institutionId }
+                )
+            } else {
+                f
+            }
+        }
+        val updatedState = state.copy(foundations = nextFoundations)
+        _playerState.value = logToPrivateLedger(updatedState, "Menghibahkan Fasilitas: ${inst.name} (${inst.level})", 0L, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateEducationInstitutionSpp(foundationId: String, institutionId: String, newSpp: Long): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+
+        val updatedInst = inst.copy(monthlySpp = newSpp)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateInstitutionCurriculum(foundationId: String, institutionId: String, newCurriculum: String): Boolean {
+        return changeEduCurriculum(foundationId, institutionId, newCurriculum)
+    }
+
+    fun updateInstitutionCurriculum(institutionId: String, newCurriculum: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f ->
+            (f.educationInstitutions ?: emptyList()).any { it.id == institutionId }
+        } ?: return false
+        return changeEduCurriculum(foundation.id, institutionId, newCurriculum)
+    }
+
+    fun updateInstitutionSpp(foundationId: String, institutionId: String, inputSpp: Long): Boolean {
+        return updateEducationInstitutionSpp(foundationId, institutionId, inputSpp)
+    }
+
+    fun updateInstitutionSpp(institutionId: String, inputSpp: Long): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f ->
+            (f.educationInstitutions ?: emptyList()).any { it.id == institutionId }
+        } ?: return false
+        return updateEducationInstitutionSpp(foundation.id, institutionId, inputSpp)
+    }
+
+    fun buildAdditionalFacility(
+        foundationId: String,
+        institutionId: String,
+        typeId: String,
+        name: String,
+        customName: String,
+        gradeId: String,
+        maintenanceCost: Long,
+        constructionCost: Long,
+        constructionTotalMonths: Int,
+        constructionLeftMonths: Int
+    ): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        
+        // Jelas jika saldo tidak cukup
+        if (foundation.endowmentFund < constructionCost) {
+            return false
+        }
+        
+        val newFacility = com.example.data.FacilityItem(
+            id = java.util.UUID.randomUUID().toString(),
+            typeId = typeId,
+            name = name,
+            baseName = name,
+            customName = if (customName.isBlank()) name else customName,
+            gradeName = gradeId,
+            maintenanceCost = maintenanceCost,
+            constructionTotalMonths = constructionTotalMonths,
+            constructionLeftMonths = constructionLeftMonths
+        )
+        
+        val updatedFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                val updatedInstitutions = (f.educationInstitutions ?: emptyList()).map { inst ->
+                    if (inst.id == institutionId) {
+                        inst.copy(
+                            additionalFacilities = (inst.additionalFacilities ?: emptyList()) + newFacility,
+                            prestigeScore = inst.prestigeScore + when (typeId) {
+                                "tk_playground" -> 8
+                                "tk_pool" -> 5
+                                "tk_computer_lab" -> 12
+                                "tk_nap_room" -> 6
+                                else -> 5
+                            },
+                            accreditationPoints = Math.min(100, inst.accreditationPoints + when (typeId) {
+                                "tk_playground" -> 5
+                                "tk_pool" -> 2
+                                "tk_computer_lab" -> 10
+                                "tk_nap_room" -> 4
+                                else -> 3
+                            })
+                        )
+                    } else {
+                        inst
+                    }
+                }
+                f.copy(
+                    endowmentFund = f.endowmentFund - constructionCost,
+                    educationInstitutions = updatedInstitutions
+                )
+            } else {
+                f
+            }
+        }
+        
+        _playerState.value = state.copy(foundations = updatedFoundations)
         saveState(_playerState.value)
         return true
     }

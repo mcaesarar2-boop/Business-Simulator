@@ -35,7 +35,7 @@ import com.example.viewmodel.GameViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HighSchoolDashboardScreen(
+fun JuniorSchoolDashboardScreen(
     navController: NavHostController,
     viewModel: GameViewModel,
     foundationId: String,
@@ -53,7 +53,7 @@ fun HighSchoolDashboardScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Institusi SMA tidak ditemukan", color = Color.White)
+                Text("Institusi SD tidak ditemukan", color = Color.White)
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = { navController.popBackStack() }) {
                     Text("Kembali")
@@ -73,7 +73,7 @@ fun HighSchoolDashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Manajemen SMA / SMK", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = { Text("Manajemen SD / MI", fontWeight = FontWeight.Bold, color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
@@ -92,7 +92,7 @@ fun HighSchoolDashboardScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F1E36))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0B192C))
             )
         },
         containerColor = Color(0xFF050C1A)
@@ -122,7 +122,7 @@ fun HighSchoolDashboardScreen(
                             .fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(Color(0xFF4F46E5), Color(0xFF0F1E36))
+                                    colors = listOf(Color(0xFF1E3A8A), Color(0xFF0F1E36))
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -131,12 +131,12 @@ fun HighSchoolDashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.School,
                                 contentDescription = null,
-                                tint = Color(0xFF818CF8),
+                                tint = Color(0xFF60A5FA),
                                 modifier = Modifier.size(64.dp)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "Jenjang Menengah Atas & Kejuruan (SMA / SMK)",
+                                "Jenjang Sekolah Dasar (SD / MI)",
                                 color = Color.LightGray,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
@@ -233,17 +233,17 @@ fun HighSchoolDashboardScreen(
                 )
 
                 val maxStudents = when (institution.curriculumType) {
-                    "Nasional" -> 800
-                    "Kejuruan (SMK)" -> 600
-                    "Cambridge (A-Level)" -> 400
-                    "IB (International Baccalaureate)" -> 300
-                    else -> 800
+                    "Nasional" -> 600
+                    "Agama Terpadu" -> 450
+                    "Nasional Plus (Bilingual)" -> 300
+                    "Cambridge Primary" -> 200
+                    else -> 600
                 }
                 val activeCurrMultiplier = when (institution.curriculumType) {
-                    "Nasional" -> 1.2
-                    "Kejuruan (SMK)" -> 1.5
-                    "Cambridge (A-Level)" -> 2.5
-                    "IB (International Baccalaureate)" -> 3.0
+                    "Nasional" -> 1.0
+                    "Agama Terpadu" -> 1.2
+                    "Nasional Plus (Bilingual)" -> 1.8
+                    "Cambridge Primary" -> 2.5
                     else -> 1.0
                 }
                 val totalFacilityMaintenanceCost = institution.additionalFacilities?.sumOf { it.maintenanceCost } ?: 0L
@@ -423,7 +423,7 @@ fun HighSchoolDashboardScreen(
 
                 Button(
                     onClick = {
-                        navController.navigate("high_school_facility_catalogue/$foundationId/$institutionId")
+                        navController.navigate("junior_school_facility_catalogue/$foundationId/$institutionId")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
@@ -668,7 +668,7 @@ fun HighSchoolDashboardScreen(
                         .fillMaxWidth()
                         .padding(bottom = 24.dp)
                         .clickable {
-                            navController.navigate("high_school_facility_catalogue/$foundationId/$institutionId")
+                            navController.navigate("junior_school_facility_catalogue/$foundationId/$institutionId")
                         },
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF14223A)),
                     shape = RoundedCornerShape(16.dp),
@@ -696,13 +696,13 @@ fun HighSchoolDashboardScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Konstruksi & Upgrade Fasilitas SMA",
+                                "Konstruksi & Upgrade Fasilitas",
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 fontSize = 14.sp
                             )
                             Text(
-                                "Mulai dari laboratorium kimia hingga STEM & Robotics Lab.",
+                                "Mulai dari fasilitas dasar hingga fasilitas internasional.",
                                 color = Color.LightGray,
                                 fontSize = 11.sp
                             )
@@ -828,11 +828,11 @@ fun HighSchoolDashboardScreen(
     }
 
     if (showCurriculumDialog) {
-        val options = listOf("Nasional", "Kejuruan (SMK)", "Cambridge (A-Level)", "IB (International Baccalaureate)")
+        val options = listOf("Nasional", "Agama Terpadu", "Nasional Plus (Bilingual)", "Cambridge Primary")
         val context = LocalContext.current
         AlertDialog(
             onDismissRequest = { showCurriculumDialog = false },
-            title = { Text("Pilih Kurikulum SMA/SMK", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text("Pilih Kurikulum SD/MI", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),

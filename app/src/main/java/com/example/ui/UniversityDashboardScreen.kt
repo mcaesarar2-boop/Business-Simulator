@@ -1,25 +1,31 @@
 package com.example.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,6 +67,8 @@ fun UniversityDashboardScreen(
     var editName by remember { mutableStateOf(institution.name) }
     var editImageUrl by remember { mutableStateOf(institution.imageUrl) }
     var editError by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showCurriculumDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -75,16 +83,25 @@ fun UniversityDashboardScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0B192C))
+                actions = {
+                    IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Hibahkan",
+                            tint = Color.Red.copy(alpha = 0.7f)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E170F)) // Warm dark / golden touch
             )
         },
-        containerColor = Color(0xFF050C1A)
+        containerColor = Color(0xFF0D0A07) // Elegant dark amber background
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF050C1A))
+                .background(Color(0xFF0D0A07))
         ) {
             // Hero Image Section
             Box(
@@ -105,7 +122,7 @@ fun UniversityDashboardScreen(
                             .fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(Color(0xFFD4AF37).copy(alpha = 0.8f), Color(0xFF0F1E36))
+                                    colors = listOf(Color(0xFFD4AF37), Color(0xFF1E170F))
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -119,7 +136,7 @@ fun UniversityDashboardScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "Jenjang Universitas & Pusat Riset",
+                                "Universitas Puncak & Pusat Riset Global",
                                 color = Color.LightGray,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
@@ -134,8 +151,8 @@ fun UniversityDashboardScreen(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color(0xFF050C1A))
-                            )
+                                colors = listOf(Color.Transparent, Color(0xFF0D0A07))
+                             )
                         )
                 )
             }
@@ -146,6 +163,7 @@ fun UniversityDashboardScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 // Title and Edit Section
                 Row(
@@ -174,7 +192,7 @@ fun UniversityDashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Akreditasi: ${institution.accreditationPoints}/100",
+                                text = "Akreditasi Kampus: ${institution.accreditationPoints}/100",
                                 color = Color.LightGray,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -191,12 +209,12 @@ fun UniversityDashboardScreen(
                         },
                         modifier = Modifier
                             .size(44.dp)
-                            .background(Color(0xFF101B2B), RoundedCornerShape(22.dp))
+                            .background(Color(0xFF231D15), RoundedCornerShape(22.dp))
                             .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(22.dp))
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Profil",
+                            contentDescription = "Edit Profil Kampus",
                             tint = Color(0xFFD4AF37),
                             modifier = Modifier.size(20.dp)
                         )
@@ -207,12 +225,90 @@ fun UniversityDashboardScreen(
 
                 // Stats Grid
                 Text(
-                    text = "Statistik Institusi",
+                    text = "Statistik Universitas",
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
+
+                val maxStudents = when (institution.curriculumType) {
+                    "Nasional (Teaching Univ)" -> 15000
+                    "Internasional (Double Degree)" -> 8000
+                    "World-Class Research Univ" -> 4000
+                    else -> 15000
+                }
+                val activeCurrMultiplier = when (institution.curriculumType) {
+                    "Nasional (Teaching Univ)" -> 1.5
+                    "Internasional (Double Degree)" -> 3.0
+                    "World-Class Research Univ" -> 5.0
+                    else -> 1.0
+                }
+                val totalFacilityMaintenanceCost = institution.additionalFacilities?.sumOf { it.maintenanceCost } ?: 0L
+                val baseCost = if (institution.baseMaintenanceCost > 0L) {
+                    institution.baseMaintenanceCost + totalFacilityMaintenanceCost
+                } else {
+                    institution.monthlyOperationalCost
+                }
+                val opsCost = (baseCost * activeCurrMultiplier).toLong()
+                val monthlyRevenue = institution.currentStudents * institution.monthlySpp
+                val netIncome = monthlyRevenue - opsCost
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .clickable { showCurriculumDialog = true },
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E170F)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD4AF37).copy(alpha = 0.2f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Sistem Pendidikan / Kurikulum", color = Color.Gray, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    institution.curriculumType,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFD4AF37),
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Ganti Kurikulum",
+                                    tint = Color(0xFFD4AF37),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Jumlah Mahasiswa", color = Color.Gray, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "${institution.currentStudents} / $maxStudents Maks",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -220,33 +316,33 @@ fun UniversityDashboardScreen(
                 ) {
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Kurikulum", color = Color.Gray, fontSize = 11.sp)
+                            Text("Ops Kampus", color = Color.Gray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                institution.curriculumType,
+                                formatCurrency(opsCost),
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 14.sp
+                                color = Color(0xFFE57373),
+                                fontSize = 13.sp
                             )
                         }
                     }
 
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Ops Bulanan", color = Color.Gray, fontSize = 11.sp)
+                            Text("Pemasukan UKT / SPP", color = Color.Gray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                formatCurrency(institution.monthlyOperationalCost),
+                                formatCurrency(monthlyRevenue),
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE57373),
+                                color = Color(0xFF81C784),
                                 fontSize = 13.sp
                             )
                         }
@@ -261,7 +357,7 @@ fun UniversityDashboardScreen(
                 ) {
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
@@ -278,7 +374,7 @@ fun UniversityDashboardScreen(
 
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
@@ -294,47 +390,328 @@ fun UniversityDashboardScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Placeholder Fitur Masa Depan
+                // Status Keuangan (Banner)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 24.dp)
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (netIncome < 0) Color(0xFFE57373).copy(alpha = 0.15f) else Color(0xFF81C784).copy(alpha = 0.15f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = if (netIncome < 0) "⚠️ Subsidi Finansial (Diberi Bantuan Dana Abadi)" else "✅ Kampus Mandiri (Surplus Finansial)",
+                            color = if (netIncome < 0) Color(0xFFEF5350) else Color(0xFF66BB6A),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        navController.navigate("university_facility_catalogue/$foundationId/$institutionId")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color(0xFF0B121E),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "[+] Bangun Fasilitas Tambahan",
+                        color = Color(0xFF0B121E),
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Menu Manajemen UKT / SPP
+                var sppInputText by remember(institution.monthlySpp) { mutableStateOf(institution.monthlySpp.toString()) }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                            1.dp,
+                            Color.White.copy(alpha = 0.08f),
+                            RoundedCornerShape(16.dp)
+                        ),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Kebijakan UKT / SPP Kampus",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "Tentukan UKT/SPP bulanan mahasiswa. Memberikan beasiswa penuh (0) melesatkan reputasi riset kampus secara masif.",
+                            color = Color.LightGray,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = sppInputText,
+                            onValueChange = { newValue ->
+                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                    sppInputText = newValue
+                                }
+                            },
+                            label = { Text("Ubah UKT Bulanan per Mahasiswa ($)", color = Color.Gray) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFD4AF37),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                focusedLabelColor = Color(0xFFD4AF37),
+                                unfocusedLabelColor = Color.Gray,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val context = LocalContext.current
+                        Button(
+                            onClick = {
+                                val newSpp = sppInputText.toLongOrNull() ?: 0L
+                                val success = viewModel.updateEducationInstitutionSpp(foundationId, institutionId, newSpp)
+                                if (success) {
+                                    Toast.makeText(context, "Uang Kuliah Tunggal (UKT) berhasil disesuaikan menjadi ${formatCurrency(newSpp)}/bulan.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Terapkan Kebijakan UKT", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Gedung & Infrastruktur Utama
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
                         .border(
                             1.dp,
                             Color(0xFFD4AF37).copy(alpha = 0.15f),
                             RoundedCornerShape(16.dp)
                         ),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B).copy(alpha = 0.5f)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
                     shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = null,
+                                tint = Color(0xFFD4AF37),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Gedung & Infrastruktur Utama Kampus",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    "Kualitas Fisik Gedung: ${institution.buildingGrade}",
+                                    color = Color(0xFFD4AF37),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Biaya Rawat Gedung Dasar:", color = Color.Gray, fontSize = 11.sp)
+                            Text(
+                                text = "${formatCurrency(institution.baseMaintenanceCost)} / bln",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                // Daftar Fasilitas Tambahan
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B150E)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Fasilitas & Lab Riset Tambahan",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Peralatan riset dan prasarana penunjang yang meningkatkan reputasi akademik kampus di kancah internasional.",
+                            color = Color.LightGray,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val facilitiesList = institution.additionalFacilities ?: emptyList()
+                        if (facilitiesList.isEmpty()) {
+                            Text(
+                                "Belum ada fasilitas riset tambahan yang dibangun.",
+                                color = Color.Gray,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            facilitiesList.forEach { fac ->
+                                val displayName = if (!fac.customName.isNullOrBlank()) "${fac.customName} (${fac.name})" else fac.name
+                                val isUnderConstruction = fac.constructionLeftMonths > 0
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp)
+                                        .background(Color(0xFF261E14), RoundedCornerShape(8.dp))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            displayName,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            fontSize = 12.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "Grade: ${fac.gradeName}",
+                                                color = Color.Gray,
+                                                fontSize = 10.sp
+                                            )
+                                            if (isUnderConstruction) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    "🚧 Sisa ${fac.constructionLeftMonths} Bulan",
+                                                    color = Color(0xFFFFB300),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (isUnderConstruction) {
+                                        Text(
+                                            "Dalam Konstruksi",
+                                            color = Color(0xFFFFB300),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    } else {
+                                        Text(
+                                            "${formatCurrency(fac.maintenanceCost)} / bln",
+                                            color = Color(0xFF10B981),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Banner / Card Promosi Katalog
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 24.dp)
+                        .clickable {
+                            navController.navigate("university_facility_catalogue/$foundationId/$institutionId")
+                        },
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF231D15)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        Color(0xFFD4AF37).copy(alpha = 0.2f)
+                    )
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = Color(0xFFD4AF37),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Fitur Akademik Mendatang",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 13.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "Fitur Manajemen Guru, Ekstrakurikuler, dan Upgrade Fasilitas Akademik akan segera hadir di sini.",
-                                color = Color.LightGray,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(Color(0xFF1B150E), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Build,
+                                contentDescription = null,
+                                tint = Color(0xFFD4AF37)
                             )
                         }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Konstruksi Fasilitas & Pusat Riset",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                "Mulai dari superkomputer, rumah sakit pendidikan, hingga pusat inkubator startup.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "Buka",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -344,7 +721,7 @@ fun UniversityDashboardScreen(
     if (showEditDialog) {
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
-            title = { Text("Edit Profil Institusi", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text("Edit Profil Kampus", fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column(
                     modifier = Modifier
@@ -355,7 +732,7 @@ fun UniversityDashboardScreen(
                     OutlinedTextField(
                         value = editName,
                         onValueChange = { editName = it },
-                        label = { Text("Ubah Nama Institusi", color = Color.Gray) },
+                        label = { Text("Ubah Nama Universitas", color = Color.Gray) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFFD4AF37),
@@ -370,7 +747,7 @@ fun UniversityDashboardScreen(
                     OutlinedTextField(
                         value = editImageUrl,
                         onValueChange = { editImageUrl = it },
-                        label = { Text("URL Gambar / Logo (PNG/JPG)", color = Color.Gray) },
+                        label = { Text("URL Banner Kampus (PNG/JPG)", color = Color.Gray) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFFD4AF37),
@@ -391,7 +768,7 @@ fun UniversityDashboardScreen(
                 Button(
                     onClick = {
                         if (editName.isBlank()) {
-                            editError = "Nama tidak boleh kosong!"
+                            editError = "Nama kampus tidak boleh kosong!"
                             return@Button
                         }
                         val success = viewModel.updateEducationInstitutionProfile(
@@ -414,6 +791,109 @@ fun UniversityDashboardScreen(
             dismissButton = {
                 TextButton(onClick = { showEditDialog = false }) {
                     Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Tutup & Hibahkan Kampus?", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Text(
+                    "Apakah Anda yakin ingin menutup '${institution.name}' dan menghibahkannya ke pemerintah daerah? Kampus ini beserta seluruh fasilitas risetnya akan dihapus permanen dari yayasan Anda.",
+                    color = Color.LightGray
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteEducationInstitution(foundationId, institutionId)
+                        showDeleteConfirmDialog = false
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Ya, Hibahkan Kampus", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Batal", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (showCurriculumDialog) {
+        val options = listOf("Nasional (Teaching Univ)", "Internasional (Double Degree)", "World-Class Research Univ")
+        val context = LocalContext.current
+        AlertDialog(
+            onDismissRequest = { showCurriculumDialog = false },
+            title = { Text("Pilih Kurikulum Kampus", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Setiap tipe kurikulum menarik minat mahasiswa dengan jumlah dan profil riset yang unik.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    options.forEach { option ->
+                        val isSelected = institution.curriculumType == option
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val success = viewModel.updateInstitutionCurriculum(foundationId, institutionId, option)
+                                    if (success) {
+                                        Toast.makeText(context, "Sistem pendidikan diubah. Kapasitas mahasiswa telah disesuaikan.", Toast.LENGTH_SHORT).show()
+                                    }
+                                    showCurriculumDialog = false
+                                }
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.05f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) Color(0xFF261E14) else Color(0xFF1B150E)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = option,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color(0xFFD4AF37) else Color.White,
+                                    fontSize = 13.sp
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Selected",
+                                        tint = Color(0xFFD4AF37),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showCurriculumDialog = false }) {
+                    Text("Batal", color = Color.Gray)
                 }
             }
         )

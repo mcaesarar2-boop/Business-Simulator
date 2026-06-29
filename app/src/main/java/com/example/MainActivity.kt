@@ -284,25 +284,49 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
             val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
             com.example.ui.FoundationDetailScreen(navController, viewModel, foundationId)
         }
+        composable("foundation_pre_built/{foundationId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            com.example.ui.FoundationPreBuiltScreen(navController, viewModel, foundationId)
+        }
         composable("kindergarten_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
             val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
             val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
             com.example.ui.KindergartenDashboardScreen(navController, viewModel, foundationId, institutionId)
         }
+        composable("kindergarten_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.KindergartenFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
         composable("primary_school_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
             val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
             val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
-            com.example.ui.PrimarySchoolDashboardScreen(navController, viewModel, foundationId, institutionId)
+            com.example.ui.JuniorSchoolDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("junior_school_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.JuniorSchoolFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
         }
         composable("high_school_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
             val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
             val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
             com.example.ui.HighSchoolDashboardScreen(navController, viewModel, foundationId, institutionId)
         }
+        composable("high_school_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.HighSchoolFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
         composable("university_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
             val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
             val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
             com.example.ui.UniversityDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("university_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.UniversityFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.School
@@ -61,6 +62,7 @@ fun PrimarySchoolDashboardScreen(
     var editName by remember { mutableStateOf(institution.name) }
     var editImageUrl by remember { mutableStateOf(institution.imageUrl) }
     var editError by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -72,6 +74,15 @@ fun PrimarySchoolDashboardScreen(
                             imageVector = Icons.AutoMirrored.Default.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Hibahkan",
+                            tint = Color.Red.copy(alpha = 0.7f)
                         )
                     }
                 },
@@ -414,6 +425,36 @@ fun PrimarySchoolDashboardScreen(
             dismissButton = {
                 TextButton(onClick = { showEditDialog = false }) {
                     Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Tutup & Hibahkan Fasilitas?", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Text(
+                    "Apakah Anda yakin ingin menutup '${institution.name}' dan menghibahkannya ke pemerintah daerah? Bangunan ini akan dihapus secara permanen dari yayasan Anda.",
+                    color = Color.LightGray
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteEducationInstitution(foundationId, institutionId)
+                        showDeleteConfirmDialog = false
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Ya, Tutup Fasilitas", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Batal", color = Color.Gray)
                 }
             }
         )
