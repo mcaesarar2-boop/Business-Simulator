@@ -223,300 +223,413 @@ fun JuniorSchoolDashboardScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Stats Grid
-                Text(
-                    text = "Statistik Institusi",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                if (!institution.isOperational) {
+                    // MODE A: PRA-OPERASIONAL
+                    val facilities = institution.additionalFacilities ?: emptyList()
+                    val builtClasses = facilities.count { it.typeId == "sd_ruang_kelas" && it.constructionLeftMonths <= 0 }
+                    val builtGuru = facilities.count { it.typeId == "sd_ruang_guru_kepsek" && it.constructionLeftMonths <= 0 }
+                    val builtToilet = facilities.count { it.typeId == "sd_toilet_siswa" && it.constructionLeftMonths <= 0 }
+                    val builtPerpus = facilities.count { it.typeId == "sd_perpustakaan_mini" && it.constructionLeftMonths <= 0 }
 
-                val maxStudents = when (institution.curriculumType) {
-                    "Nasional" -> 600
-                    "Agama Terpadu" -> 450
-                    "Nasional Plus (Bilingual)" -> 300
-                    "Cambridge Primary" -> 200
-                    else -> 600
-                }
-                val activeCurrMultiplier = when (institution.curriculumType) {
-                    "Nasional" -> 1.0
-                    "Agama Terpadu" -> 1.2
-                    "Nasional Plus (Bilingual)" -> 1.8
-                    "Cambridge Primary" -> 2.5
-                    else -> 1.0
-                }
-                val totalFacilityMaintenanceCost = institution.additionalFacilities?.sumOf { it.maintenanceCost } ?: 0L
-                val baseCost = if (institution.baseMaintenanceCost > 0L) {
-                    institution.baseMaintenanceCost + totalFacilityMaintenanceCost
-                } else {
-                    institution.monthlyOperationalCost
-                }
-                val opsCost = (baseCost * activeCurrMultiplier).toLong()
-                val monthlyRevenue = institution.currentStudents * institution.monthlySpp
-                val netIncome = monthlyRevenue - opsCost
+                    val classOk = builtClasses >= 6
+                    val guruOk = builtGuru >= 1
+                    val toiletOk = builtToilet >= 2
+                    val perpusOk = builtPerpus >= 1
+                    val allOk = classOk && guruOk && toiletOk && perpusOk
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                    // Warning Banner
                     Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { showCurriculumDialog = true },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF57C00).copy(alpha = 0.15f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF57C00))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "⚠️ Menunggu Akreditasi & Kelengkapan Fasilitas Dasar",
+                                color = Color(0xFFFFB74D),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Checklist Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Checklist Syarat Operasional",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            ChecklistItem(label = "Ruang Kelas SD (Min. 6)", current = builtClasses, target = 6, isOk = classOk)
+                            ChecklistItem(label = "Ruang Guru & Kepsek (Min. 1)", current = builtGuru, target = 1, isOk = guruOk)
+                            ChecklistItem(label = "Toilet Siswa (Min. 2)", current = builtToilet, target = 2, isOk = toiletOk)
+                            ChecklistItem(label = "Perpustakaan Mini (Min. 1)", current = builtPerpus, target = 1, isOk = perpusOk)
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            val context = LocalContext.current
+                            Button(
+                                onClick = {
+                                    if (allOk) {
+                                        val success = viewModel.activateEducationInstitution(foundationId, institutionId)
+                                        if (success) {
+                                            Toast.makeText(context, "Akreditasi disetujui! Institusi kini resmi beroperasi.", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                enabled = allOk,
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF10B981),
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Color.White.copy(alpha = 0.05f),
+                                    disabledContentColor = Color.Gray
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Ajukan Akreditasi & Buka Sekolah", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Button Bangun Fasilitas Tambahan (so they can complete the checklist)
+                    Button(
+                        onClick = {
+                            navController.navigate("junior_school_facility_catalogue/$foundationId/$institutionId")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Kurikulum", color = Color.Gray, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = Color(0xFF0B121E),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "[+] Bangun Fasilitas Tambahan",
+                            color = Color(0xFF0B121E),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                } else {
+                    // MODE B: BEROPERASI (Original stats grid and SPP Card)
+                    // Stats Grid
+                    Text(
+                        text = "Statistik Institusi",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    val maxStudents = when (institution.curriculumType) {
+                        "Nasional" -> 600
+                        "Agama Terpadu" -> 450
+                        "Nasional Plus (Bilingual)" -> 300
+                        "Cambridge Primary" -> 200
+                        else -> 600
+                    }
+                    val activeCurrMultiplier = when (institution.curriculumType) {
+                        "Nasional" -> 1.0
+                        "Agama Terpadu" -> 1.2
+                        "Nasional Plus (Bilingual)" -> 1.8
+                        "Cambridge Primary" -> 2.5
+                        else -> 1.0
+                    }
+                    val totalFacilityMaintenanceCost = institution.additionalFacilities?.sumOf { it.maintenanceCost } ?: 0L
+                    val baseCost = if (institution.baseMaintenanceCost > 0L) {
+                        institution.baseMaintenanceCost + totalFacilityMaintenanceCost
+                    } else {
+                        institution.monthlyOperationalCost
+                    }
+                    val opsCost = (baseCost * activeCurrMultiplier).toLong()
+                    val monthlyRevenue = institution.currentStudents * institution.monthlySpp
+                    val netIncome = monthlyRevenue - opsCost
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { showCurriculumDialog = true },
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Kurikulum", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        institution.curriculumType,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Ganti Kurikulum",
+                                        tint = Color(0xFFD4AF37),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Jumlah Murid", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    institution.curriculumType,
+                                    "${institution.currentStudents} / $maxStudents Maks",
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Ganti Kurikulum",
-                                    tint = Color(0xFFD4AF37),
-                                    modifier = Modifier.size(12.dp)
+                                    fontSize = 13.sp
                                 )
                             }
                         }
                     }
 
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Jumlah Murid", color = Color.Gray, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "${institution.currentStudents} / $maxStudents Maks",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Ops Bulanan", color = Color.Gray, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                formatCurrency(opsCost),
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE57373),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Pemasukan SPP Bulanan", color = Color.Gray, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                formatCurrency(monthlyRevenue),
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF81C784),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Prestige Score", color = Color.Gray, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "+${institution.prestigeScore} Prestige",
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF81C784),
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Level Fasilitas", color = Color.Gray, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Tier ${institution.facilityLevel} / 5",
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64B5F6),
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Status Keuangan (Banner)
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (netIncome < 0) Color(0xFFE57373).copy(alpha = 0.15f) else Color(0xFF81C784).copy(alpha = 0.15f)
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Ops Bulanan", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    formatCurrency(opsCost),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE57373),
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Pemasukan SPP Bulanan", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    formatCurrency(monthlyRevenue),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF81C784),
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Prestige Score", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "+${institution.prestigeScore} Prestige",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF81C784),
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Level Fasilitas", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Tier ${institution.facilityLevel} / 5",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF64B5F6),
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Status Keuangan (Banner)
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = if (netIncome < 0) "⚠️ Yayasan Defisit (Disubsidi Dana Abadi)" else "✅ Yayasan Mandiri (Surplus)",
-                            color = if (netIncome < 0) Color(0xFFEF5350) else Color(0xFF66BB6A),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        navController.navigate("junior_school_facility_catalogue/$foundationId/$institutionId")
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = Color(0xFF0B121E),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "[+] Bangun Fasilitas Tambahan",
-                        color = Color(0xFF0B121E),
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Menu Manajemen SPP
-                var sppInputText by remember(institution.monthlySpp) { mutableStateOf(institution.monthlySpp.toString()) }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(
-                            1.dp,
-                            Color.White.copy(alpha = 0.08f),
-                            RoundedCornerShape(16.dp)
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (netIncome < 0) Color(0xFFE57373).copy(alpha = 0.15f) else Color(0xFF81C784).copy(alpha = 0.15f)
                         ),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Atur Kebijakan SPP",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 15.sp
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            "Tentukan SPP bulanan per murid. Gratis meningkatkan reputasi, sedangkan SPP tinggi menghasilkan pemasukan untuk dana abadi.",
-                            color = Color.LightGray,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        OutlinedTextField(
-                            value = sppInputText,
-                            onValueChange = { newValue ->
-                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                                    sppInputText = newValue
-                                }
-                            },
-                            label = { Text("Atur Biaya SPP Bulanan per Murid ($)", color = Color.Gray) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFFD4AF37),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                                focusedLabelColor = Color(0xFFD4AF37),
-                                unfocusedLabelColor = Color.Gray,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
-                            ),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        val context = LocalContext.current
-                        Button(
-                            onClick = {
-                                val newSpp = sppInputText.toLongOrNull() ?: 0L
-                                val success = viewModel.updateEducationInstitutionSpp(foundationId, institutionId, newSpp)
-                                if (success) {
-                                    Toast.makeText(context, "Kebijakan SPP berhasil diubah menjadi ${formatCurrency(newSpp)}/murid.", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Text("Terapkan Kebijakan SPP", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(
+                                text = if (netIncome < 0) "⚠️ Yayasan Defisit (Disubsidi Dana Abadi)" else "✅ Yayasan Mandiri (Surplus)",
+                                color = if (netIncome < 0) Color(0xFFEF5350) else Color(0xFF66BB6A),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            navController.navigate("junior_school_facility_catalogue/$foundationId/$institutionId")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = Color(0xFF0B121E),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "[+] Bangun Fasilitas Tambahan",
+                            color = Color(0xFF0B121E),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Menu Manajemen SPP
+                    var sppInputText by remember(institution.monthlySpp) { mutableStateOf(institution.monthlySpp.toString()) }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                1.dp,
+                                Color.White.copy(alpha = 0.08f),
+                                RoundedCornerShape(16.dp)
+                            ),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Atur Kebijakan SPP",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 15.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "Tentukan SPP bulanan per murid. Gratis meningkatkan reputasi, sedangkan SPP tinggi menghasilkan pemasukan untuk dana abadi.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            OutlinedTextField(
+                                value = sppInputText,
+                                onValueChange = { newValue ->
+                                    if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                        sppInputText = newValue
+                                    }
+                                },
+                                label = { Text("Atur Biaya SPP Bulanan per Murid ($)", color = Color.Gray) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFFD4AF37),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                    focusedLabelColor = Color(0xFFD4AF37),
+                                    unfocusedLabelColor = Color.Gray,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            val context = LocalContext.current
+                            Button(
+                                onClick = {
+                                    val newSpp = sppInputText.toLongOrNull() ?: 0L
+                                    val success = viewModel.updateEducationInstitutionSpp(foundationId, institutionId, newSpp)
+                                    if (success) {
+                                        Toast.makeText(context, "Kebijakan SPP berhasil diubah menjadi ${formatCurrency(newSpp)}/murid.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Terapkan Kebijakan SPP", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // Gedung & Infrastruktur Utama
                 Card(

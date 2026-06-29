@@ -986,7 +986,13 @@ fun EducationInstitutionCard(
             .fillMaxWidth()
             .border(
                 width = 1.dp,
-                color = if (isUnderConstruction) Color(0xFFFBC02D).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.05f),
+                color = if (isUnderConstruction) {
+                    Color(0xFFFBC02D).copy(alpha = 0.5f)
+                } else if (!inst.isOperational) {
+                    Color(0xFF81D4FA).copy(alpha = 0.4f)
+                } else {
+                    Color.White.copy(alpha = 0.05f)
+                },
                 shape = RoundedCornerShape(12.dp)
             )
             .then(
@@ -997,7 +1003,13 @@ fun EducationInstitutionCard(
                 }
             ),
         colors = CardDefaults.cardColors(
-            containerColor = if (isUnderConstruction) Color(0xFF1E1B10) else Color(0xFF101B2B)
+            containerColor = if (isUnderConstruction) {
+                Color(0xFF1E1B10)
+            } else if (!inst.isOperational) {
+                Color(0xFF152238) // Abu-abu / Biru Pucat
+            } else {
+                Color(0xFF101B2B)
+            }
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -1138,8 +1150,8 @@ fun EducationInstitutionCard(
                     fontSize = 14.sp
                 )
                 Text(
-                    text = "$levelLabel | Level ${inst.facilityLevel}/5 | ${inst.buildingGrade}",
-                    color = Color.LightGray,
+                    text = if (!inst.isOperational) "Menunggu Akreditasi/Fasilitas Dasar" else "$levelLabel | Level ${inst.facilityLevel}/5 | ${inst.buildingGrade}",
+                    color = if (!inst.isOperational) Color(0xFFFFB300) else Color.LightGray,
                     fontSize = 11.sp
                 )
 

@@ -38,7 +38,8 @@ data class EducationInstitution(
     val baseMaintenanceCost: Long = 0L, // Biaya rawat gedung dasar per bulan
     val additionalFacilities: List<FacilityItem> = emptyList(),
     val constructionMonthsTotal: Int = 0,
-    val constructionMonthsLeft: Int = 0
+    val constructionMonthsLeft: Int = 0,
+    val isOperational: Boolean = false
 ) {
     val isUnderConstruction: Boolean get() = constructionMonthsLeft > 0
 }

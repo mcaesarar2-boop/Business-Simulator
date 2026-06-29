@@ -88,7 +88,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             baseMaintenanceCost = inst.baseMaintenanceCost,
                             additionalFacilities = inst.additionalFacilities ?: emptyList(),
                             constructionMonthsTotal = inst.constructionMonthsTotal,
-                            constructionMonthsLeft = inst.constructionMonthsLeft
+                            constructionMonthsLeft = inst.constructionMonthsLeft,
+                            isOperational = inst.isOperational || (inst.constructionMonthsLeft == 0 && inst.currentStudents > 0)
                         )
                     }
                 } catch (e: Exception) {
@@ -4851,25 +4852,39 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         } else {
                             inst.monthlyOperationalCost
                         }
-                        val opsCost = (baseCost * curriculumMultiplier).toLong()
-                        val monthlyRevenue = inst.currentStudents * inst.monthlySpp
+                        
+                        val isOp = inst.isOperational
+                        val opsCost = if (isOp) {
+                            (baseCost * curriculumMultiplier).toLong()
+                        } else {
+                            ((inst.baseMaintenanceCost + totalActiveFacilityMaint) * curriculumMultiplier).toLong()
+                        }
+                        val monthlyRevenue = if (isOp) {
+                            inst.currentStudents * inst.monthlySpp
+                        } else {
+                            0L
+                        }
                         val netIncome = monthlyRevenue - opsCost
 
-                        var isOperational = false
+                        var isRunningFine = false
                         if (netIncome < 0) {
                             val deficit = kotlin.math.abs(netIncome)
                             if (nextEndowmentFund >= deficit) {
                                 nextEndowmentFund -= deficit
-                                isOperational = true
-                                totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                isRunningFine = true
+                                if (isOp) {
+                                    totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                }
                             } else {
                                 // Dana abadi habis, potong dari KAS PRIBADI CEO sebagai bailout darurat!
                                 val remainingDeficit = deficit - nextEndowmentFund
                                 nextEndowmentFund = 0L
                                 if (familyOfficePrivateBalanceVal >= remainingDeficit) {
                                     familyOfficePrivateBalanceVal -= remainingDeficit
-                                    isOperational = true
-                                    totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                    isRunningFine = true
+                                    if (isOp) {
+                                        totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                    }
                                 } else {
                                     familyOfficePrivateBalanceVal = 0L
                                 }
@@ -4877,8 +4892,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         } else {
                             // Yayasan Surplus (Mandiri)
                             nextEndowmentFund += netIncome
-                            isOperational = true
-                            totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                            isRunningFine = true
+                            if (isOp) {
+                                totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                            }
                         }
 
                         if (beforePoints < 90 && nextPoints >= 90) {
@@ -4889,7 +4906,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             ))
                         }
 
-                        if (nextPoints >= 90 && isOperational) {
+                        if (nextPoints >= 90 && isOp && isRunningFine) {
                             nextEndowmentFund += 250000L
                         }
 
@@ -8739,19 +8756,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             monthlyOperationalCost = com.example.data.calculateEduOperationalCost(level, 1, defaultCurriculum),
             prestigeScore = basePrestige,
             imageUrl = "",
-            currentStudents = when (level) {
-                "TK" -> (100..300).random()
-                "SD" -> (200..600).random()
-                "SMA" -> (300..800).random()
-                "UNIV" -> (5000..15000).random()
-                else -> 0
-            },
+            currentStudents = 0,
             monthlySpp = 0L,
             buildingGrade = buildingGrade,
             baseMaintenanceCost = baseMaintenanceCost,
             additionalFacilities = emptyList(),
             constructionMonthsTotal = duration,
-            constructionMonthsLeft = duration
+            constructionMonthsLeft = duration,
+            isOperational = false
         )
         
         val nextFoundations = state.foundations.map { f ->
@@ -8765,6 +8777,38 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun activateEducationInstitution(foundationId: String, institutionId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f -> f.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val randomStudents = when (inst.level) {
+            "TK" -> (100..300).random()
+            "SD" -> (200..600).random()
+            "SMA" -> (300..800).random()
+            "UNIV" -> (5000..15000).random()
+            else -> 0
+        }
+        
+        val updatedInst = inst.copy(
+            isOperational = true,
+            currentStudents = randomStudents
+        )
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
         _playerState.value = state.copy(foundations = nextFoundations)
         saveState(_playerState.value)
         return true
