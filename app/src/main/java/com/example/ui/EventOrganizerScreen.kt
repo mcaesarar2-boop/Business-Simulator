@@ -64,6 +64,26 @@ fun EventOrganizerScreen(navController: NavHostController, viewModel: GameViewMo
         return
     }
 
+    var activeSubScreen by remember { mutableStateOf<String?>(null) }
+
+    if (activeSubScreen == "HQ") {
+        HQEventScreen(
+            instanceId = instanceId,
+            viewModel = viewModel,
+            onBack = { activeSubScreen = null }
+        )
+        return
+    }
+
+    if (activeSubScreen == "ASSETS") {
+        AssetsEventScreen(
+            instanceId = instanceId,
+            viewModel = viewModel,
+            onBack = { activeSubScreen = null }
+        )
+        return
+    }
+
     var activeTab by remember { mutableStateOf(0) } // 0: Dashboard & Kantor, 1: Tender & Tawaran, 2: Proyek Aktif
     var showTransferDialog by remember { mutableStateOf(false) }
     var transferType by remember { mutableStateOf("DEPOSIT") } // "DEPOSIT" atau "WITHDRAW"
@@ -177,7 +197,14 @@ fun EventOrganizerScreen(navController: NavHostController, viewModel: GameViewMo
             // Tab Contents
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (activeTab) {
-                    0 -> DashboardTab(ownedData, viewModel, instanceId, context)
+                    0 -> DashboardTab(
+                        ownedData = ownedData,
+                        viewModel = viewModel,
+                        instanceId = instanceId,
+                        context = context,
+                        onOpenHq = { activeSubScreen = "HQ" },
+                        onOpenAssets = { activeSubScreen = "ASSETS" }
+                    )
                     1 -> TenderTab(ownedData, viewModel, instanceId, context)
                     2 -> ActiveProjectsTab(ownedData, viewModel, instanceId, context, onShowReview = { selectedReviewEvent = it })
                 }
@@ -342,7 +369,14 @@ fun EventOrganizerScreen(navController: NavHostController, viewModel: GameViewMo
 // TAB 1: DASHBOARD & KANTOR
 // ==========================================
 @Composable
-fun DashboardTab(ownedData: com.example.data.OwnedBusiness, viewModel: GameViewModel, instanceId: String, context: android.content.Context) {
+fun DashboardTab(
+    ownedData: com.example.data.OwnedBusiness,
+    viewModel: GameViewModel,
+    instanceId: String,
+    context: android.content.Context,
+    onOpenHq: () -> Unit,
+    onOpenAssets: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -403,145 +437,113 @@ fun DashboardTab(ownedData: com.example.data.OwnedBusiness, viewModel: GameViewM
             }
         }
 
-        // HQ Upgrade Panel
+        // launcher 1: HQ & Divisions
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.3f)),
+                modifier = Modifier.clickable { onOpenHq() }
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Tingkat Markas (HQ)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    val currentHq = ownedData.eoCompanyHqLevel ?: "HOUSE"
-                    val nextHq = when (currentHq) {
-                        "HOUSE" -> "OFFICE"
-                        "OFFICE" -> "REGIONAL"
-                        "REGIONAL" -> "NATIONAL"
-                        "NATIONAL" -> "INTERNATIONAL"
-                        else -> null
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .background(Color(0xFF3B82F6).copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Icon(Icons.Filled.Business, contentDescription = "HQ", tint = Color(0xFF3B82F6), modifier = Modifier.size(30.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Kelola Markas & Divisi (HQ)", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        val hqLevel = ownedData.eoCompanyHqLevel ?: "HOUSE"
+                        val divsHired = ownedData.eoDivisions?.size ?: 0
+                        val maxDivs = when (hqLevel) {
+                            "HOUSE" -> 3
+                            "OFFICE" -> 5
+                            "REGIONAL" -> 7
+                            else -> 9
+                        }
+                        Text(
+                            "Level: ${viewModel.getHqDisplayName(hqLevel)} • Divisi: $divsHired / $maxDivs",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+
+                    Icon(Icons.Filled.ArrowForwardIos, contentDescription = "Go", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+
+        // launcher 2: Permanent Assets & Warehouse
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f)),
+                modifier = Modifier.clickable { onOpenAssets() }
+            ) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                    .size(52.dp)
+                                    .background(Color(0xFF10B981).copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Inventory, contentDescription = "Assets", tint = Color(0xFF10B981), modifier = Modifier.size(30.dp))
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(getHqDisplayName(currentHq), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3B82F6))
-                            Text(getHqDescription(currentHq), fontSize = 11.sp, color = Color.Gray)
-                        }
-                        
-                        if (nextHq != null) {
-                            val upgradeCost = viewModel.getHqUpgradeCost(nextHq)
-                            Button(
-                                onClick = {
-                                    val err = viewModel.upgradeEoHq(instanceId)
-                                    if (err != null) Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
-                                    else Toast.makeText(context, "HQ berhasil diupgrade ke ${getHqDisplayName(nextHq)}!", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Upgrade ($${String.format("%,.0f", upgradeCost)})", fontSize = 12.sp)
+                            Text("Gudang & Aset Permanen", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            val standardCount = (ownedData.eoOwnedAssets ?: emptyMap()).values.sum()
+                            val customCount = (ownedData.eoCustomAssets ?: emptyList()).sumOf { it.quantity }
+                            val totalCount = standardCount + customCount
+                            val capacity = when (ownedData.eoCompanyHqLevel ?: "HOUSE") {
+                                "HOUSE" -> 5
+                                "OFFICE" -> 15
+                                "REGIONAL" -> 40
+                                "NATIONAL" -> 100
+                                else -> 9999
                             }
-                        } else {
-                            Text("Max HQ Level", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Total Aset: $totalCount / $capacity unit • Kustom: ${ownedData.eoCustomAssets?.size ?: 0} jenis",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
                         }
-                    }
-                }
-            }
-        }
 
-        // Divisions Section
-        item {
-            Text("Divisi Kantor Perusahaan", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        }
-        val divs = listOf("Sales", "Creative", "Production", "Multimedia", "Talent", "Logistics", "Finance", "Legal", "Marketing")
-        items(divs) { div ->
-            val isHired = ownedData.eoDivisions.contains(div)
-            val cost = viewModel.getDivisionHiringCost(div)
-            
-            Card(
-                colors = CardDefaults.cardColors(containerColor = if (isHired) Color(0xFF1E293B) else Color(0x331E293B)),
-                border = BorderStroke(1.dp, if (isHired) Color(0xFF3B82F6) else Color.DarkGray),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(getDivisionIcon(div), fontSize = 18.sp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(div, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-                        }
-                        Text(getDivisionBenefit(div), fontSize = 11.sp, color = Color.Gray)
+                        Icon(Icons.Filled.ArrowForwardIos, contentDescription = "Go", tint = Color.Gray, modifier = Modifier.size(16.dp))
                     }
-                    if (isHired) {
-                        Text("Aktif", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    } else {
-                        Button(
-                            onClick = {
-                                val err = viewModel.hireEoDivision(instanceId, div)
-                                if (err != null) Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
-                                else Toast.makeText(context, "Divisi $div berhasil dibentuk!", Toast.LENGTH_SHORT).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                            border = BorderStroke(1.dp, Color.Gray),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Text("Bentuk ($${String.format("%,.0f", cost)})", fontSize = 11.sp, color = Color.White)
-                        }
-                    }
-                }
-            }
-        }
 
-        // Inventory / Permanent Assets Section
-        item {
-            Text("Aset Permanen (Milik Sendiri)", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        }
-        val assets = listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance", "Tent", "Truss", "Forklift", "Truck", "Warehouse", "Helicopter")
-        items(assets) { asset ->
-            val ownedCount = ownedData.eoOwnedAssets[asset] ?: 0
-            val cost = viewModel.getAssetPurchasePrice(asset)
-            
-            Card(
-                colors = CardDefaults.cardColors(containerColor = if (ownedCount > 0) Color(0xFF1E293B) else Color(0x331E293B)),
-                border = BorderStroke(1.dp, if (ownedCount > 0) Color(0xFF10B981) else Color.DarkGray),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(getAssetEmoji(asset) + " " + asset, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-                        Text("Bebas biaya sewa saat event", fontSize = 11.sp, color = Color.Gray)
+                    // Warehouse status bar
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val totalCount = (ownedData.eoOwnedAssets ?: emptyMap()).values.sum() + (ownedData.eoCustomAssets ?: emptyList()).sumOf { it.quantity }
+                    val capacity = when (ownedData.eoCompanyHqLevel ?: "HOUSE") {
+                        "HOUSE" -> 5
+                        "OFFICE" -> 15
+                        "REGIONAL" -> 40
+                        "NATIONAL" -> 100
+                        else -> 9999
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (ownedCount > 0) {
-                            Text("Dimiliki: $ownedCount", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
-                        Button(
-                            onClick = {
-                                val err = viewModel.buyEoAsset(instanceId, asset)
-                                if (err != null) Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
-                                else Toast.makeText(context, "Membeli aset $asset!", Toast.LENGTH_SHORT).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                            border = BorderStroke(1.dp, Color.Gray),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Text("Beli ($${String.format("%,.0f", cost)})", fontSize = 11.sp, color = Color.White)
-                        }
-                    }
+                    LinearProgressIndicator(
+                        progress = (totalCount.toFloat() / capacity.toFloat()).coerceIn(0f, 1f),
+                        color = if (totalCount >= capacity) Color(0xFFF43F5E) else Color(0xFF10B981),
+                        trackColor = Color.DarkGray,
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+                    )
                 }
             }
         }
@@ -764,7 +766,26 @@ fun ActiveProjectsTab(
                             Spacer(modifier = Modifier.height(6.dp))
                             
                             ev.requirements.forEach { req ->
-                                val isOwned = (ownedData.eoOwnedAssets[req] ?: 0) > 0
+                                val mappedType = when (req.lowercase()) {
+                                    "stage" -> "stage"
+                                    "sound" -> "sound system"
+                                    "lighting" -> "lighting"
+                                    "led" -> "led wall"
+                                    "power" -> "power generator"
+                                    "security" -> "security"
+                                    "toilet" -> "mobile toilet"
+                                    "barricade" -> "barricade"
+                                    "ambulance" -> "ambulance"
+                                    "tent" -> "tent & truss"
+                                    "truss" -> "tent & truss"
+                                    "forklift" -> "heavy equipment"
+                                    "truck" -> "logistics truck"
+                                    "warehouse" -> "warehouse storage"
+                                    "helicopter" -> "vip heli"
+                                    else -> req.lowercase()
+                                }
+                                val hasCustom = (ownedData.eoCustomAssets ?: emptyList()).any { it.type.lowercase() == mappedType && it.quantity > 0 }
+                                val isOwned = ((ownedData.eoOwnedAssets[req] ?: 0) > 0) || hasCustom
                                 val isRented = ev.rentedAssets.contains(req)
                                 val rentCost = viewModel.getAssetPurchasePrice(req) * 0.05
                                 

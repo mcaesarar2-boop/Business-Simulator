@@ -223,6 +223,10 @@ data class CruiseShip(
     val constructionProgressPercent: Int = 0,
     
     var targetTicketPrice: Long = 150L,
+    var ticketPriceRegular: Long = 150L,
+    var ticketPriceVip: Long = 300L,
+    var ticketPriceVvip: Long = 600L,
+    var ticketPriceGrandSuite: Long = 1200L,
     var assignedPortId: String? = null,
     
     var monthsSinceDrydock: Int = 0,
@@ -231,6 +235,10 @@ data class CruiseShip(
     
     // Monthly statistics
     var lastMonthPassengers: Int = 0,
+    var lastMonthPassengersRegular: Int = 0,
+    var lastMonthPassengersVip: Int = 0,
+    var lastMonthPassengersVvip: Int = 0,
+    var lastMonthPassengersGrandSuite: Int = 0,
     var lastMonthTicketRevenue: Long = 0L,
     var lastMonthOnboardRevenue: Long = 0L,
     var lastMonthExpenses: Long = 0L,

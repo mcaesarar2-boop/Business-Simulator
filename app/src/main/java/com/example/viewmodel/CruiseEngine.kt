@@ -113,9 +113,10 @@ object CruiseEngine {
         }
 
         // --- DEMAND / PASSENGER COMPUTATION ---
-        // Ideal base ticket price for calculations is $180
-        val baseIdealPrice = 180.0
-        val priceRatio = ship.targetTicketPrice.toDouble() / baseIdealPrice
+        // Ideal base ticket price for calculations is $250 based on average suite values
+        val baseIdealPrice = 250.0
+        val avgTicketPrice = (ship.ticketPriceRegular * 0.70 + ship.ticketPriceVip * 0.20 + ship.ticketPriceVvip * 0.08 + ship.ticketPriceGrandSuite * 0.02)
+        val priceRatio = avgTicketPrice / baseIdealPrice
         // Price elasticity: demand decays if price ratio is high
         val priceFactor = when {
             priceRatio <= 0.5 -> 1.4
@@ -142,8 +143,17 @@ object CruiseEngine {
         val computedDemand = (port.baseDemand * priceFactor * (1.0 + sumFacilityDemandBuff) * brandFactor * yardBonusMultiplier).toInt()
         val passengersCount = computedDemand.coerceIn(0, ship.maxPax)
 
+        // --- PASSENGER SPLIT ---
+        val passengersRegular = (passengersCount * 0.70).toInt()
+        val passengersVip = (passengersCount * 0.20).toInt()
+        val passengersVvip = (passengersCount * 0.08).toInt()
+        val passengersGrandSuite = (passengersCount - passengersRegular - passengersVip - passengersVvip).coerceAtLeast(0)
+
         // --- REVENUE COMPUTATION ---
-        val ticketRevenue = passengersCount.toLong() * ship.targetTicketPrice
+        val ticketRevenue = (passengersRegular * ship.ticketPriceRegular) +
+                            (passengersVip * ship.ticketPriceVip) +
+                            (passengersVvip * ship.ticketPriceVvip) +
+                            (passengersGrandSuite * ship.ticketPriceGrandSuite)
         
         // Onboard Spend per passenger
         val baseOnboardSpend = 25L // standard $25 spend
@@ -171,11 +181,15 @@ object CruiseEngine {
             engineHealth = newEngineHealth,
             monthsSinceDrydock = nextMonthsSinceDrydock,
             lastMonthPassengers = passengersCount,
+            lastMonthPassengersRegular = passengersRegular,
+            lastMonthPassengersVip = passengersVip,
+            lastMonthPassengersVvip = passengersVvip,
+            lastMonthPassengersGrandSuite = passengersGrandSuite,
             lastMonthTicketRevenue = ticketRevenue,
             lastMonthOnboardRevenue = onboardRevenue,
             lastMonthExpenses = totalMonthlyExpenses,
             lastMonthAccidentOccurred = false,
-            lastMonthAccidentReport = "Pelayaran sukses berlayar ke ${port.name}. Okupansi kapal mencapai ${(occupancyRatio * 100).toInt()}% dengan total ${passengersCount} penumpang onboard."
+            lastMonthAccidentReport = "Pelayaran sukses berlayar ke ${port.name}. Okupansi mencapai ${(occupancyRatio * 100).toInt()}% dengan total ${passengersCount} tamu (Reg: $passengersRegular, VIP: $passengersVip, VVIP: $passengersVvip, Suite: $passengersGrandSuite)."
         )
     }
 

@@ -296,6 +296,15 @@ data class EventProject(
     val finalProfit: Double = 0.0
 )
 
+data class EoCustomAsset(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val type: String,
+    val quantity: Int = 1,
+    val priceUnit: Double = 0.0,
+    val imageUrl: String? = null
+)
+
 enum class HotelTier(val title: String, val baseBuildCost: Long, val buildMonths: Int, val maxRooms: Int, val baseRoomRate: Long) {
     CAPSULE_HOTEL("Capsule Hotel", 2_000_000, 2, 100, 20),
     TRANSIT_MOTEL("Transit Motel", 5_000_000, 2, 50, 40),
@@ -426,6 +435,7 @@ data class OwnedBusiness(
     val eoCompanyHqLevel: String = "HOUSE", // HOUSE, OFFICE, REGIONAL, NATIONAL, INTERNATIONAL
     val eoDivisions: Set<String> = emptySet(),
     val eoOwnedAssets: Map<String, Int> = emptyMap(),
+    val eoCustomAssets: List<EoCustomAsset> = emptyList(),
     val themeParkBranches: List<ThemeParkBranch> = emptyList(),
     val activeThemeParkBiddings: List<ActiveBidding> = emptyList(),
     val hospitalityProperties: List<HotelProperty> = emptyList(),

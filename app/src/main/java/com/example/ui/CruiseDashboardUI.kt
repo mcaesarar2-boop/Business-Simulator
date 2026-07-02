@@ -75,6 +75,17 @@ fun CruiseDashboardUI(
     
     var shipToManageFacilities by remember { mutableStateOf<CruiseShip?>(null) }
     var shipToAssignRoute by remember { mutableStateOf<CruiseShip?>(null) }
+    var selectedShipId by remember { mutableStateOf<String?>(null) }
+
+    if (selectedShipId != null) {
+        ShipsScreen(
+            instanceId = businessId,
+            shipId = selectedShipId!!,
+            viewModel = viewModel,
+            onBack = { selectedShipId = null }
+        )
+        return
+    }
 
     val shipsList = ownedBusiness.cruiseShips ?: emptyList()
     val prestige = ownedBusiness.cruiseBrandPrestige
@@ -414,6 +425,9 @@ fun CruiseDashboardUI(
                         },
                         onScrapClick = {
                             viewModel.scrapCruiseShip(businessId, ship.id)
+                        },
+                        onCardClick = {
+                            selectedShipId = ship.id
                         }
                     )
                 }
@@ -786,7 +800,8 @@ fun ShipItemCard(
     onManageFacilitiesClick: () -> Unit,
     onAssignRouteClick: () -> Unit,
     onDrydockClick: () -> Unit,
-    onScrapClick: () -> Unit
+    onScrapClick: () -> Unit,
+    onCardClick: () -> Unit
 ) {
     val assignedPort = availablePorts.find { it.id == ship.assignedPortId }
     val isBuilding = ship.monthsUntilDelivery > 0
@@ -795,6 +810,7 @@ fun ShipItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onCardClick() }
             .border(
                 width = 1.dp,
                 color = if (isDrydocking) SandGold.copy(alpha = 0.5f) else CoralBlue.copy(alpha = 0.3f),

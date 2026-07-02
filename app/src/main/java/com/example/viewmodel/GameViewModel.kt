@@ -6872,6 +6872,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateCruiseShipTicketPrices(
+        businessId: String,
+        shipId: String,
+        regular: Long,
+        vip: Long,
+        vvip: Long,
+        grandSuite: Long
+    ) {
+        updateBusiness(businessId) { owned ->
+            val updated = (owned.cruiseShips ?: emptyList()).map { ship ->
+                if (ship.id == shipId) {
+                    ship.copy(
+                        ticketPriceRegular = regular,
+                        ticketPriceVip = vip,
+                        ticketPriceVvip = vvip,
+                        ticketPriceGrandSuite = grandSuite
+                    )
+                } else ship
+            }
+            owned.copy(cruiseShips = updated)
+        }
+    }
+
     fun scrapCruiseShip(businessId: String, shipId: String) {
         updateBusiness(businessId) { owned ->
             val targetShip = (owned.cruiseShips ?: emptyList()).find { it.id == shipId }
@@ -8628,6 +8651,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun getHqDisplayName(hq: String): String {
+        return when (hq) {
+            "HOUSE" -> "Rumah Pribadi"
+            "OFFICE" -> "Kantor Sewaan"
+            "REGIONAL" -> "Kantor Regional"
+            "NATIONAL" -> "Kantor Nasional"
+            "INTERNATIONAL" -> "Markas Internasional"
+            else -> hq
+        }
+    }
+
     fun formRentalDivision(instanceId: String): String? {
         val state = _playerState.value
         val cost = 100000L
@@ -8917,7 +8951,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 // Missing assets deductions
                 var missingCount = 0
                 for (req in ev.requirements) {
-                    val isOwned = (biz.eoOwnedAssets[req] ?: 0) > 0
+                    val mappedType = when (req.lowercase()) {
+                        "stage" -> "stage"
+                        "sound" -> "sound system"
+                        "lighting" -> "lighting"
+                        "led" -> "led wall"
+                        "power" -> "power generator"
+                        "security" -> "security"
+                        "toilet" -> "mobile toilet"
+                        "barricade" -> "barricade"
+                        "ambulance" -> "ambulance"
+                        "tent" -> "tent & truss"
+                        "truss" -> "tent & truss"
+                        "forklift" -> "heavy equipment"
+                        "truck" -> "logistics truck"
+                        "warehouse" -> "warehouse storage"
+                        "helicopter" -> "vip heli"
+                        else -> req.lowercase()
+                    }
+                    val hasCustom = (biz.eoCustomAssets ?: emptyList()).any { it.type.lowercase() == mappedType && it.quantity > 0 }
+                    val isOwned = ((biz.eoOwnedAssets[req] ?: 0) > 0) || hasCustom
                     val isRented = ev.rentedAssets.contains(req)
                     if (!isOwned && !isRented) {
                         missingCount++
@@ -8929,8 +8982,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 var weatherDeduction = 0.0
                 var weatherCost = 0.0
                 if (ev.isOutdoor && ev.weather == "RAINY") {
-                    val hasTent = (biz.eoOwnedAssets["Tent"] ?: 0) > 0 || ev.rentedAssets.contains("Tent")
-                    val hasTruss = (biz.eoOwnedAssets["Truss"] ?: 0) > 0 || ev.rentedAssets.contains("Truss")
+                    val hasCustomTent = (biz.eoCustomAssets ?: emptyList()).any { it.type.lowercase() == "tent & truss" && it.quantity > 0 }
+                    val hasTent = (biz.eoOwnedAssets["Tent"] ?: 0) > 0 || ev.rentedAssets.contains("Tent") || hasCustomTent
+                    val hasTruss = (biz.eoOwnedAssets["Truss"] ?: 0) > 0 || ev.rentedAssets.contains("Truss") || hasCustomTent
                     if (hasTent || hasTruss) {
                         weatherCost = 1000.0
                     } else {
@@ -9100,8 +9154,30 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var errorMsg: String? = null
         val cost = getDivisionHiringCost(divName)
         val ok = updateEoBusiness(instanceId) { biz ->
+            val hq = biz.eoCompanyHqLevel ?: "HOUSE"
             val divisions = biz.eoDivisions ?: emptySet()
-            if (divisions.contains(divName)) {
+            
+            val isLocked = when (hq) {
+                "HOUSE" -> !listOf("Production", "Logistics", "Creative", "Marketing").contains(divName)
+                "OFFICE" -> !listOf("Production", "Logistics", "Creative", "Marketing", "Sales", "Finance", "Multimedia").contains(divName)
+                "REGIONAL" -> !listOf("Production", "Logistics", "Creative", "Marketing", "Sales", "Finance", "Multimedia", "Talent", "Legal").contains(divName)
+                else -> false
+            }
+            
+            val maxDivs = when (hq) {
+                "HOUSE" -> 3
+                "OFFICE" -> 5
+                "REGIONAL" -> 7
+                else -> 9
+            }
+            
+            if (isLocked) {
+                errorMsg = "Divisi ini terkunci untuk tingkat HQ saat ini (${getHqDisplayName(hq)}). Upgrade HQ Anda terlebih dahulu!"
+                biz
+            } else if (divisions.size >= maxDivs) {
+                errorMsg = "Kapasitas divisi penuh! HQ ${getHqDisplayName(hq)} hanya dapat menampung maksimal $maxDivs divisi. Upgrade HQ Anda!"
+                biz
+            } else if (divisions.contains(divName)) {
                 errorMsg = "Divisi ini sudah dibentuk."
                 biz
             } else if (biz.companyCash < cost) {
@@ -9122,17 +9198,109 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var errorMsg: String? = null
         val cost = getAssetPurchasePrice(assetName)
         val ok = updateEoBusiness(instanceId) { biz ->
-            val owned = biz.eoOwnedAssets ?: emptyMap()
-            if (biz.companyCash < cost) {
+            val hq = biz.eoCompanyHqLevel ?: "HOUSE"
+            val currentTotal = (biz.eoOwnedAssets ?: emptyMap()).values.sum() + (biz.eoCustomAssets ?: emptyList()).sumOf { it.quantity }
+            val capacity = when (hq) {
+                "HOUSE" -> 5
+                "OFFICE" -> 15
+                "REGIONAL" -> 40
+                "NATIONAL" -> 100
+                else -> 9999
+            }
+            if (currentTotal + 1 > capacity) {
+                errorMsg = "Gudang penuh! HQ ${getHqDisplayName(hq)} hanya menampung maksimal $capacity unit aset. Upgrade HQ Anda!"
+                biz
+            } else if (biz.companyCash < cost) {
                 errorMsg = "Kas internal tidak cukup untuk membeli aset $assetName ($${String.format("%,.0f", cost)})."
                 biz
             } else {
+                val owned = biz.eoOwnedAssets ?: emptyMap()
                 val currentCount = owned[assetName] ?: 0
                 val updatedOwned = owned.toMutableMap()
                 updatedOwned[assetName] = currentCount + 1
                 biz.copy(
                     eoOwnedAssets = updatedOwned,
                     companyCash = biz.companyCash - cost
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun buyEoCustomAsset(instanceId: String, name: String, type: String, quantity: Int, priceUnit: Double, imageUrl: String?): String? {
+        var errorMsg: String? = null
+        val totalCost = priceUnit * quantity
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val hq = biz.eoCompanyHqLevel ?: "HOUSE"
+            val currentTotal = (biz.eoOwnedAssets ?: emptyMap()).values.sum() + (biz.eoCustomAssets ?: emptyList()).sumOf { it.quantity }
+            val capacity = when (hq) {
+                "HOUSE" -> 5
+                "OFFICE" -> 15
+                "REGIONAL" -> 40
+                "NATIONAL" -> 100
+                else -> 9999
+            }
+            if (currentTotal + quantity > capacity) {
+                errorMsg = "Gudang penuh! HQ ${getHqDisplayName(hq)} hanya menampung maksimal $capacity unit aset. Upgrade HQ Anda!"
+                biz
+            } else if (biz.companyCash < totalCost) {
+                errorMsg = "Kas internal tidak cukup untuk membeli aset ini ($${String.format("%,.0f", totalCost)})."
+                biz
+            } else {
+                val newAsset = com.example.data.EoCustomAsset(
+                    name = name,
+                    type = type,
+                    quantity = quantity,
+                    priceUnit = priceUnit,
+                    imageUrl = if (imageUrl.isNullOrBlank()) null else imageUrl
+                )
+                biz.copy(
+                    eoCustomAssets = (biz.eoCustomAssets ?: emptyList()) + newAsset,
+                    companyCash = biz.companyCash - totalCost
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun editEoCustomAsset(instanceId: String, assetId: String, newName: String, newImageUrl: String?): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val exists = biz.eoCustomAssets?.any { it.id == assetId } ?: false
+            if (!exists) {
+                errorMsg = "Aset tidak ditemukan."
+                biz
+            } else {
+                val updatedList = biz.eoCustomAssets.map { asset ->
+                    if (asset.id == assetId) {
+                        asset.copy(
+                            name = newName,
+                            imageUrl = if (newImageUrl.isNullOrBlank()) null else newImageUrl
+                        )
+                    } else asset
+                }
+                biz.copy(eoCustomAssets = updatedList)
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun sellEoCustomAsset(instanceId: String, assetId: String): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val asset = biz.eoCustomAssets?.find { it.id == assetId }
+            if (asset == null) {
+                errorMsg = "Aset tidak ditemukan."
+                biz
+            } else {
+                val returnAmount = asset.priceUnit * asset.quantity * 0.5
+                val updatedList = biz.eoCustomAssets.filter { it.id != assetId }
+                biz.copy(
+                    eoCustomAssets = updatedList,
+                    companyCash = biz.companyCash + returnAmount
                 )
             }
         }
