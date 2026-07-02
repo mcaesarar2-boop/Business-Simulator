@@ -72,6 +72,87 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             (list ?: emptyList()).map { f ->
                 val safeInstitutions = try {
                     (f.educationInstitutions ?: emptyList()).map { inst ->
+                        val migratedTeachers = if (inst.teachers != null) {
+                            var u = inst.teachers.umum ?: com.example.data.StaffRole()
+                            var s = inst.teachers.spesialis ?: com.example.data.StaffRole()
+                            var sn = inst.teachers.senior ?: com.example.data.StaffRole()
+                            
+                            if (u.customSalary == 0L) u = u.copy(customSalary = 3000L)
+                            if (s.customSalary == 0L) s = s.copy(customSalary = 5000L)
+                            if (sn.customSalary == 0L) sn = sn.copy(customSalary = 8000L)
+                            
+                            if (u.target == 0 && (u.active > 0 || u.recruiting > 0)) {
+                                u = u.copy(target = u.active + u.recruiting)
+                            }
+                            if (s.target == 0 && (s.active > 0 || s.recruiting > 0)) {
+                                s = s.copy(target = s.active + s.recruiting)
+                            }
+                            if (sn.target == 0 && (sn.active > 0 || sn.recruiting > 0)) {
+                                sn = sn.copy(target = sn.active + sn.recruiting)
+                            }
+                            
+                            @Suppress("DEPRECATION")
+                            if (u.active == 0 && u.recruiting == 0 && (inst.teachers.umumCount ?: 0) > 0) {
+                                u = u.copy(active = inst.teachers.umumCount ?: 0, target = inst.teachers.umumCount ?: 0)
+                            }
+                            @Suppress("DEPRECATION")
+                            if (s.active == 0 && s.recruiting == 0 && (inst.teachers.spesialisCount ?: 0) > 0) {
+                                s = s.copy(active = inst.teachers.spesialisCount ?: 0, target = inst.teachers.spesialisCount ?: 0)
+                            }
+                            @Suppress("DEPRECATION")
+                            if (sn.active == 0 && sn.recruiting == 0 && (inst.teachers.seniorCount ?: 0) > 0) {
+                                sn = sn.copy(active = inst.teachers.seniorCount ?: 0, target = inst.teachers.seniorCount ?: 0)
+                            }
+                            com.example.data.TeacherStaff(umum = u, spesialis = s, senior = sn)
+                        } else {
+                            com.example.data.TeacherStaff()
+                        }
+
+                        val migratedSupport = if (inst.supportStaff != null) {
+                            var o = inst.supportStaff.ob ?: com.example.data.StaffRole()
+                            var sat = inst.supportStaff.satpam ?: com.example.data.StaffRole()
+                            var adm = inst.supportStaff.admin ?: com.example.data.StaffRole()
+                            var ch = inst.supportStaff.chef ?: com.example.data.StaffRole()
+                            
+                            if (o.customSalary == 0L) o = o.copy(customSalary = 800L)
+                            if (sat.customSalary == 0L) sat = sat.copy(customSalary = 1000L)
+                            if (adm.customSalary == 0L) adm = adm.copy(customSalary = 1200L)
+                            if (ch.customSalary == 0L) ch = ch.copy(customSalary = 2500L)
+                            
+                            if (o.target == 0 && (o.active > 0 || o.recruiting > 0)) {
+                                o = o.copy(target = o.active + o.recruiting)
+                            }
+                            if (sat.target == 0 && (sat.active > 0 || sat.recruiting > 0)) {
+                                sat = sat.copy(target = sat.active + sat.recruiting)
+                            }
+                            if (adm.target == 0 && (adm.active > 0 || adm.recruiting > 0)) {
+                                adm = adm.copy(target = adm.active + adm.recruiting)
+                            }
+                            if (ch.target == 0 && (ch.active > 0 || ch.recruiting > 0)) {
+                                ch = ch.copy(target = ch.active + ch.recruiting)
+                            }
+                            
+                            @Suppress("DEPRECATION")
+                            if (o.active == 0 && o.recruiting == 0 && (inst.supportStaff.janitorCount ?: 0) > 0) {
+                                o = o.copy(active = inst.supportStaff.janitorCount ?: 0, target = inst.supportStaff.janitorCount ?: 0)
+                            }
+                            @Suppress("DEPRECATION")
+                            if (sat.active == 0 && sat.recruiting == 0 && (inst.supportStaff.securityCount ?: 0) > 0) {
+                                sat = sat.copy(active = inst.supportStaff.securityCount ?: 0, target = inst.supportStaff.securityCount ?: 0)
+                            }
+                            @Suppress("DEPRECATION")
+                            if (adm.active == 0 && adm.recruiting == 0 && (inst.supportStaff.adminCount ?: 0) > 0) {
+                                adm = adm.copy(active = inst.supportStaff.adminCount ?: 0, target = inst.supportStaff.adminCount ?: 0)
+                            }
+                            @Suppress("DEPRECATION")
+                            if (ch.active == 0 && ch.recruiting == 0 && (inst.supportStaff.chefCount ?: 0) > 0) {
+                                ch = ch.copy(active = inst.supportStaff.chefCount ?: 0, target = inst.supportStaff.chefCount ?: 0)
+                            }
+                            com.example.data.SupportStaff(ob = o, satpam = sat, admin = adm, chef = ch)
+                        } else {
+                            com.example.data.SupportStaff()
+                        }
+
                         com.example.data.EducationInstitution(
                             id = inst.id ?: java.util.UUID.randomUUID().toString(),
                             name = inst.name ?: "Institusi Lama",
@@ -89,7 +170,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             additionalFacilities = inst.additionalFacilities ?: emptyList(),
                             constructionMonthsTotal = inst.constructionMonthsTotal,
                             constructionMonthsLeft = inst.constructionMonthsLeft,
-                            isOperational = inst.isOperational || (inst.constructionMonthsLeft == 0 && inst.currentStudents > 0)
+                            isOperational = inst.isOperational || (inst.constructionMonthsLeft == 0 && inst.currentStudents > 0),
+                            teachers = migratedTeachers,
+                            supportStaff = migratedSupport
                         )
                     }
                 } catch (e: Exception) {
@@ -4807,33 +4890,44 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         val beforePoints = inst.accreditationPoints
                         val nextPoints = Math.min(100, (beforePoints + addedPoints).toInt())
 
-                        val curriculumMultiplier = if (inst.level == "SMA") {
-                            when (inst.curriculumType) {
-                                "Nasional" -> 1.2
-                                "Kejuruan (SMK)" -> 1.5
-                                "Cambridge (A-Level)" -> 2.5
-                                "IB (International Baccalaureate)" -> 3.0
-                                else -> 1.0
-                            }
-                        } else if (inst.level == "UNIV") {
-                            when (inst.curriculumType) {
-                                "Nasional (Teaching Univ)" -> 1.5
-                                "Internasional (Double Degree)" -> 3.0
-                                "World-Class Research Univ" -> 5.0
-                                else -> 1.0
-                            }
-                        } else {
-                            when (inst.curriculumType) {
-                                "Montessori", "Waldorf" -> 1.5
-                                "Agama Terpadu" -> if (inst.level == "SD") 1.2 else 1.75
-                                "Nasional Plus (Bilingual)" -> 1.8
-                                "Cambridge Primary" -> 2.5
-                                "Cambridge", "IB" -> 3.0
-                                "Internasional" -> 6.0
-                                else -> 1.0
-                            }
-                        }
-                        // 1. Kurangi waktu konstruksi fasilitas tambahan
+                        // 1. Pindahkan status rekrutmen ke aktif
+                        val currentTeachers = inst.teachers
+                        val tickedTeachers = currentTeachers.copy(
+                            umum = currentTeachers.umum.copy(
+                                active = currentTeachers.umum.active + currentTeachers.umum.recruiting,
+                                recruiting = 0
+                            ),
+                            spesialis = currentTeachers.spesialis.copy(
+                                active = currentTeachers.spesialis.active + currentTeachers.spesialis.recruiting,
+                                recruiting = 0
+                            ),
+                            senior = currentTeachers.senior.copy(
+                                active = currentTeachers.senior.active + currentTeachers.senior.recruiting,
+                                recruiting = 0
+                            )
+                        )
+
+                        val currentSupport = inst.supportStaff
+                        val tickedSupport = currentSupport.copy(
+                            ob = currentSupport.ob.copy(
+                                active = currentSupport.ob.active + currentSupport.ob.recruiting,
+                                recruiting = 0
+                            ),
+                            satpam = currentSupport.satpam.copy(
+                                active = currentSupport.satpam.active + currentSupport.satpam.recruiting,
+                                recruiting = 0
+                            ),
+                            admin = currentSupport.admin.copy(
+                                active = currentSupport.admin.active + currentSupport.admin.recruiting,
+                                recruiting = 0
+                            ),
+                            chef = currentSupport.chef.copy(
+                                active = currentSupport.chef.active + currentSupport.chef.recruiting,
+                                recruiting = 0
+                            )
+                        )
+
+                        // 2. Kurangi waktu konstruksi fasilitas tambahan
                         val updatedFacilities = (inst.additionalFacilities ?: emptyList()).map { fac ->
                             if (fac.constructionLeftMonths > 0) {
                                 fac.copy(constructionLeftMonths = fac.constructionLeftMonths - 1)
@@ -4842,23 +4936,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
 
-                        // 2. Kalkulasi biaya Ops HANYA untuk fasilitas yang sudah jadi
-                        val totalActiveFacilityMaint = updatedFacilities
-                            .filter { it.constructionLeftMonths <= 0 }
-                            .sumOf { it.maintenanceCost }
+                        val updatedInst = inst.copy(
+                            teachers = tickedTeachers,
+                            supportStaff = tickedSupport,
+                            additionalFacilities = updatedFacilities
+                        )
 
-                        val baseCost = if (inst.baseMaintenanceCost > 0L) {
-                            inst.baseMaintenanceCost + totalActiveFacilityMaint
-                        } else {
-                            inst.monthlyOperationalCost
-                        }
-                        
+                        // 3. Gunakan extension function universal yang baru
+                        val opsCost = updatedInst.calculateTotalMonthlyOpsCost()
+
                         val isOp = inst.isOperational
-                        val opsCost = if (isOp) {
-                            (baseCost * curriculumMultiplier).toLong()
-                        } else {
-                            ((inst.baseMaintenanceCost + totalActiveFacilityMaint) * curriculumMultiplier).toLong()
-                        }
                         val monthlyRevenue = if (isOp) {
                             inst.currentStudents * inst.monthlySpp
                         } else {
@@ -4910,9 +4997,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             nextEndowmentFund += 250000L
                         }
 
-                        inst.copy(
+                        updatedInst.copy(
                             accreditationPoints = nextPoints,
-                            additionalFacilities = updatedFacilities
+                            monthlyOperationalCost = opsCost
                         )
                     }
                 }
@@ -9075,6 +9162,223 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         _playerState.value = state.copy(foundations = updatedFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun hireTeacher(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedTeachers = when (type) {
+            "umum" -> inst.teachers.copy(umum = inst.teachers.umum.copy(
+                target = inst.teachers.umum.target + 1,
+                recruiting = inst.teachers.umum.recruiting + 1
+            ))
+            "spesialis" -> inst.teachers.copy(spesialis = inst.teachers.spesialis.copy(
+                target = inst.teachers.spesialis.target + 1,
+                recruiting = inst.teachers.spesialis.recruiting + 1
+            ))
+            "senior" -> inst.teachers.copy(senior = inst.teachers.senior.copy(
+                target = inst.teachers.senior.target + 1,
+                recruiting = inst.teachers.senior.recruiting + 1
+            ))
+            else -> inst.teachers
+        }
+        
+        val updatedInst = inst.copy(teachers = updatedTeachers)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun fireTeacher(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedTeachers = when (type) {
+            "umum" -> {
+                val r = inst.teachers.umum
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.teachers.copy(umum = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "spesialis" -> {
+                val r = inst.teachers.spesialis
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.teachers.copy(spesialis = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "senior" -> {
+                val r = inst.teachers.senior
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.teachers.copy(senior = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            else -> inst.teachers
+        }
+        
+        val updatedInst = inst.copy(teachers = updatedTeachers)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun hireSupportStaff(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedSupport = when (type) {
+            "janitor" -> inst.supportStaff.copy(ob = inst.supportStaff.ob.copy(
+                target = inst.supportStaff.ob.target + 1,
+                recruiting = inst.supportStaff.ob.recruiting + 1
+            ))
+            "security" -> inst.supportStaff.copy(satpam = inst.supportStaff.satpam.copy(
+                target = inst.supportStaff.satpam.target + 1,
+                recruiting = inst.supportStaff.satpam.recruiting + 1
+            ))
+            "admin" -> inst.supportStaff.copy(admin = inst.supportStaff.admin.copy(
+                target = inst.supportStaff.admin.target + 1,
+                recruiting = inst.supportStaff.admin.recruiting + 1
+            ))
+            "chef" -> inst.supportStaff.copy(chef = inst.supportStaff.chef.copy(
+                target = inst.supportStaff.chef.target + 1,
+                recruiting = inst.supportStaff.chef.recruiting + 1
+            ))
+            else -> inst.supportStaff
+        }
+        
+        val updatedInst = inst.copy(supportStaff = updatedSupport)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun fireSupportStaff(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedSupport = when (type) {
+            "janitor" -> {
+                val r = inst.supportStaff.ob
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(ob = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "security" -> {
+                val r = inst.supportStaff.satpam
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(satpam = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "admin" -> {
+                val r = inst.supportStaff.admin
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(admin = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "chef" -> {
+                val r = inst.supportStaff.chef
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(chef = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            else -> inst.supportStaff
+        }
+        
+        val updatedInst = inst.copy(supportStaff = updatedSupport)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateStaffSalary(
+        foundationId: String,
+        institutionId: String,
+        isTeacher: Boolean,
+        roleType: String,
+        newSalary: Long
+    ): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f -> f.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedInst = if (isTeacher) {
+            val updatedTeachers = when (roleType) {
+                "umum" -> inst.teachers.copy(umum = inst.teachers.umum.copy(customSalary = newSalary))
+                "spesialis" -> inst.teachers.copy(spesialis = inst.teachers.spesialis.copy(customSalary = newSalary))
+                "senior" -> inst.teachers.copy(senior = inst.teachers.senior.copy(customSalary = newSalary))
+                else -> inst.teachers
+            }
+            inst.copy(teachers = updatedTeachers)
+        } else {
+            val updatedSupport = when (roleType) {
+                "janitor" -> inst.supportStaff.copy(ob = inst.supportStaff.ob.copy(customSalary = newSalary))
+                "security" -> inst.supportStaff.copy(satpam = inst.supportStaff.satpam.copy(customSalary = newSalary))
+                "admin" -> inst.supportStaff.copy(admin = inst.supportStaff.admin.copy(customSalary = newSalary))
+                "chef" -> inst.supportStaff.copy(chef = inst.supportStaff.chef.copy(customSalary = newSalary))
+                else -> inst.supportStaff
+            }
+            inst.copy(supportStaff = updatedSupport)
+        }
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
         saveState(_playerState.value)
         return true
     }

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.viewmodel.GameViewModel
+import com.example.data.calculateTotalOpsCost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -235,7 +236,12 @@ fun JuniorSchoolDashboardScreen(
                     val guruOk = builtGuru >= 1
                     val toiletOk = builtToilet >= 2
                     val perpusOk = builtPerpus >= 1
-                    val allOk = classOk && guruOk && toiletOk && perpusOk
+
+                    val teachersCount = institution.teachers.umum.active + institution.teachers.spesialis.active + institution.teachers.senior.active
+                    val teachersOk = teachersCount >= 2
+                    val janitorOk = institution.supportStaff.ob.active >= 1
+
+                    val allOk = classOk && guruOk && toiletOk && perpusOk && teachersOk && janitorOk
 
                     // Warning Banner
                     Card(
@@ -277,6 +283,8 @@ fun JuniorSchoolDashboardScreen(
                             ChecklistItem(label = "Ruang Guru & Kepsek (Min. 1)", current = builtGuru, target = 1, isOk = guruOk)
                             ChecklistItem(label = "Toilet Siswa (Min. 2)", current = builtToilet, target = 2, isOk = toiletOk)
                             ChecklistItem(label = "Perpustakaan Mini (Min. 1)", current = builtPerpus, target = 1, isOk = perpusOk)
+                            ChecklistItem(label = "Kuota Tenaga Pengajar Dasar (Min. 2)", current = teachersCount, target = 2, isOk = teachersOk)
+                            ChecklistItem(label = "Kuota Staff Kebersihan Dasar (OB) (Min. 1)", current = institution.supportStaff.ob.active, target = 1, isOk = janitorOk)
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -304,6 +312,10 @@ fun JuniorSchoolDashboardScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SdmManagementPanel(foundationId, institution, viewModel)
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -364,7 +376,7 @@ fun JuniorSchoolDashboardScreen(
                     } else {
                         institution.monthlyOperationalCost
                     }
-                    val opsCost = (baseCost * activeCurrMultiplier).toLong()
+                    val opsCost = institution.calculateTotalOpsCost()
                     val monthlyRevenue = institution.currentStudents * institution.monthlySpp
                     val netIncome = monthlyRevenue - opsCost
 
@@ -627,6 +639,10 @@ fun JuniorSchoolDashboardScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SdmManagementPanel(foundationId, institution, viewModel)
 
                     Spacer(modifier = Modifier.height(16.dp))
                 }

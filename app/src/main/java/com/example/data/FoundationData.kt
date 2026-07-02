@@ -22,6 +22,33 @@ data class FacilityItem(
     val isUnderConstruction: Boolean get() = constructionLeftMonths > 0
 }
 
+data class StaffRole(
+    val active: Int = 0,
+    val recruiting: Int = 0,
+    val target: Int = 0, // Target kuota yang di-set pemain
+    val customSalary: Long = 0L // Gaji bulanan yang bisa diedit
+)
+
+data class TeacherStaff(
+    val umum: StaffRole = StaffRole(customSalary = 3000L),
+    val spesialis: StaffRole = StaffRole(customSalary = 5000L),
+    val senior: StaffRole = StaffRole(customSalary = 8000L),
+    @Deprecated("Use umum.active instead") val umumCount: Int? = null,
+    @Deprecated("Use spesialis.active instead") val spesialisCount: Int? = null,
+    @Deprecated("Use senior.active instead") val seniorCount: Int? = null
+)
+
+data class SupportStaff(
+    val ob: StaffRole = StaffRole(customSalary = 800L),
+    val satpam: StaffRole = StaffRole(customSalary = 1000L),
+    val admin: StaffRole = StaffRole(customSalary = 1200L),
+    val chef: StaffRole = StaffRole(customSalary = 2500L),
+    @Deprecated("Use ob.active instead") val janitorCount: Int? = null,
+    @Deprecated("Use satpam.active instead") val securityCount: Int? = null,
+    @Deprecated("Use admin.active instead") val adminCount: Int? = null,
+    @Deprecated("Use chef.active instead") val chefCount: Int? = null
+)
+
 data class EducationInstitution(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -39,7 +66,9 @@ data class EducationInstitution(
     val additionalFacilities: List<FacilityItem> = emptyList(),
     val constructionMonthsTotal: Int = 0,
     val constructionMonthsLeft: Int = 0,
-    val isOperational: Boolean = false
+    val isOperational: Boolean = false,
+    val teachers: TeacherStaff = TeacherStaff(),
+    val supportStaff: SupportStaff = SupportStaff()
 ) {
     val isUnderConstruction: Boolean get() = constructionMonthsLeft > 0
 }
@@ -175,3 +204,71 @@ val BUILDING_GRADES = listOf(
     BuildingGrade("Grade S9", 350000L, "Mahakarya seni & teknologi.", 20),
     BuildingGrade("Grade SS", 500000L, "Ultra-elit. Kualitas nomor 1 di dunia.", 24)
 )
+
+fun EducationInstitution.getCurriculumMultiplier(): Double {
+    return if (this.level == "SMA") {
+        when (this.curriculumType) {
+            "Nasional" -> 1.2
+            "Kejuruan (SMK)" -> 1.5
+            "Cambridge (A-Level)" -> 2.5
+            "IB (International Baccalaureate)" -> 3.0
+            else -> 1.0
+        }
+    } else if (this.level == "UNIV") {
+        when (this.curriculumType) {
+            "Nasional (Teaching Univ)" -> 1.5
+            "Internasional (Double Degree)" -> 3.0
+            "World-Class Research Univ" -> 5.0
+            else -> 1.0
+        }
+    } else {
+        when (this.curriculumType) {
+            "Montessori", "Waldorf" -> 1.5
+            "Agama Terpadu" -> if (this.level == "SD") 1.2 else 1.75
+            "Nasional Plus (Bilingual)" -> 1.8
+            "Cambridge Primary" -> 2.5
+            "Cambridge", "IB" -> 3.0
+            "Internasional" -> 6.0
+            else -> 1.0
+        }
+    }
+}
+
+fun EducationInstitution.calculateTotalOpsCost(): Long {
+    if (this.constructionMonthsLeft > 0) return 0L // Gedung belum jadi = $0 Ops
+
+    // 1. Biaya Perawatan Fisik
+    val activeFacCost = (this.additionalFacilities ?: emptyList())
+        .filter { it.constructionLeftMonths <= 0 }
+        .sumOf { it.maintenanceCost }
+
+    val baseBldg = if (this.baseMaintenanceCost > 0L) {
+        this.baseMaintenanceCost
+    } else {
+        when (this.level) {
+            "TK" -> 10000L
+            "SD" -> 30000L
+            "SMA" -> 100000L
+            "UNIV" -> 400000L
+            else -> 10000L
+        }
+    }
+
+    val physicalCost = (baseBldg + activeFacCost) * getCurriculumMultiplier()
+
+    // 2. Biaya Gaji Seluruh SDM Aktif
+    val teacherCost = (this.teachers.umum.active * this.teachers.umum.customSalary) + 
+                      (this.teachers.spesialis.active * this.teachers.spesialis.customSalary) + 
+                      (this.teachers.senior.active * this.teachers.senior.customSalary)
+                      
+    val supportCost = (this.supportStaff.ob.active * this.supportStaff.ob.customSalary) +
+                      (this.supportStaff.satpam.active * this.supportStaff.satpam.customSalary) +
+                      (this.supportStaff.admin.active * this.supportStaff.admin.customSalary) +
+                      (this.supportStaff.chef.active * this.supportStaff.chef.customSalary)
+
+    return physicalCost.toLong() + teacherCost + supportCost
+}
+
+fun EducationInstitution.calculateTotalMonthlyOpsCost(): Long {
+    return this.calculateTotalOpsCost()
+}

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.viewmodel.GameViewModel
+import com.example.data.calculateTotalOpsCost
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -239,7 +240,12 @@ fun HighSchoolDashboardScreen(
                     val toiletOk = builtToilet >= 4
                     val osisOk = builtOsis >= 1
                     val ipaOk = builtIpa >= 1
-                    val allOk = classOk && guruOk && toiletOk && osisOk && ipaOk
+
+                    val teachersCount = institution.teachers.umum.active + institution.teachers.spesialis.active + institution.teachers.senior.active
+                    val teachersOk = teachersCount >= 2
+                    val janitorOk = institution.supportStaff.ob.active >= 1
+
+                    val allOk = classOk && guruOk && toiletOk && osisOk && ipaOk && teachersOk && janitorOk
 
                     // Warning Banner
                     Card(
@@ -282,6 +288,8 @@ fun HighSchoolDashboardScreen(
                             ChecklistItem(label = "Toilet Siswa (Min. 4)", current = builtToilet, target = 4, isOk = toiletOk)
                             ChecklistItem(label = "Laboratorium IPA (Min. 1)", current = builtIpa, target = 1, isOk = ipaOk)
                             ChecklistItem(label = "Ruang OSIS (Min. 1)", current = builtOsis, target = 1, isOk = osisOk)
+                            ChecklistItem(label = "Kuota Tenaga Pengajar Dasar (Min. 2)", current = teachersCount, target = 2, isOk = teachersOk)
+                            ChecklistItem(label = "Kuota Staff Kebersihan Dasar (OB) (Min. 1)", current = institution.supportStaff.ob.active, target = 1, isOk = janitorOk)
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -309,6 +317,10 @@ fun HighSchoolDashboardScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SdmManagementPanel(foundationId, institution, viewModel)
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -369,7 +381,7 @@ fun HighSchoolDashboardScreen(
                     } else {
                         institution.monthlyOperationalCost
                     }
-                    val opsCost = (baseCost * activeCurrMultiplier).toLong()
+                    val opsCost = institution.calculateTotalOpsCost()
                     val monthlyRevenue = institution.currentStudents * institution.monthlySpp
                     val netIncome = monthlyRevenue - opsCost
 
@@ -632,6 +644,10 @@ fun HighSchoolDashboardScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SdmManagementPanel(foundationId, institution, viewModel)
 
                     Spacer(modifier = Modifier.height(16.dp))
                 }

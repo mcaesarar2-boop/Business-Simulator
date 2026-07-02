@@ -945,39 +945,7 @@ fun EducationInstitutionCard(
     val upgradeCost = baseUpgradeCost * inst.facilityLevel
     val canUpgrade = inst.facilityLevel < 5 && endowmentFund >= upgradeCost && inst.constructionMonthsLeft <= 0
 
-    val curriculumMultiplier = if (inst.level == "SMA") {
-        when (inst.curriculumType) {
-            "Nasional" -> 1.2
-            "Kejuruan (SMK)" -> 1.5
-            "Cambridge (A-Level)" -> 2.5
-            "IB (International Baccalaureate)" -> 3.0
-            else -> 1.0
-        }
-    } else if (inst.level == "UNIV") {
-        when (inst.curriculumType) {
-            "Nasional (Teaching Univ)" -> 1.5
-            "Internasional (Double Degree)" -> 3.0
-            "World-Class Research Univ" -> 5.0
-            else -> 1.0
-        }
-    } else {
-        when (inst.curriculumType) {
-            "Montessori", "Waldorf" -> 1.5
-            "Agama Terpadu" -> if (inst.level == "SD") 1.2 else 1.75
-            "Nasional Plus (Bilingual)" -> 1.8
-            "Cambridge Primary" -> 2.5
-            "Cambridge", "IB" -> 3.0
-            "Internasional" -> 6.0
-            else -> 1.0
-        }
-    }
-    val totalFacilityMaintenanceCost = inst.additionalFacilities?.sumOf { it.maintenanceCost } ?: 0L
-    val baseCost = if (inst.baseMaintenanceCost > 0L) {
-        inst.baseMaintenanceCost + totalFacilityMaintenanceCost
-    } else {
-        inst.monthlyOperationalCost
-    }
-    val opsCost = (baseCost * curriculumMultiplier).toLong()
+    val opsCost = inst.calculateTotalMonthlyOpsCost()
 
     val isUnderConstruction = inst.constructionMonthsLeft > 0
 
