@@ -3238,34 +3238,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
                 var newClientEventRequests = owned.clientEventRequests
                 if (owned.catalogId == "media_radio") {
-                    val maxLimit = when (owned.level) {
-                        in 1..10 -> 5
-                        in 11..30 -> 8
-                        in 31..40 -> 12
-                        else -> 15
-                    }
-                    val count = (1..maxLimit).random()
-                    val generated = mutableListOf<com.example.data.EventProject>()
-                    val categories = listOf("Wedding", "Corporate Gathering", "Pensi Sekolah", "Konser Indie", "Fanmeeting", "Pertandingan Olahraga", "Konser Internasional")
-                    for (i in 0 until count) {
-                        val basePax = when {
-                            owned.level <= 10 -> (100..5000).random()
-                            owned.level <= 30 -> (100..20000).random()
-                            else -> (100..50000).random()
-                        }
-                        val cat = categories.random()
-                        val tb = basePax * (50..200).random().toDouble()
-                        generated.add(com.example.data.EventProject(
-                            name = "Tawaran: $cat",
-                            category = cat,
-                            pax = basePax,
-                            totalBudget = tb,
-                            eoFee = tb * 0.20,
-                            techFee = tb * 0.40,
-                            useInHouseTech = false
-                        ))
-                    }
-                    newClientEventRequests = generated
+                    newClientEventRequests = generateEventRequestsForBusiness(owned)
                 }
                 
                 owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = updatedTenders, subsidiaries = updatedSubsidiaries, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
@@ -3719,34 +3692,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         
                         var newClientEventRequests = owned.clientEventRequests
                         if (owned.catalogId == "media_radio") {
-                            val maxLimit = when (owned.level) {
-                                in 1..10 -> 5
-                                in 11..30 -> 8
-                                in 31..40 -> 12
-                                else -> 15
-                            }
-                            val count = (1..maxLimit).random()
-                            val generated = mutableListOf<com.example.data.EventProject>()
-                            val categories = listOf("Wedding", "Corporate Gathering", "Pensi Sekolah", "Konser Indie", "Fanmeeting", "Pertandingan Olahraga", "Konser Internasional")
-                            for (i in 0 until count) {
-                                val basePax = when {
-                                    owned.level <= 10 -> (100..5000).random()
-                                    owned.level <= 30 -> (100..20000).random()
-                                    else -> (100..50000).random()
-                                }
-                                val cat = categories.random()
-                                val tb = basePax * (50..200).random().toDouble()
-                                generated.add(com.example.data.EventProject(
-                                    name = "Tawaran: $cat",
-                                    category = cat,
-                                    pax = basePax,
-                                    totalBudget = tb,
-                                    eoFee = tb * 0.20,
-                                    techFee = tb * 0.40,
-                                    useInHouseTech = false
-                                ))
-                            }
-                            newClientEventRequests = generated
+                            newClientEventRequests = generateEventRequestsForBusiness(owned)
                         }
                         
                         owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = updatedTenders, subsidiaries = updatedDeepSubs, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
@@ -8610,118 +8556,679 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    private fun updateEoBusiness(instanceId: String, updateBlock: (com.example.data.OwnedBusiness) -> com.example.data.OwnedBusiness): Boolean {
+        val state = _playerState.value
+        var modified = false
+        val newBusinesses = state.ownedBusinesses.map { s ->
+            if (s.instanceId == instanceId) {
+                modified = true
+                updateBlock(s)
+            } else s
+        }
+        val newHoldings = state.holdingCompanies.map { h ->
+            val newSubs = h.subsidiaries.map { s ->
+                if (s.instanceId == instanceId) {
+                    modified = true
+                    updateBlock(s)
+                } else s
+            }
+            h.copy(subsidiaries = newSubs)
+        }
+        if (modified) {
+            _playerState.value = state.copy(ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
+            saveState(_playerState.value)
+        }
+        return modified
+    }
+
+    fun getAssetPurchasePrice(asset: String): Double {
+        return when (asset) {
+            "Stage" -> 20000.0
+            "Sound" -> 15000.0
+            "Lighting" -> 12000.0
+            "LED" -> 25000.0
+            "Power" -> 15000.0
+            "Security" -> 8000.0
+            "Toilet" -> 5000.0
+            "Barricade" -> 6000.0
+            "Ambulance" -> 30000.0
+            "Tent" -> 10000.0
+            "Truss" -> 15000.0
+            "Forklift" -> 12000.0
+            "Truck" -> 18000.0
+            "Warehouse" -> 50000.0
+            "Helicopter" -> 500000.0
+            else -> 10000.0
+        }
+    }
+
+    fun getDivisionHiringCost(div: String): Double {
+        return when (div) {
+            "Sales" -> 15000.0
+            "Creative" -> 12000.0
+            "Production" -> 20000.0
+            "Multimedia" -> 18000.0
+            "Talent" -> 25000.0
+            "Logistics" -> 15000.0
+            "Finance" -> 22000.0
+            "Legal" -> 25000.0
+            "Marketing" -> 15000.0
+            else -> 10000.0
+        }
+    }
+
+    fun getHqUpgradeCost(hq: String): Double {
+        return when (hq) {
+            "HOUSE" -> 0.0
+            "OFFICE" -> 50000.0
+            "REGIONAL" -> 200000.0
+            "NATIONAL" -> 1000000.0
+            "INTERNATIONAL" -> 5000000.0
+            else -> 0.0
+        }
+    }
+
     fun formRentalDivision(instanceId: String): String? {
         val state = _playerState.value
         val cost = 100000L
         if (state.cash < cost) return "Kas pribadi kurang dari $100,000"
         
-        var modified = false
-        val newBusinesses = state.ownedBusinesses.map { biz ->
-            if (biz.instanceId == instanceId) {
-                modified = true
-                biz.copy(hasRentalDivision = true)
-            } else biz
+        var success = false
+        val ok = updateEoBusiness(instanceId) { biz ->
+            success = true
+            biz.copy(hasRentalDivision = true)
         }
-        if (!modified) return "Bisnis tidak ditemukan."
-        
-        _playerState.value = state.copy(cash = state.cash - cost, ownedBusinesses = newBusinesses)
-        saveState(_playerState.value)
-        return null
+        if (ok && success) {
+            _playerState.value = _playerState.value.copy(cash = _playerState.value.cash - cost)
+            saveState(_playerState.value)
+            return null
+        }
+        return "Bisnis tidak ditemukan."
+    }
+
+    fun acceptClientEvent(instanceId: String, eventId: String): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val ev = biz.clientEventRequests.find { it.id == eventId }
+            if (ev == null) {
+                errorMsg = "Tawaran tidak valid."
+                biz
+            } else {
+                val newEv = ev.copy(phase = "PLANNING")
+                biz.copy(
+                    clientEventRequests = biz.clientEventRequests.filter { it.id != eventId },
+                    activeEvents = biz.activeEvents + newEv
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
     }
 
     fun startCustomEvent(instanceId: String, name: String, category: String, pax: Int, tb: Double, eoFee: Double, techFee: Double, useInHouse: Boolean): String? {
-        val state = _playerState.value
         var errorMsg: String? = null
-        var modified = false
-        
-        val newBusinesses = state.ownedBusinesses.map { biz ->
-            if (biz.instanceId == instanceId) {
-                if (biz.companyCash < tb) {
-                    errorMsg = "Kas internal perusahaan tidak cukup untuk modal event!"
-                    biz
-                } else {
-                    modified = true
-                    val durationMs = (1..5).random() * 60000L
-                    val event = com.example.data.EventProject(
-                        name = name,
-                        category = category,
-                        pax = pax,
-                        totalBudget = tb,
-                        eoFee = eoFee,
-                        techFee = techFee,
-                        useInHouseTech = useInHouse,
-                        executionEndTime = System.currentTimeMillis() + durationMs
-                    )
-                    biz.copy(companyCash = biz.companyCash - tb, activeEvents = biz.activeEvents + event)
-                }
-            } else biz
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val requirements = when (category) {
+                "Birthday Party" -> listOf("Sound", "Lighting")
+                "Wedding" -> listOf("Stage", "Sound", "Lighting", "LED")
+                "Graduation" -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security")
+                "Corporate Gathering" -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security")
+                "Concert" -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance")
+                "Festival" -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance", "Tent")
+                "Exhibition" -> listOf("LED", "Power", "Security", "Toilet", "Barricade", "Forklift", "Truck")
+                "Sports Event" -> listOf("Sound", "Power", "Security", "Toilet", "Barricade", "Ambulance")
+                "Government Event" -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security")
+                "International Summit" -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance", "Helicopter")
+                else -> listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security")
+            }
+            val weather = if (kotlin.random.Random.nextDouble() < 0.3) "RAINY" else "SUNNY"
+            val isOutdoor = listOf("Wedding", "Pensi", "Konser", "Festival", "Sports").any { category.contains(it, ignoreCase = true) }
+            val event = com.example.data.EventProject(
+                name = name,
+                category = category,
+                pax = pax,
+                totalBudget = tb,
+                eoFee = eoFee,
+                techFee = techFee,
+                useInHouseTech = useInHouse,
+                executionEndTime = 0L,
+                weather = weather,
+                isOutdoor = isOutdoor,
+                requirements = requirements,
+                phase = "PLANNING"
+            )
+            biz.copy(activeEvents = biz.activeEvents + event)
         }
-        
-        if (errorMsg != null) return errorMsg
-        if (!modified) return "Perusahaan tidak ditemukan"
-        
-        _playerState.value = state.copy(ownedBusinesses = newBusinesses)
-        saveState(_playerState.value)
-        return null
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
     }
 
-    fun acceptClientEvent(instanceId: String, eventId: String, useInHouse: Boolean): String? {
-        val state = _playerState.value
+    fun startSpecialEvent(instanceId: String, specName: String, specCategory: String, budget: Double, fee: Double, requirements: List<String>, prestigeReward: Int): String? {
         var errorMsg: String? = null
-        var modified = false
+        val ok = updateEoBusiness(instanceId) { biz ->
+            if (biz.eoCompletedSpecialEvents.contains(specName)) {
+                errorMsg = "Kamu sudah menyelesaikan event prestige ini!"
+                biz
+            } else if (biz.eoPrestige < prestigeReward - 25) { // some threshold
+                errorMsg = "Prestige perusahaan kamu belum cukup untuk event akbar ini!"
+                biz
+            } else {
+                val weather = if (kotlin.random.Random.nextDouble() < 0.3) "RAINY" else "SUNNY"
+                val event = com.example.data.EventProject(
+                    name = specName,
+                    category = specCategory,
+                    pax = 10000,
+                    totalBudget = budget,
+                    eoFee = fee,
+                    techFee = budget * 0.4,
+                    useInHouseTech = false,
+                    executionEndTime = 0L,
+                    weather = weather,
+                    isOutdoor = true,
+                    requirements = requirements,
+                    phase = "PLANNING",
+                    isSpecial = true,
+                    requiredPrestige = prestigeReward // Store the reward here for ease of access
+                )
+                biz.copy(activeEvents = biz.activeEvents + event)
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun rentAssetForEvent(instanceId: String, eventId: String, reqName: String): String? {
+        var errorMsg: String? = null
+        val rentCost = getAssetPurchasePrice(reqName) * 0.05
         
-        val newBusinesses = state.ownedBusinesses.map { biz ->
-            if (biz.instanceId == instanceId) {
-                val ev = biz.clientEventRequests.find { it.id == eventId }
-                if (ev == null) {
-                    errorMsg = "Tawaran tidak valid."
-                    biz
-                } else if (biz.companyCash < ev.totalBudget) {
-                    errorMsg = "Kas internal tidak cukup modal."
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val ev = biz.activeEvents.find { it.id == eventId }
+            if (ev == null) {
+                errorMsg = "Event tidak ditemukan."
+                biz
+            } else if (biz.companyCash < rentCost) {
+                errorMsg = "Kas internal tidak mencukupi untuk sewa vendor ($${String.format("%,.0f", rentCost)})."
+                biz
+            } else {
+                val updatedEv = ev.copy(rentedAssets = ev.rentedAssets + reqName)
+                biz.copy(
+                    companyCash = biz.companyCash - rentCost,
+                    activeEvents = biz.activeEvents.map { if (it.id == eventId) updatedEv else it }
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun startEventExecution(instanceId: String, eventId: String): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val ev = biz.activeEvents.find { it.id == eventId }
+            if (ev == null) {
+                errorMsg = "Event tidak ditemukan."
+                biz
+            } else if (biz.companyCash < ev.totalBudget) {
+                errorMsg = "Kas internal tidak cukup modal untuk mengeksekusi event ($${String.format("%,.0f", ev.totalBudget)})."
+                biz
+            } else {
+                // Random incident: 40% chance
+                val hasIncident = kotlin.random.Random.nextDouble() < 0.40
+                val incidentName = if (hasIncident) {
+                    listOf("GENSET_BROKEN", "VENDOR_LATE", "ARTIST_CANCELED", "TICKETS_OVERSOLD", "DEMONSTRATION", "STRONG_WINDS").random()
+                } else null
+                
+                // Duration of event execution in milliseconds: 30 seconds
+                val durationMs = 30000L
+                val updatedEv = ev.copy(
+                    phase = "EXECUTING",
+                    executionStartTime = System.currentTimeMillis(),
+                    executionEndTime = System.currentTimeMillis() + durationMs,
+                    activeIncident = incidentName,
+                    incidentResolved = false,
+                    incidentImpactQuality = 0.0,
+                    incidentImpactCost = 0.0
+                )
+                biz.copy(
+                    companyCash = biz.companyCash - ev.totalBudget,
+                    activeEvents = biz.activeEvents.map { if (it.id == eventId) updatedEv else it }
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun resolveEventIncident(instanceId: String, eventId: String, choiceIndex: Int): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val ev = biz.activeEvents.find { it.id == eventId }
+            if (ev == null || ev.activeIncident == null) {
+                errorMsg = "Incident tidak aktif."
+                biz
+            } else {
+                var qualityImpact = 0.0
+                var costImpact = 0.0
+                
+                when (ev.activeIncident) {
+                    "GENSET_BROKEN" -> {
+                        if (choiceIndex == 0) { // Emergency generator
+                            costImpact = 10000.0
+                            qualityImpact = 0.0
+                        } else if (choiceIndex == 1) { // Backup generator (if owned)
+                            if ((biz.eoOwnedAssets["Power"] ?: 0) > 0) {
+                                costImpact = 0.0
+                                qualityImpact = 0.0
+                            } else {
+                                costImpact = 5000.0
+                                qualityImpact = -10.0
+                            }
+                        } else { // Do nothing
+                            costImpact = 0.0
+                            qualityImpact = -30.0
+                        }
+                    }
+                    "VENDOR_LATE" -> {
+                        if (choiceIndex == 0) { // Pay courier
+                            costImpact = 5000.0
+                            qualityImpact = 0.0
+                        } else { // Wait
+                            costImpact = 0.0
+                            qualityImpact = -15.0
+                        }
+                    }
+                    "ARTIST_CANCELED" -> {
+                        if (choiceIndex == 0) { // Replace artist
+                            costImpact = 20000.0
+                            qualityImpact = 0.0
+                        } else if (choiceIndex == 1) { // Negotiate discount
+                            costImpact = 8000.0
+                            qualityImpact = -10.0
+                        } else { // Cancel parts
+                            costImpact = 0.0
+                            qualityImpact = -40.0
+                        }
+                    }
+                    "TICKETS_OVERSOLD" -> {
+                        if (choiceIndex == 0) { // Upgrade area
+                            costImpact = 15000.0
+                            qualityImpact = 0.0
+                        } else { // Leave crowded
+                            costImpact = 0.0
+                            qualityImpact = -25.0
+                        }
+                    }
+                    "DEMONSTRATION" -> {
+                        if (choiceIndex == 0) { // Extra security
+                            costImpact = 12000.0
+                            qualityImpact = 0.0
+                        } else { // Negotiate
+                            costImpact = 0.0
+                            qualityImpact = -20.0
+                        }
+                    }
+                    "STRONG_WINDS" -> {
+                        if (choiceIndex == 0) { // Reinforce rigging
+                            costImpact = 8000.0
+                            qualityImpact = 0.0
+                        } else { // Do nothing
+                            costImpact = 0.0
+                            qualityImpact = -30.0
+                        }
+                    }
+                }
+                
+                if (biz.companyCash < costImpact) {
+                    errorMsg = "Kas internal tidak cukup untuk keputusan ini!"
                     biz
                 } else {
-                    modified = true
-                    val durationMs = (1..5).random() * 60000L
-                    val newEv = ev.copy(useInHouseTech = useInHouse, executionEndTime = System.currentTimeMillis() + durationMs)
+                    val updatedEv = ev.copy(
+                        incidentResolved = true,
+                        incidentImpactQuality = qualityImpact,
+                        incidentImpactCost = costImpact
+                    )
                     biz.copy(
-                        companyCash = biz.companyCash - ev.totalBudget,
-                        clientEventRequests = biz.clientEventRequests.filter { it.id != eventId },
-                        activeEvents = biz.activeEvents + newEv
+                        companyCash = biz.companyCash - costImpact,
+                        activeEvents = biz.activeEvents.map { if (it.id == eventId) updatedEv else it }
                     )
                 }
-            } else biz
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun calculateEventResults(instanceId: String, eventId: String): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val ev = biz.activeEvents.find { it.id == eventId }
+            if (ev == null) {
+                errorMsg = "Event tidak ditemukan."
+                biz
+            } else {
+                val divisions = biz.eoDivisions ?: emptySet()
+                
+                // 1. Calculate Quality
+                var baseQuality = 100.0
+                if (divisions.contains("Creative")) {
+                    baseQuality += 5.0
+                }
+                
+                // Missing assets deductions
+                var missingCount = 0
+                for (req in ev.requirements) {
+                    val isOwned = (biz.eoOwnedAssets[req] ?: 0) > 0
+                    val isRented = ev.rentedAssets.contains(req)
+                    if (!isOwned && !isRented) {
+                        missingCount++
+                    }
+                }
+                val requirementDeduction = missingCount * 12.0
+                
+                // Weather impact
+                var weatherDeduction = 0.0
+                var weatherCost = 0.0
+                if (ev.isOutdoor && ev.weather == "RAINY") {
+                    val hasTent = (biz.eoOwnedAssets["Tent"] ?: 0) > 0 || ev.rentedAssets.contains("Tent")
+                    val hasTruss = (biz.eoOwnedAssets["Truss"] ?: 0) > 0 || ev.rentedAssets.contains("Truss")
+                    if (hasTent || hasTruss) {
+                        weatherCost = 1000.0
+                    } else {
+                        weatherDeduction = 25.0
+                        weatherCost = 5000.0
+                    }
+                }
+                
+                // Incident impact
+                var incidentDeduction = 0.0
+                if (ev.activeIncident != null) {
+                    if (!ev.incidentResolved) {
+                        incidentDeduction = when (ev.activeIncident) {
+                            "GENSET_BROKEN" -> 30.0
+                            "VENDOR_LATE" -> 15.0
+                            "ARTIST_CANCELED" -> 40.0
+                            "TICKETS_OVERSOLD" -> 25.0
+                            "DEMONSTRATION" -> 20.0
+                            "STRONG_WINDS" -> 30.0
+                            else -> 20.0
+                        }
+                    } else {
+                        incidentDeduction = ev.incidentImpactQuality
+                    }
+                }
+                
+                val finalQuality = (baseQuality - requirementDeduction - weatherDeduction - incidentDeduction).coerceIn(0.0, 100.0)
+                
+                // 2. Star rating
+                var rating = when {
+                    finalQuality >= 90.0 -> 5.0
+                    finalQuality >= 75.0 -> 4.0
+                    finalQuality >= 55.0 -> 3.0
+                    finalQuality >= 35.0 -> 2.0
+                    else -> 1.0
+                }
+                if (divisions.contains("Talent")) {
+                    rating = (rating + 0.3).coerceAtMost(5.0)
+                }
+                
+                val reviewText = when {
+                    rating >= 4.8 -> "SANGAT LUAR BIASA! Semua terencana dengan sempurna, profesional, dan klien sangat puas dengan hasil kerja kami!"
+                    rating >= 4.0 -> "Acara berjalan dengan lancar dan cukup rapi. Klien puas dan memberikan feedback positif."
+                    rating >= 3.0 -> "Biasa saja. Beberapa kendala teknis kecil mengganggu jalannya acara, tapi overall ok."
+                    rating >= 2.0 -> "Cukup mengecewakan. Banyak fasilitas utama yang kurang lengkap dan tidak sesuai ekspektasi."
+                    else -> "Bencana total! Acara hancur lebur, genset bermasalah, dan penonton ricuh! Media massa menyoroti kegagalan fatal kami."
+                }
+                
+                // 3. Profit calculations
+                var profit = ev.eoFee
+                var multiplier = 1.0
+                if (divisions.contains("Production")) multiplier += 0.10
+                if (divisions.contains("Finance")) multiplier += 0.05
+                profit *= multiplier
+                profit -= weatherCost
+                
+                val updatedEv = ev.copy(
+                    phase = "REVIEW",
+                    quality = finalQuality,
+                    resultRating = rating,
+                    resultReviewText = reviewText,
+                    finalProfit = profit
+                )
+                
+                biz.copy(
+                    activeEvents = biz.activeEvents.map { if (it.id == eventId) updatedEv else it }
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun collectEventEarnings(instanceId: String, eventId: String): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val ev = biz.activeEvents.find { it.id == eventId }
+            if (ev == null || ev.phase != "REVIEW") {
+                errorMsg = "Event belum selesai direview."
+                biz
+            } else {
+                val rating = ev.resultRating
+                val divisions = biz.eoDivisions ?: emptySet()
+                
+                // Reputation change
+                var repChange = when {
+                    rating >= 4.5 -> 8.0
+                    rating >= 3.5 -> 4.0
+                    rating >= 2.5 -> 1.0
+                    rating >= 1.5 -> -5.0
+                    else -> -15.0
+                }
+                if (repChange > 0 && divisions.contains("Marketing")) {
+                    repChange *= 1.20
+                }
+                if (repChange < 0 && divisions.contains("Legal")) {
+                    repChange *= 0.50
+                }
+                
+                val newReputation = (biz.eoReputation + repChange).coerceIn(0.0, 100.0)
+                
+                // Prestige points
+                val basePrestigeReward = when (ev.category) {
+                    "Birthday Party" -> 1
+                    "Wedding" -> 2
+                    "Graduation" -> 2
+                    "Corporate Gathering" -> 3
+                    "Concert" -> 5
+                    "Festival" -> 6
+                    "Exhibition" -> 4
+                    "Sports Event" -> 5
+                    "Government Event" -> 6
+                    "International Summit" -> 10
+                    else -> 1
+                }
+                val totalPrestigeReward = if (ev.isSpecial) ev.requiredPrestige else basePrestigeReward
+                
+                val newPrestige = biz.eoPrestige + totalPrestigeReward
+                val newSpecialEvents = if (ev.isSpecial) biz.eoCompletedSpecialEvents + ev.name else biz.eoCompletedSpecialEvents
+                val totalPayout = ev.totalBudget + ev.finalProfit
+                
+                biz.copy(
+                    companyCash = biz.companyCash + totalPayout,
+                    eoReputation = newReputation,
+                    eoPrestige = newPrestige,
+                    eoCompletedSpecialEvents = newSpecialEvents,
+                    activeEvents = biz.activeEvents.filter { it.id != eventId }
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun upgradeEoHq(instanceId: String): String? {
+        var errorMsg: String? = null
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val currentHq = biz.eoCompanyHqLevel ?: "HOUSE"
+            val nextHq = when (currentHq) {
+                "HOUSE" -> "OFFICE"
+                "OFFICE" -> "REGIONAL"
+                "REGIONAL" -> "NATIONAL"
+                "NATIONAL" -> "INTERNATIONAL"
+                else -> null
+            }
+            if (nextHq == null) {
+                errorMsg = "HQ sudah berada di tingkat maksimal!"
+                biz
+            } else {
+                val cost = getHqUpgradeCost(nextHq)
+                if (biz.companyCash < cost) {
+                    errorMsg = "Kas internal tidak cukup untuk upgrade HQ ($${String.format("%,.0f", cost)})."
+                    biz
+                } else {
+                    biz.copy(
+                        eoCompanyHqLevel = nextHq,
+                        companyCash = biz.companyCash - cost
+                    )
+                }
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun hireEoDivision(instanceId: String, divName: String): String? {
+        var errorMsg: String? = null
+        val cost = getDivisionHiringCost(divName)
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val divisions = biz.eoDivisions ?: emptySet()
+            if (divisions.contains(divName)) {
+                errorMsg = "Divisi ini sudah dibentuk."
+                biz
+            } else if (biz.companyCash < cost) {
+                errorMsg = "Kas internal tidak cukup untuk membentuk divisi $divName ($${String.format("%,.0f", cost)})."
+                biz
+            } else {
+                biz.copy(
+                    eoDivisions = divisions + divName,
+                    companyCash = biz.companyCash - cost
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    fun buyEoAsset(instanceId: String, assetName: String): String? {
+        var errorMsg: String? = null
+        val cost = getAssetPurchasePrice(assetName)
+        val ok = updateEoBusiness(instanceId) { biz ->
+            val owned = biz.eoOwnedAssets ?: emptyMap()
+            if (biz.companyCash < cost) {
+                errorMsg = "Kas internal tidak cukup untuk membeli aset $assetName ($${String.format("%,.0f", cost)})."
+                biz
+            } else {
+                val currentCount = owned[assetName] ?: 0
+                val updatedOwned = owned.toMutableMap()
+                updatedOwned[assetName] = currentCount + 1
+                biz.copy(
+                    eoOwnedAssets = updatedOwned,
+                    companyCash = biz.companyCash - cost
+                )
+            }
+        }
+        if (!ok) return "Bisnis tidak ditemukan."
+        return errorMsg
+    }
+
+    data class EventTemplate(
+        val category: String,
+        val minPax: Int,
+        val maxPax: Int,
+        val baseCostPerPax: Double,
+        val feePercent: Double,
+        val isOutdoor: Boolean,
+        val requirements: List<String>,
+        val requiredHqs: List<String>,
+        val minReputation: Double,
+        val tier: Int
+    )
+
+    private val eventTemplates = listOf(
+        EventTemplate("Birthday Party", 50, 200, 30.0, 0.30, false, listOf("Sound", "Lighting"), listOf("HOUSE", "OFFICE", "REGIONAL", "NATIONAL", "INTERNATIONAL"), 0.0, 2),
+        EventTemplate("Wedding", 200, 1000, 50.0, 0.35, true, listOf("Stage", "Sound", "Lighting", "LED"), listOf("HOUSE", "OFFICE", "REGIONAL", "NATIONAL", "INTERNATIONAL"), 10.0, 3),
+        EventTemplate("Graduation", 300, 1500, 20.0, 0.20, false, listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security"), listOf("HOUSE", "OFFICE", "REGIONAL", "NATIONAL", "INTERNATIONAL"), 20.0, 3),
+        EventTemplate("Corporate Gathering", 100, 500, 80.0, 0.25, false, listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security"), listOf("OFFICE", "REGIONAL", "NATIONAL", "INTERNATIONAL"), 30.0, 4),
+        EventTemplate("Concert", 3000, 20000, 40.0, 0.30, true, listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance"), listOf("REGIONAL", "NATIONAL", "INTERNATIONAL"), 50.0, 4),
+        EventTemplate("Festival", 5000, 40000, 50.0, 0.40, true, listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance", "Tent"), listOf("NATIONAL", "INTERNATIONAL"), 65.0, 4),
+        EventTemplate("Exhibition", 1000, 10000, 35.0, 0.25, false, listOf("LED", "Power", "Security", "Toilet", "Barricade", "Forklift", "Truck"), listOf("OFFICE", "REGIONAL", "NATIONAL", "INTERNATIONAL"), 40.0, 4),
+        EventTemplate("Sports Event", 5000, 30000, 25.0, 0.20, true, listOf("Sound", "Power", "Security", "Toilet", "Barricade", "Ambulance"), listOf("REGIONAL", "NATIONAL", "INTERNATIONAL"), 55.0, 4),
+        EventTemplate("Government Event", 500, 3000, 60.0, 0.35, false, listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security"), listOf("REGIONAL", "NATIONAL", "INTERNATIONAL"), 70.0, 4),
+        EventTemplate("International Summit", 1000, 5000, 150.0, 0.30, false, listOf("Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance", "Helicopter"), listOf("NATIONAL", "INTERNATIONAL"), 85.0, 5)
+    )
+
+    fun generateEventRequestsForBusiness(owned: com.example.data.OwnedBusiness): List<com.example.data.EventProject> {
+        val hq = owned.eoCompanyHqLevel ?: "HOUSE"
+        val reputation = owned.eoReputation
+        val divisions = owned.eoDivisions ?: emptySet()
+        
+        val filtered = eventTemplates.filter { t ->
+            t.requiredHqs.contains(hq) && reputation >= t.minReputation
+        }
+        val pool = if (filtered.isEmpty()) {
+            eventTemplates.filter { it.category == "Birthday Party" }
+        } else {
+            filtered
         }
         
-        if (errorMsg != null) return errorMsg
-        if (!modified) return "Perusahaan tidak ditemukan"
+        var count = (2..5).random()
+        if (divisions.contains("Marketing")) {
+            count += (1..2).random()
+        }
         
-        _playerState.value = state.copy(ownedBusinesses = newBusinesses)
-        saveState(_playerState.value)
-        return null
+        val list = mutableListOf<com.example.data.EventProject>()
+        for (i in 0 until count) {
+            val template = pool.random()
+            val pax = (template.minPax..template.maxPax).random()
+            var tb = pax * template.baseCostPerPax * (0.8 + kotlin.random.Random.nextDouble(0.0, 0.4))
+            
+            if (divisions.contains("Sales")) {
+                tb *= 1.15
+            }
+            
+            val eoFee = tb * template.feePercent
+            val techFee = tb * 0.40
+            val weather = if (kotlin.random.Random.nextDouble() < 0.30) "RAINY" else "SUNNY"
+            
+            val clientPrefix = when (template.tier) {
+                2 -> listOf("Bpk. Budi", "Siska & Rio", "Ibu Dewi", "SMA 1 Merdeka").random()
+                3 -> listOf("CV Jaya Makmur", "Universitas Abadi", "Pemkot Regional", "Konser Indie Bandung").random()
+                4 -> listOf("PT Telkom Indonesia", "Pesta Rakyat Raya", "Pemerintah Nasional", "Festival Musik Kebangsaan").random()
+                else -> listOf("G20 Secretariat", "World Expo Group", "Asian Games Council", "International Summit Org").random()
+            }
+            
+            list.add(com.example.data.EventProject(
+                name = "$clientPrefix - ${template.category}",
+                category = template.category,
+                pax = pax,
+                totalBudget = tb,
+                eoFee = eoFee,
+                techFee = techFee,
+                useInHouseTech = false,
+                executionEndTime = 0L,
+                tier = template.tier,
+                isSpecial = false,
+                weather = weather,
+                isOutdoor = template.isOutdoor,
+                requirements = template.requirements,
+                phase = "PLANNING"
+            ))
+        }
+        return list
     }
 
     fun completeEventProject(instanceId: String, eventId: String) {
-        val state = _playerState.value
-        var netProfitLog = 0.0
-        val newBusinesses = state.ownedBusinesses.map { biz ->
-            if (biz.instanceId == instanceId) {
-                val ev = biz.activeEvents.find { it.id == eventId }
-                if (ev != null) {
-                    val returnCapital = ev.totalBudget
-                    var profit = ev.eoFee
-                    if (ev.useInHouseTech) profit += ev.techFee
-                    netProfitLog = profit
-                    biz.copy(
-                        companyCash = biz.companyCash + returnCapital + profit,
-                        activeEvents = biz.activeEvents.filter { it.id != eventId }
-                    )
-                } else biz
-            } else biz
-        }
-        if (netProfitLog > 0) {
-            _playerState.value = state.copy(ownedBusinesses = newBusinesses)
-            saveState(_playerState.value)
-        }
+        // Keeps backwards compatibility of the method name just in case
+        calculateEventResults(instanceId, eventId)
     }
 
     // ==========================================

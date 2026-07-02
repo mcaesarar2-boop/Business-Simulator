@@ -267,7 +267,33 @@ data class EventProject(
     val eoFee: Double,
     val techFee: Double,
     val useInHouseTech: Boolean,
-    val executionEndTime: Long = 0L
+    val executionEndTime: Long = 0L,
+    
+    // NEW properties for advanced mechanics:
+    val tier: Int = 2, // Client tier: 2 to 5 Stars
+    val isSpecial: Boolean = false, // If true, it is an iconic prestige event
+    val requiredPrestige: Int = 0, // Prestige level required
+    val requiredReputation: Double = 0.0, // Reputation required
+    val weather: String = "SUNNY", // "SUNNY", "RAINY"
+    val isOutdoor: Boolean = false, // If outdoor, susceptible to weather
+    val requirements: List<String> = emptyList(), // "Stage", "Sound", "Lighting", "LED", "Power", "Security", "Toilet", "Barricade", "Ambulance"
+    
+    // Incident tracking:
+    val activeIncident: String? = null, // Current active incident during execution
+    val incidentResolved: Boolean = false,
+    val incidentImpactQuality: Double = 0.0,
+    val incidentImpactCost: Double = 0.0,
+    
+    // Planning/Execution status:
+    val phase: String = "PLANNING", // "PLANNING", "EXECUTING", "REVIEW"
+    val rentedAssets: List<String> = emptyList(), // Assets currently rented for this event
+    val quality: Double = 100.0, // Event Quality: starts at 100.0
+    val executionStartTime: Long = 0L,
+    
+    // Result details:
+    val resultRating: Double = 0.0, // Stars awarded: 1 to 5
+    val resultReviewText: String = "",
+    val finalProfit: Double = 0.0
 )
 
 enum class HotelTier(val title: String, val baseBuildCost: Long, val buildMonths: Int, val maxRooms: Int, val baseRoomRate: Long) {
@@ -394,6 +420,12 @@ data class OwnedBusiness(
     val hasRentalDivision: Boolean = false,
     val activeEvents: List<EventProject> = emptyList(),
     val clientEventRequests: List<EventProject> = emptyList(),
+    val eoReputation: Double = 50.0,
+    val eoPrestige: Int = 0,
+    val eoCompletedSpecialEvents: Set<String> = emptySet(),
+    val eoCompanyHqLevel: String = "HOUSE", // HOUSE, OFFICE, REGIONAL, NATIONAL, INTERNATIONAL
+    val eoDivisions: Set<String> = emptySet(),
+    val eoOwnedAssets: Map<String, Int> = emptyMap(),
     val themeParkBranches: List<ThemeParkBranch> = emptyList(),
     val activeThemeParkBiddings: List<ActiveBidding> = emptyList(),
     val hospitalityProperties: List<HotelProperty> = emptyList(),
