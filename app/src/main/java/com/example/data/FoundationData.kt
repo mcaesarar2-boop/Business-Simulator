@@ -113,7 +113,8 @@ data class FoundationEntity(
     val endowmentFund: Long = 0L, // Dana abadi yayasan
     val facilities: List<FoundationFacility> = emptyList(),
     val educationInstitutions: List<EducationInstitution> = emptyList(),
-    val healthInstitutions: List<HealthInstitution> = emptyList()
+    val healthInstitutions: List<HealthInstitution> = emptyList(),
+    val charityInstitutions: List<CharityInstitution> = emptyList()
 )
 
 data class FoundationFacility(

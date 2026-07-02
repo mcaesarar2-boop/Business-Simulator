@@ -200,7 +200,7 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                                 
                                 Button(
                                     onClick = {
-                                        if (foundation.type == FoundationType.EDUCATION) {
+                                        if (foundation.type == FoundationType.EDUCATION || foundation.type == FoundationType.HUMANITARIAN) {
                                             navController.navigate("foundation_pre_built/${foundation.id}")
                                         } else if (foundation.type == FoundationType.HEALTHCARE) {
                                             customHealthName = ""
@@ -393,6 +393,88 @@ fun FoundationDetailScreen(navController: NavHostController, viewModel: GameView
                                     )
                                     Text(
                                         text = "Klik tombol \"Bangun Fasilitas\" di atas untuk mendirikan klinik atau rumah sakit.",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (foundation.type == FoundationType.HUMANITARIAN) {
+                    item {
+                        Text(
+                            text = "Institusi Sosial & Kemanusiaan",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+
+                    val charityList = foundation.charityInstitutions ?: emptyList()
+                    if (charityList.isNotEmpty()) {
+                        val chunks = charityList.chunked(2)
+                        chunks.forEach { pair ->
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    pair.forEach { inst ->
+                                        Box(modifier = Modifier.weight(1.0f)) {
+                                            CharityInstitutionCard(
+                                                inst = inst,
+                                                endowmentFund = foundation.endowmentFund,
+                                                onCardClick = {
+                                                    val route = when (inst.level) {
+                                                        "Humanitarian Aid" -> "humanitarian_aid_dashboard/${foundation.id}/${inst.id}"
+                                                        "Social Care" -> "social_care_dashboard/${foundation.id}/${inst.id}"
+                                                        "Disaster Relief" -> "disaster_relief_dashboard/${foundation.id}/${inst.id}"
+                                                        "Community Empowerment" -> "community_empowerment_dashboard/${foundation.id}/${inst.id}"
+                                                        else -> ""
+                                                    }
+                                                    if (route.isNotEmpty()) {
+                                                        navController.navigate(route)
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                    if (pair.size < 2) {
+                                        Spacer(modifier = Modifier.weight(1.0f))
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF101B2B)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Favorite,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Belum ada institusi dibangun.",
+                                        color = Color.LightGray,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = "Klik tombol \"Bangun Fasilitas\" di atas untuk mendirikan pos bantuan sosial atau posko kemanusiaan.",
                                         color = Color.Gray,
                                         fontSize = 11.sp,
                                         textAlign = TextAlign.Center
@@ -1587,6 +1669,166 @@ fun HealthInstitutionCard(
                     Text(
                         text = "${com.example.ui.formatCurrency(inst.monthlyBillPerPatient)}/pasien",
                         color = Color(0xFF81C784),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CharityInstitutionCard(
+    inst: com.example.data.CharityInstitution,
+    endowmentFund: Long,
+    onCardClick: () -> Unit
+) {
+    val isUnderConstruction = inst.constructionLeftMonths > 0
+    val opsCost = inst.calculateTotalMonthlyOpsCost()
+
+    val cardColor = Color(0xFF2E1C0F) // warm reddish amber/brown for charity
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCardClick() }
+            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                // Accreditation Badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "AKREDITASI",
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (isUnderConstruction) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFE65100).copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("KONSTRUKSI", color = Color(0xFFFF9800), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else if (inst.accreditationPoints >= 90) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "UNGGUL", 
+                                color = Color(0xFF4CAF50), 
+                                fontSize = 9.sp, 
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    } else if (inst.accreditationPoints >= 60) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF1976D2).copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "BAIK", 
+                                color = Color(0xFF2196F3), 
+                                fontSize = 9.sp, 
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1, softWrap = false
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFE65100).copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "CUKUP", 
+                                color = Color(0xFFFF9800), 
+                                fontSize = 9.sp, 
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1, softWrap = false
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { inst.accreditationPoints / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = if (inst.accreditationPoints >= 90) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                    trackColor = Color.White.copy(alpha = 0.1f)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Level & Name
+                Text(
+                    text = inst.name,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = if (isUnderConstruction) "Konstruksi: Sisa ${inst.constructionLeftMonths} Bln" else "${inst.level} | Level ${inst.facilityLevel}/5 | ${inst.buildingGrade}",
+                    color = if (isUnderConstruction) Color(0xFFFFB300) else Color.LightGray,
+                    fontSize = 11.sp
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Info Details
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Cakupan Wilayah:", color = Color.Gray, fontSize = 11.sp)
+                    Text(inst.scope, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Ops Bulanan:", color = Color.Gray, fontSize = 11.sp)
+                    Text(
+                        text = com.example.ui.formatCurrency(opsCost),
+                        color = Color(0xFFE57373),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Penerima Manfaat:", color = Color.Gray, fontSize = 11.sp)
+                    Text(
+                        text = "${inst.monthlyBeneficiaries}/${inst.maxCapacity} jiwa/bln",
+                        color = Color(0xFFFFB74D),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )

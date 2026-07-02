@@ -365,5 +365,50 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
             val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
             com.example.ui.InternationalHospitalFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
         }
+
+        // --- CHARITY ROUTES ---
+        composable("humanitarian_aid_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.HumanitarianAidDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("humanitarian_aid_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.HumanitarianAidFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
+
+        composable("social_care_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.SocialCareDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("social_care_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.SocialCareFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
+
+        composable("disaster_relief_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.DisasterReliefDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("disaster_relief_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.DisasterReliefFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
+
+        composable("community_empowerment_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.CommunityEmpowermentDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("community_empowerment_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.charity.CommunityEmpowermentFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
     }
 }

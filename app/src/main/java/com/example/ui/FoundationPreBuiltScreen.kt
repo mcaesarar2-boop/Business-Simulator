@@ -51,16 +51,26 @@ fun FoundationPreBuiltScreen(
     }
 
     var customName by remember { mutableStateOf("") }
-    var selectedLevel by remember { mutableStateOf("TK") }
+    var selectedLevel by remember(foundation.type) { mutableStateOf(if (foundation.type == FoundationType.HUMANITARIAN) "Humanitarian Aid" else "TK") }
     var selectedGrade by remember { mutableStateOf(BUILDING_GRADES.first()) }
     var buildError by remember { mutableStateOf<String?>(null) }
 
-    val buildCost = when (selectedLevel) {
-        "TK" -> 200000L
-        "SD" -> 500000L
-        "SMA" -> 1500000L
-        "UNIV" -> 5000000L
-        else -> 200000L
+    val buildCost = if (foundation.type == FoundationType.HUMANITARIAN) {
+        when (selectedLevel) {
+            "Humanitarian Aid" -> 150000L
+            "Social Care" -> 300000L
+            "Disaster Relief" -> 800000L
+            "Community Empowerment" -> 500000L
+            else -> 150000L
+        }
+    } else {
+        when (selectedLevel) {
+            "TK" -> 200000L
+            "SD" -> 500000L
+            "SMA" -> 1500000L
+            "UNIV" -> 5000000L
+            else -> 200000L
+        }
     }
 
     Scaffold(
@@ -124,7 +134,11 @@ fun FoundationPreBuiltScreen(
                                     fontSize = 15.sp
                                 )
                                 Text(
-                                    text = "Sediakan pendidikan berkualitas berlandaskan spesifikasi gedung unggul.",
+                                    text = if (foundation.type == FoundationType.HUMANITARIAN) {
+                                        "Mendirikan posko kemanusiaan dan pelayanan sosial dengan spesifikasi gedung terbaik."
+                                    } else {
+                                        "Sediakan pendidikan berkualitas berlandaskan spesifikasi gedung unggul."
+                                    },
                                     color = Color.LightGray,
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp
@@ -153,7 +167,7 @@ fun FoundationPreBuiltScreen(
                             OutlinedTextField(
                                 value = customName,
                                 onValueChange = { customName = it },
-                                label = { Text("Nama Institusi Pendidikan", color = Color.Gray) },
+                                label = { Text(if (foundation.type == FoundationType.HUMANITARIAN) "Nama Institusi Sosial/Bantuan" else "Nama Institusi Pendidikan", color = Color.Gray) },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = Color(0xFFD4AF37),
@@ -169,30 +183,39 @@ fun FoundationPreBuiltScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Text(
-                                "Pilih Jenjang Sekolah",
+                                if (foundation.type == FoundationType.HUMANITARIAN) "Pilih Divisi Bantuan" else "Pilih Jenjang Sekolah",
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
                                 fontSize = 12.sp
                             )
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            val levels = listOf(
-                                Pair("TK", "Taman Kanak-Kanak"),
-                                Pair("SD", "Sekolah Dasar"),
-                                Pair("SMA", "Sekolah Menengah"),
-                                Pair("UNIV", "Universitas")
-                            )
+                            val levels = if (foundation.type == FoundationType.HUMANITARIAN) {
+                                listOf(
+                                    Triple("Humanitarian Aid", "Aid", "Kemanusiaan"),
+                                    Triple("Social Care", "Care", "Panti & Sosial"),
+                                    Triple("Disaster Relief", "Relief", "Bencana"),
+                                    Triple("Community Empowerment", "Empower", "Pemberdayaan")
+                                )
+                            } else {
+                                listOf(
+                                    Triple("TK", "TK", "Taman Kanak-Kanak"),
+                                    Triple("SD", "SD", "Sekolah Dasar"),
+                                    Triple("SMA", "SMA", "Sekolah Menengah"),
+                                    Triple("UNIV", "UNIV", "Universitas")
+                                )
+                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                levels.forEach { (levelCode, label) ->
-                                    val isSelected = selectedLevel == levelCode
+                                levels.forEach { (fullLevel, shortCode, label) ->
+                                    val isSelected = selectedLevel == fullLevel
                                     Card(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clickable { selectedLevel = levelCode }
+                                            .clickable { selectedLevel = fullLevel }
                                             .border(
                                                 width = 1.dp,
                                                 color = if (isSelected) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.05f),
@@ -209,7 +232,7 @@ fun FoundationPreBuiltScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
-                                                text = levelCode,
+                                                text = shortCode,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (isSelected) Color(0xFFD4AF37) else Color.White,
                                                 fontSize = 13.sp
@@ -372,19 +395,38 @@ fun FoundationPreBuiltScreen(
                         return@Button
                     }
 
-                    val success = viewModel.buildEducationInstitution(
-                        foundationId = foundation.id,
-                        name = customName,
-                        level = selectedLevel,
-                        buildingGrade = selectedGrade.name,
-                        baseMaintenanceCost = selectedGrade.baseMaintenanceCost
-                    )
+                    val success = if (foundation.type == FoundationType.HUMANITARIAN) {
+                        viewModel.buildCharityInstitution(
+                            foundationId = foundation.id,
+                            name = customName,
+                            level = selectedLevel,
+                            buildingGrade = selectedGrade.name,
+                            baseMaintenanceCost = selectedGrade.baseMaintenanceCost
+                        )
+                    } else {
+                        viewModel.buildEducationInstitution(
+                            foundationId = foundation.id,
+                            name = customName,
+                            level = selectedLevel,
+                            buildingGrade = selectedGrade.name,
+                            baseMaintenanceCost = selectedGrade.baseMaintenanceCost
+                        )
+                    }
 
                     if (success) {
-                        Toast.makeText(context, "Berhasil merancang & mendirikan sekolah ${selectedLevel} baru!", Toast.LENGTH_SHORT).show()
+                        val message = if (foundation.type == FoundationType.HUMANITARIAN) {
+                            "Berhasil merancang & mendirikan posko ${selectedLevel} baru!"
+                        } else {
+                            "Berhasil merancang & mendirikan sekolah ${selectedLevel} baru!"
+                        }
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         navController.navigateUp()
                     } else {
-                        buildError = "Gagal mendirikan institusi pendidikan."
+                        buildError = if (foundation.type == FoundationType.HUMANITARIAN) {
+                            "Gagal mendirikan institusi kemanusiaan."
+                        } else {
+                            "Gagal mendirikan institusi pendidikan."
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
