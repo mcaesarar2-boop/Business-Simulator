@@ -180,6 +180,86 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     emptyList()
                 }
 
+                val safeHealthInstitutions = try {
+                    (f.healthInstitutions ?: emptyList()).map { inst ->
+                        val migratedMedical = if (inst.medicalStaff != null) {
+                            var p = inst.medicalStaff.perawat ?: com.example.data.StaffRole()
+                            var du = inst.medicalStaff.dokterUmum ?: com.example.data.StaffRole()
+                            var ds = inst.medicalStaff.dokterSpesialis ?: com.example.data.StaffRole()
+                            
+                            if (p.customSalary == 0L) p = p.copy(customSalary = 4000L)
+                            if (du.customSalary == 0L) du = du.copy(customSalary = 8000L)
+                            if (ds.customSalary == 0L) ds = ds.copy(customSalary = 15000L)
+                            
+                            if (p.target == 0 && (p.active > 0 || p.recruiting > 0)) {
+                                p = p.copy(target = p.active + p.recruiting)
+                            }
+                            if (du.target == 0 && (du.active > 0 || du.recruiting > 0)) {
+                                du = du.copy(target = du.active + du.recruiting)
+                            }
+                            if (ds.target == 0 && (ds.active > 0 || ds.recruiting > 0)) {
+                                ds = ds.copy(target = ds.active + ds.recruiting)
+                            }
+                            com.example.data.MedicalStaff(perawat = p, dokterUmum = du, dokterSpesialis = ds)
+                        } else {
+                            com.example.data.MedicalStaff()
+                        }
+
+                        val migratedSupport = if (inst.supportStaff != null) {
+                            var o = inst.supportStaff.ob ?: com.example.data.StaffRole()
+                            var sat = inst.supportStaff.satpam ?: com.example.data.StaffRole()
+                            var adm = inst.supportStaff.admin ?: com.example.data.StaffRole()
+                            var ch = inst.supportStaff.chef ?: com.example.data.StaffRole()
+                            
+                            if (o.customSalary == 0L) o = o.copy(customSalary = 800L)
+                            if (sat.customSalary == 0L) sat = sat.copy(customSalary = 1000L)
+                            if (adm.customSalary == 0L) adm = adm.copy(customSalary = 1200L)
+                            if (ch.customSalary == 0L) ch = ch.copy(customSalary = 2500L)
+                            
+                            if (o.target == 0 && (o.active > 0 || o.recruiting > 0)) {
+                                o = o.copy(target = o.active + o.recruiting)
+                            }
+                            if (sat.target == 0 && (sat.active > 0 || sat.recruiting > 0)) {
+                                sat = sat.copy(target = sat.active + sat.recruiting)
+                            }
+                            if (adm.target == 0 && (adm.active > 0 || adm.recruiting > 0)) {
+                                adm = adm.copy(target = adm.active + adm.recruiting)
+                            }
+                            if (ch.target == 0 && (ch.active > 0 || ch.recruiting > 0)) {
+                                ch = ch.copy(target = ch.active + ch.recruiting)
+                            }
+                            com.example.data.SupportStaff(ob = o, satpam = sat, admin = adm, chef = ch)
+                        } else {
+                            com.example.data.SupportStaff()
+                        }
+
+                        com.example.data.HealthInstitution(
+                            id = inst.id ?: java.util.UUID.randomUUID().toString(),
+                            name = inst.name ?: "Klinik Lama",
+                            level = inst.level ?: "Klinik",
+                            serviceType = inst.serviceType ?: "Reguler",
+                            facilityLevel = if (inst.facilityLevel <= 0) 1 else inst.facilityLevel,
+                            accreditationPoints = if (inst.accreditationPoints < 0) 0 else inst.accreditationPoints,
+                            monthlyOperationalCost = if (inst.monthlyOperationalCost < 0L) 15000L else inst.monthlyOperationalCost,
+                            prestigeScore = if (inst.prestigeScore < 0) 0 else inst.prestigeScore,
+                            imageUrl = inst.imageUrl ?: "",
+                            monthlyBillPerPatient = inst.monthlyBillPerPatient,
+                            currentPatients = inst.currentPatients,
+                            buildingGrade = inst.buildingGrade ?: "Grade A",
+                            baseMaintenanceCost = inst.baseMaintenanceCost,
+                            additionalFacilities = inst.additionalFacilities ?: emptyList(),
+                            constructionMonthsTotal = inst.constructionMonthsTotal,
+                            constructionMonthsLeft = inst.constructionMonthsLeft,
+                            isOperational = inst.isOperational || (inst.constructionMonthsLeft == 0 && inst.currentPatients > 0),
+                            medicalStaff = migratedMedical,
+                            supportStaff = migratedSupport
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AppDebug", "Error patching healthInstitutions, fallback to empty: ${e.message}")
+                    emptyList()
+                }
+
                 com.example.data.FoundationEntity(
                     id = f.id ?: java.util.UUID.randomUUID().toString(),
                     name = f.name ?: "Yayasan Tanpa Nama",
@@ -188,7 +268,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     constructionMonthsLeft = f.constructionMonthsLeft,
                     endowmentFund = f.endowmentFund,
                     facilities = f.facilities ?: emptyList(),
-                    educationInstitutions = safeInstitutions
+                    educationInstitutions = safeInstitutions,
+                    healthInstitutions = safeHealthInstitutions
                 )
             }
         } catch (e: Exception) {
@@ -5066,12 +5147,136 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 f.educationInstitutions ?: emptyList()
             }
 
+            val nextHealthInstitutions = if (f.type == com.example.data.FoundationType.HEALTHCARE && nextIsLegalized) {
+                (f.healthInstitutions ?: emptyList()).map { inst ->
+                    if (inst.constructionMonthsLeft > 0) {
+                        inst.copy(
+                            constructionMonthsLeft = inst.constructionMonthsLeft - 1
+                        )
+                    } else {
+                        val addedPoints = (inst.facilityLevel * 0.5) + (inst.prestigeScore * 0.1)
+                        val beforePoints = inst.accreditationPoints
+                        val nextPoints = Math.min(100, (beforePoints + addedPoints).toInt())
+
+                        val currentMedical = inst.medicalStaff
+                        val tickedMedical = currentMedical.copy(
+                            perawat = currentMedical.perawat.copy(
+                                active = currentMedical.perawat.active + currentMedical.perawat.recruiting,
+                                recruiting = 0
+                            ),
+                            dokterUmum = currentMedical.dokterUmum.copy(
+                                active = currentMedical.dokterUmum.active + currentMedical.dokterUmum.recruiting,
+                                recruiting = 0
+                            ),
+                            dokterSpesialis = currentMedical.dokterSpesialis.copy(
+                                active = currentMedical.dokterSpesialis.active + currentMedical.dokterSpesialis.recruiting,
+                                recruiting = 0
+                            )
+                        )
+
+                        val currentSupport = inst.supportStaff
+                        val tickedSupport = currentSupport.copy(
+                            ob = currentSupport.ob.copy(
+                                active = currentSupport.ob.active + currentSupport.ob.recruiting,
+                                recruiting = 0
+                            ),
+                            satpam = currentSupport.satpam.copy(
+                                active = currentSupport.satpam.active + currentSupport.satpam.recruiting,
+                                recruiting = 0
+                            ),
+                            admin = currentSupport.admin.copy(
+                                active = currentSupport.admin.active + currentSupport.admin.recruiting,
+                                recruiting = 0
+                            ),
+                            chef = currentSupport.chef.copy(
+                                active = currentSupport.chef.active + currentSupport.chef.recruiting,
+                                recruiting = 0
+                            )
+                        )
+
+                        val updatedFacilities = (inst.additionalFacilities ?: emptyList()).map { fac ->
+                            if (fac.constructionLeftMonths > 0) {
+                                fac.copy(constructionLeftMonths = fac.constructionLeftMonths - 1)
+                            } else {
+                                fac
+                            }
+                        }
+
+                        val updatedInst = inst.copy(
+                            medicalStaff = tickedMedical,
+                            supportStaff = tickedSupport,
+                            additionalFacilities = updatedFacilities
+                        )
+
+                        val opsCost = updatedInst.calculateTotalMonthlyOpsCost()
+
+                        val isOp = inst.isOperational
+                        val monthlyRevenue = if (isOp) {
+                            inst.currentPatients * inst.monthlyBillPerPatient
+                        } else {
+                            0L
+                        }
+                        val netIncome = monthlyRevenue - opsCost
+
+                        var isRunningFine = false
+                        if (netIncome < 0) {
+                            val deficit = kotlin.math.abs(netIncome)
+                            if (nextEndowmentFund >= deficit) {
+                                nextEndowmentFund -= deficit
+                                isRunningFine = true
+                                if (isOp) {
+                                    totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                }
+                            } else {
+                                val remainingDeficit = deficit - nextEndowmentFund
+                                nextEndowmentFund = 0L
+                                if (familyOfficePrivateBalanceVal >= remainingDeficit) {
+                                    familyOfficePrivateBalanceVal -= remainingDeficit
+                                    isRunningFine = true
+                                    if (isOp) {
+                                        totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                                    }
+                                } else {
+                                    familyOfficePrivateBalanceVal = 0L
+                                }
+                            }
+                        } else {
+                            nextEndowmentFund += netIncome
+                            isRunningFine = true
+                            if (isOp) {
+                                totalLegacyReward += (inst.prestigeScore * 0.1).toLong()
+                            }
+                        }
+
+                        if (beforePoints < 90 && nextPoints >= 90) {
+                            foNews.add(MarketNews(
+                                id = "med_prestasi_nasional_${System.currentTimeMillis()}_${inst.id}",
+                                text = "🏥 PRESTASI MEDIS: Fasilitas ${inst.level} di Yayasan ${f.name} memperoleh Akreditasi Unggul! Hibah Riset & Subsidi Layanan Kesehatan senilai +$${com.example.ui.formatCurrencyRingkas(250000.0, false)}/bln ditambahkan ke Dana Abadi.",
+                                type = "BULL"
+                            ))
+                        }
+
+                        if (nextPoints >= 90 && isOp && isRunningFine) {
+                            nextEndowmentFund += 250000L
+                        }
+
+                        updatedInst.copy(
+                            accreditationPoints = nextPoints,
+                            monthlyOperationalCost = opsCost
+                        )
+                    }
+                }
+            } else {
+                f.healthInstitutions ?: emptyList()
+            }
+
             f.copy(
                 constructionMonthsLeft = nextConstructionMonthsLeft,
                 isLegalized = nextIsLegalized,
                 endowmentFund = nextEndowmentFund,
                 facilities = nextFacilities,
-                educationInstitutions = nextEduInstitutions
+                educationInstitutions = nextEduInstitutions,
+                healthInstitutions = nextHealthInstitutions
             )
         }
         val nextLegacyPoints = currentState.foundationLegacyPoints + totalLegacyReward
@@ -9567,6 +9772,639 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (f.id == foundationId) {
                 f.copy(
                     educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun renameFacility(foundationId: String, institutionId: String, facilityId: String, newName: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedFacilities = (inst.additionalFacilities ?: emptyList()).map { fac ->
+            if (fac.id == facilityId) {
+                fac.copy(customName = newName)
+            } else {
+                fac
+            }
+        }
+        
+        val updatedInst = inst.copy(additionalFacilities = updatedFacilities)
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun deleteFacility(foundationId: String, institutionId: String, facilityId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.educationInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedFacilities = (inst.additionalFacilities ?: emptyList()).filter { it.id != facilityId }
+        
+        val updatedInst = inst.copy(additionalFacilities = updatedFacilities)
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    educationInstitutions = (f.educationInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun buildHealthInstitution(foundationId: String, name: String, level: String): Boolean {
+        return buildHealthInstitution(foundationId, name, level, "Grade A", 0L)
+    }
+
+    fun buildHealthInstitution(
+        foundationId: String,
+        name: String,
+        level: String,
+        buildingGrade: String,
+        baseMaintenanceCost: Long
+    ): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        if (!foundation.isLegalized) return false
+        
+        val cost = when (level) {
+            "Klinik" -> 300000L
+            "RS Umum" -> 1000000L
+            "RS Khusus" -> 3000000L
+            "RS Internasional" -> 10000000L
+            else -> 300000L
+        }
+        
+        if (foundation.endowmentFund < cost) return false
+        
+        val basePrestige = when (level) {
+            "Klinik" -> 8
+            "RS Umum" -> 25
+            "RS Khusus" -> 70
+            "RS Internasional" -> 180
+            else -> 8
+        }
+        
+        val defaultServiceType = "Reguler"
+        
+        val gradeObj = com.example.data.BUILDING_GRADES.find { it.name == buildingGrade }
+        val duration = gradeObj?.constructionMonths ?: 0
+
+        val newInst = com.example.data.HealthInstitution(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name,
+            level = level,
+            serviceType = defaultServiceType,
+            facilityLevel = 1,
+            accreditationPoints = 0,
+            monthlyOperationalCost = 0L,
+            prestigeScore = basePrestige,
+            imageUrl = "",
+            currentPatients = 0,
+            monthlyBillPerPatient = 0L,
+            buildingGrade = buildingGrade,
+            baseMaintenanceCost = baseMaintenanceCost,
+            additionalFacilities = emptyList(),
+            constructionMonthsTotal = duration,
+            constructionMonthsLeft = duration,
+            isOperational = false
+        )
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    endowmentFund = f.endowmentFund - cost,
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()) + newInst
+                )
+            } else {
+                f
+            }
+        }
+        
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun activateHealthInstitution(foundationId: String, institutionId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f -> f.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val randomPatients = when (inst.level) {
+            "Klinik" -> (15..50).random()
+            "RS Umum" -> (80..200).random()
+            "RS Khusus" -> (120..350).random()
+            "RS Internasional" -> (200..600).random()
+            else -> 0
+        }
+        
+        val updatedInst = inst.copy(
+            isOperational = true,
+            currentPatients = randomPatients
+        )
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateHealthInstitutionProfile(foundationId: String, institutionId: String, newName: String, newImageUrl: String): Boolean {
+        val state = _playerState.value
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                val updatedInstitutions = (f.healthInstitutions ?: emptyList()).map { inst ->
+                    if (inst.id == institutionId) {
+                        inst.copy(name = newName, imageUrl = newImageUrl)
+                    } else {
+                        inst
+                    }
+                }
+                f.copy(healthInstitutions = updatedInstitutions)
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun upgradeHealthFacility(foundationId: String, institutionId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        if (inst.facilityLevel >= 5) return false
+
+        val baseUpgradeCost = when (inst.level) {
+            "Klinik" -> 250000L
+            "RS Umum" -> 800000L
+            "RS Khusus" -> 2500000L
+            "RS Internasional" -> 8000000L
+            else -> 250000L
+        }
+        val cost = baseUpgradeCost * inst.facilityLevel
+
+        if (foundation.endowmentFund < cost) return false
+
+        val nextLevel = inst.facilityLevel + 1
+        val basePrestige = when (inst.level) {
+            "Klinik" -> 8
+            "RS Umum" -> 25
+            "RS Khusus" -> 70
+            "RS Internasional" -> 180
+            else -> 8
+        }
+        val nextPrestige = basePrestige * nextLevel
+
+        val updatedInst = inst.copy(
+            facilityLevel = nextLevel,
+            prestigeScore = nextPrestige
+        )
+
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    endowmentFund = f.endowmentFund - cost,
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun changeHealthServiceType(foundationId: String, institutionId: String, newServiceType: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+
+        val nextPatients = when (newServiceType) {
+            "Subsidi" -> (50..150).random()
+            "Reguler" -> (30..100).random()
+            "VIP" -> (15..45).random()
+            "VVIP" -> (5..20).random()
+            else -> (30..100).random()
+        }
+
+        val updatedInst = inst.copy(
+            serviceType = newServiceType,
+            currentPatients = nextPatients
+        )
+
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun deleteHealthInstitution(foundationId: String, institutionId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).filter { it.id != institutionId }
+                )
+            } else {
+                f
+            }
+        }
+        val updatedState = state.copy(foundations = nextFoundations)
+        _playerState.value = logToPrivateLedger(updatedState, "Menghibahkan Layanan Medis: ${inst.name} (${inst.level})", 0L, false)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateHealthInstitutionBill(foundationId: String, institutionId: String, newBill: Long): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+
+        val updatedInst = inst.copy(monthlyBillPerPatient = newBill)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateHealthBill(institutionId: String, inputBill: Long): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f ->
+            (f.healthInstitutions ?: emptyList()).any { it.id == institutionId }
+        } ?: return false
+        return updateHealthInstitutionBill(foundation.id, institutionId, inputBill)
+    }
+
+    fun buildHealthAdditionalFacility(
+        foundationId: String,
+        institutionId: String,
+        typeId: String,
+        name: String,
+        customName: String,
+        gradeId: String,
+        maintenanceCost: Long,
+        constructionCost: Long,
+        constructionTotalMonths: Int,
+        constructionLeftMonths: Int
+    ): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        
+        if (foundation.endowmentFund < constructionCost) {
+            return false
+        }
+        
+        val newFacility = com.example.data.FacilityItem(
+            id = java.util.UUID.randomUUID().toString(),
+            typeId = typeId,
+            name = name,
+            baseName = name,
+            customName = if (customName.isBlank()) name else customName,
+            gradeName = gradeId,
+            maintenanceCost = maintenanceCost,
+            constructionTotalMonths = constructionTotalMonths,
+            constructionLeftMonths = constructionLeftMonths
+        )
+        
+        val updatedFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                val updatedInstitutions = (f.healthInstitutions ?: emptyList()).map { inst ->
+                    if (inst.id == institutionId) {
+                        inst.copy(
+                            additionalFacilities = (inst.additionalFacilities ?: emptyList()) + newFacility,
+                            prestigeScore = inst.prestigeScore + 10,
+                            accreditationPoints = Math.min(100, inst.accreditationPoints + 8)
+                        )
+                    } else {
+                        inst
+                    }
+                }
+                f.copy(
+                    endowmentFund = f.endowmentFund - constructionCost,
+                    healthInstitutions = updatedInstitutions
+                )
+            } else {
+                f
+            }
+        }
+        
+        _playerState.value = state.copy(foundations = updatedFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun hireMedicalStaff(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedMedical = when (type) {
+            "perawat" -> inst.medicalStaff.copy(perawat = inst.medicalStaff.perawat.copy(
+                target = inst.medicalStaff.perawat.target + 1,
+                recruiting = inst.medicalStaff.perawat.recruiting + 1
+            ))
+            "dokterUmum" -> inst.medicalStaff.copy(dokterUmum = inst.medicalStaff.dokterUmum.copy(
+                target = inst.medicalStaff.dokterUmum.target + 1,
+                recruiting = inst.medicalStaff.dokterUmum.recruiting + 1
+            ))
+            "dokterSpesialis" -> inst.medicalStaff.copy(dokterSpesialis = inst.medicalStaff.dokterSpesialis.copy(
+                target = inst.medicalStaff.dokterSpesialis.target + 1,
+                recruiting = inst.medicalStaff.dokterSpesialis.recruiting + 1
+            ))
+            else -> inst.medicalStaff
+        }
+        
+        val updatedInst = inst.copy(medicalStaff = updatedMedical)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun fireMedicalStaff(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedMedical = when (type) {
+            "perawat" -> {
+                val r = inst.medicalStaff.perawat
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.medicalStaff.copy(perawat = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "dokterUmum" -> {
+                val r = inst.medicalStaff.dokterUmum
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.medicalStaff.copy(dokterUmum = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "dokterSpesialis" -> {
+                val r = inst.medicalStaff.dokterSpesialis
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.medicalStaff.copy(dokterSpesialis = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            else -> inst.medicalStaff
+        }
+        
+        val updatedInst = inst.copy(medicalStaff = updatedMedical)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun hireHealthSupportStaff(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedSupport = when (type) {
+            "janitor" -> inst.supportStaff.copy(ob = inst.supportStaff.ob.copy(
+                target = inst.supportStaff.ob.target + 1,
+                recruiting = inst.supportStaff.ob.recruiting + 1
+            ))
+            "security" -> inst.supportStaff.copy(satpam = inst.supportStaff.satpam.copy(
+                target = inst.supportStaff.satpam.target + 1,
+                recruiting = inst.supportStaff.satpam.recruiting + 1
+            ))
+            "admin" -> inst.supportStaff.copy(admin = inst.supportStaff.admin.copy(
+                target = inst.supportStaff.admin.target + 1,
+                recruiting = inst.supportStaff.admin.recruiting + 1
+            ))
+            "chef" -> inst.supportStaff.copy(chef = inst.supportStaff.chef.copy(
+                target = inst.supportStaff.chef.target + 1,
+                recruiting = inst.supportStaff.chef.recruiting + 1
+            ))
+            else -> inst.supportStaff
+        }
+        
+        val updatedInst = inst.copy(supportStaff = updatedSupport)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun fireHealthSupportStaff(foundationId: String, institutionId: String, type: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedSupport = when (type) {
+            "janitor" -> {
+                val r = inst.supportStaff.ob
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(ob = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "security" -> {
+                val r = inst.supportStaff.satpam
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(satpam = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "admin" -> {
+                val r = inst.supportStaff.admin
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(admin = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            "chef" -> {
+                val r = inst.supportStaff.chef
+                val nextTarget = (r.target - 1).coerceAtLeast(0)
+                val nextRecruiting = if (r.recruiting > 0) r.recruiting - 1 else 0
+                val nextActive = if (r.recruiting == 0 && r.active > 0) r.active - 1 else r.active
+                inst.supportStaff.copy(chef = r.copy(target = nextTarget, recruiting = nextRecruiting, active = nextActive))
+            }
+            else -> inst.supportStaff
+        }
+        
+        val updatedInst = inst.copy(supportStaff = updatedSupport)
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun updateHealthStaffSalary(
+        foundationId: String,
+        institutionId: String,
+        isMedical: Boolean,
+        roleType: String,
+        newSalary: Long
+    ): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { f -> f.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedInst = if (isMedical) {
+            val updatedMedical = when (roleType) {
+                "perawat" -> inst.medicalStaff.copy(perawat = inst.medicalStaff.perawat.copy(customSalary = newSalary))
+                "dokterUmum" -> inst.medicalStaff.copy(dokterUmum = inst.medicalStaff.dokterUmum.copy(customSalary = newSalary))
+                "dokterSpesialis" -> inst.medicalStaff.copy(dokterSpesialis = inst.medicalStaff.dokterSpesialis.copy(customSalary = newSalary))
+                else -> inst.medicalStaff
+            }
+            inst.copy(medicalStaff = updatedMedical)
+        } else {
+            val updatedSupport = when (roleType) {
+                "janitor" -> inst.supportStaff.copy(ob = inst.supportStaff.ob.copy(customSalary = newSalary))
+                "security" -> inst.supportStaff.copy(satpam = inst.supportStaff.satpam.copy(customSalary = newSalary))
+                "admin" -> inst.supportStaff.copy(admin = inst.supportStaff.admin.copy(customSalary = newSalary))
+                "chef" -> inst.supportStaff.copy(chef = inst.supportStaff.chef.copy(customSalary = newSalary))
+                else -> inst.supportStaff
+            }
+            inst.copy(supportStaff = updatedSupport)
+        }
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun renameHealthFacility(foundationId: String, institutionId: String, facilityId: String, newName: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedFacilities = (inst.additionalFacilities ?: emptyList()).map { fac ->
+            if (fac.id == facilityId) {
+                fac.copy(customName = newName)
+            } else {
+                fac
+            }
+        }
+        
+        val updatedInst = inst.copy(additionalFacilities = updatedFacilities)
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
+                )
+            } else {
+                f
+            }
+        }
+        _playerState.value = state.copy(foundations = nextFoundations)
+        saveState(_playerState.value)
+        return true
+    }
+
+    fun deleteHealthFacility(foundationId: String, institutionId: String, facilityId: String): Boolean {
+        val state = _playerState.value
+        val foundation = state.foundations.find { it.id == foundationId } ?: return false
+        val inst = (foundation.healthInstitutions ?: emptyList()).find { it.id == institutionId } ?: return false
+        
+        val updatedFacilities = (inst.additionalFacilities ?: emptyList()).filter { it.id != facilityId }
+        
+        val updatedInst = inst.copy(additionalFacilities = updatedFacilities)
+        
+        val nextFoundations = state.foundations.map { f ->
+            if (f.id == foundationId) {
+                f.copy(
+                    healthInstitutions = (f.healthInstitutions ?: emptyList()).map { if (it.id == institutionId) updatedInst else it }
                 )
             } else {
                 f

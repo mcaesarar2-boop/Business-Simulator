@@ -325,5 +325,45 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
             val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
             com.example.ui.UniversityFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
         }
+        composable("clinic_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.ClinicDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("clinic_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.ClinicFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("general_hospital_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.GeneralHospitalDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("general_hospital_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.GeneralHospitalFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("specialized_hospital_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.SpecializedHospitalDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("specialized_hospital_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.SpecializedHospitalFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("international_hospital_dashboard/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.InternationalHospitalDashboardScreen(navController, viewModel, foundationId, institutionId)
+        }
+        composable("international_hospital_facility_catalogue/{foundationId}/{institutionId}") { backStackEntry ->
+            val foundationId = backStackEntry.arguments?.getString("foundationId") ?: ""
+            val institutionId = backStackEntry.arguments?.getString("institutionId") ?: ""
+            com.example.ui.InternationalHospitalFacilityCatalogueScreen(navController, viewModel, foundationId, institutionId)
+        }
     }
 }

@@ -75,6 +75,14 @@ fun KindergartenDashboardScreen(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showCurriculumDialog by remember { mutableStateOf(false) }
 
+    var facilitySortBy by remember { mutableStateOf("Terbaru") }
+    var selectedFacilityForEdit by remember { mutableStateOf<com.example.data.FacilityItem?>(null) }
+    var showEditFacilityDialog by remember { mutableStateOf(false) }
+    var editFacilityCustomName by remember { mutableStateOf("") }
+
+    var selectedFacilityForDelete by remember { mutableStateOf<com.example.data.FacilityItem?>(null) }
+    var showDeleteFacilityConfirmDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -730,7 +738,58 @@ fun KindergartenDashboardScreen(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         } else {
-                            facilitiesList.forEach { fac ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("Urutan:", color = Color.Gray, fontSize = 11.sp)
+                                listOf("Terbaru", "A-Z", "Biaya ⬇️").forEach { opt ->
+                                    val isSelected = when (opt) {
+                                        "Terbaru" -> facilitySortBy == "Terbaru"
+                                        "A-Z" -> facilitySortBy == "Abjad"
+                                        "Biaya ⬇️" -> facilitySortBy == "Biaya"
+                                        else -> false
+                                    }
+                                    val label = when (opt) {
+                                        "Terbaru" -> "Terbaru"
+                                        "A-Z" -> "Abjad"
+                                        "Biaya ⬇️" -> "Biaya Perawatan"
+                                        else -> opt
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) Color(0xFFD4AF37) else Color(0xFF14223A))
+                                            .border(1.dp, if (isSelected) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                facilitySortBy = when (opt) {
+                                                    "Terbaru" -> "Terbaru"
+                                                    "A-Z" -> "Abjad"
+                                                    "Biaya ⬇️" -> "Biaya"
+                                                    else -> "Terbaru"
+                                                }
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            color = if (isSelected) Color(0xFF0F1E36) else Color.LightGray,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            val sortedFacilities = when (facilitySortBy) {
+                                "Abjad" -> facilitiesList.sortedBy { (if (!it.customName.isNullOrBlank()) it.customName else it.name).lowercase() }
+                                "Biaya" -> facilitiesList.sortedByDescending { it.maintenanceCost }
+                                else -> facilitiesList
+                            }
+
+                            sortedFacilities.forEach { fac ->
                                 val displayName = if (!fac.customName.isNullOrBlank()) "${fac.customName} (${fac.name})" else fac.name
                                 val isUnderConstruction = fac.constructionLeftMonths > 0
                                 Row(
@@ -738,7 +797,7 @@ fun KindergartenDashboardScreen(
                                         .fillMaxWidth()
                                         .padding(vertical = 6.dp)
                                         .background(Color(0xFF14223A), RoundedCornerShape(8.dp))
-                                        .padding(10.dp),
+                                        .padding(start = 12.dp, top = 10.dp, end = 6.dp, bottom = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -767,20 +826,56 @@ fun KindergartenDashboardScreen(
                                             }
                                         }
                                     }
-                                    if (isUnderConstruction) {
-                                        Text(
-                                            "Dalam Konstruksi",
-                                            color = Color(0xFFFFB300),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
-                                    } else {
-                                        Text(
-                                            "${formatCurrency(fac.maintenanceCost)} / bln",
-                                            color = Color(0xFF10B981),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (isUnderConstruction) {
+                                            Text(
+                                                "Dalam Konstruksi",
+                                                color = Color(0xFFFFB300),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        } else {
+                                            Text(
+                                                "${formatCurrency(fac.maintenanceCost)} / bln",
+                                                color = Color(0xFF10B981),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                selectedFacilityForEdit = fac
+                                                editFacilityCustomName = fac.customName.ifBlank { fac.name }
+                                                showEditFacilityDialog = true
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit Nama",
+                                                tint = Color.LightGray,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                selectedFacilityForDelete = fac
+                                                showDeleteFacilityConfirmDialog = true
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Bongkar",
+                                                tint = Color.Red.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1023,6 +1118,82 @@ fun KindergartenDashboardScreen(
                     Text("Batal", color = Color.Gray)
                 }
             }
+        )
+    }
+
+    if (showEditFacilityDialog && selectedFacilityForEdit != null) {
+        AlertDialog(
+            onDismissRequest = { showEditFacilityDialog = false },
+            title = { Text("Ubah Nama Fasilitas", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Column {
+                    Text("Ubah nama tampilan untuk fasilitas ini:", color = Color.LightGray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editFacilityCustomName,
+                        onValueChange = { editFacilityCustomName = it },
+                        label = { Text("Nama Kustom") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFD4AF37),
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val fac = selectedFacilityForEdit!!
+                        viewModel.renameFacility(foundationId, institutionId, fac.id, editFacilityCustomName)
+                        showEditFacilityDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37))
+                ) {
+                    Text("Simpan", color = Color(0xFF0F1E36), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditFacilityDialog = false }) {
+                    Text("Batal", color = Color.White)
+                }
+            },
+            containerColor = Color(0xFF0F1E36)
+        )
+    }
+
+    if (showDeleteFacilityConfirmDialog && selectedFacilityForDelete != null) {
+        val fac = selectedFacilityForDelete!!
+        AlertDialog(
+            onDismissRequest = { showDeleteFacilityConfirmDialog = false },
+            title = { Text("Bongkar Fasilitas", fontWeight = FontWeight.Bold, color = Color.Red) },
+            text = {
+                Text(
+                    "Bongkar fasilitas ${fac.customName.ifBlank { fac.name }}? Tindakan ini tidak dapat dibatalkan dan akan menghentikan biaya perawatan bulanan sebesar ${formatCurrency(fac.maintenanceCost)}.",
+                    color = Color.LightGray,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteFacility(foundationId, institutionId, fac.id)
+                        showDeleteFacilityConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Bongkar", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteFacilityConfirmDialog = false }) {
+                    Text("Batal", color = Color.White)
+                }
+            },
+            containerColor = Color(0xFF0F1E36)
         )
     }
 }

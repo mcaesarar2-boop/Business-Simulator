@@ -73,6 +73,37 @@ data class EducationInstitution(
     val isUnderConstruction: Boolean get() = constructionMonthsLeft > 0
 }
 
+data class MedicalStaff(
+    val perawat: StaffRole = StaffRole(customSalary = 4000L),
+    val dokterUmum: StaffRole = StaffRole(customSalary = 8000L),
+    val dokterSpesialis: StaffRole = StaffRole(customSalary = 15000L)
+)
+
+data class HealthInstitution(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val level: String, // Klinik, RS Umum, RS Khusus, RS Internasional
+    val serviceType: String, // Subsidi, Reguler, VIP, VVIP
+    val facilityLevel: Int = 1,
+    val accreditationPoints: Int = 0,
+    val monthlyOperationalCost: Long = 0L,
+    val prestigeScore: Int = 0,
+    val imageUrl: String = "",
+    val monthlyBillPerPatient: Long = 0L, 
+    val currentPatients: Int = 0, 
+    val maxPatients: Int = 0,
+    val buildingGrade: String = "Grade A",
+    val baseMaintenanceCost: Long = 0L,
+    val additionalFacilities: List<FacilityItem> = emptyList(),
+    val constructionMonthsTotal: Int = 0,
+    val constructionMonthsLeft: Int = 0,
+    val isOperational: Boolean = false,
+    val medicalStaff: MedicalStaff = MedicalStaff(),
+    val supportStaff: SupportStaff = SupportStaff()
+) {
+    val isUnderConstruction: Boolean get() = constructionMonthsLeft > 0
+}
+
 data class FoundationEntity(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -81,7 +112,8 @@ data class FoundationEntity(
     val constructionMonthsLeft: Int,
     val endowmentFund: Long = 0L, // Dana abadi yayasan
     val facilities: List<FoundationFacility> = emptyList(),
-    val educationInstitutions: List<EducationInstitution> = emptyList()
+    val educationInstitutions: List<EducationInstitution> = emptyList(),
+    val healthInstitutions: List<HealthInstitution> = emptyList()
 )
 
 data class FoundationFacility(
@@ -272,3 +304,53 @@ fun EducationInstitution.calculateTotalOpsCost(): Long {
 fun EducationInstitution.calculateTotalMonthlyOpsCost(): Long {
     return this.calculateTotalOpsCost()
 }
+
+fun HealthInstitution.getServiceTypeMultiplier(): Double {
+    return when (this.serviceType) {
+        "Subsidi" -> 0.5
+        "Reguler" -> 1.0
+        "VIP" -> 2.0
+        "VVIP" -> 3.5
+        else -> 1.0
+    }
+}
+
+fun HealthInstitution.calculateTotalOpsCost(): Long {
+    if (this.constructionMonthsLeft > 0) return 0L // Gedung belum jadi = $0 Ops
+
+    // 1. Biaya Perawatan Fisik
+    val activeFacCost = (this.additionalFacilities ?: emptyList())
+        .filter { it.constructionLeftMonths <= 0 }
+        .sumOf { it.maintenanceCost }
+
+    val baseBldg = if (this.baseMaintenanceCost > 0L) {
+        this.baseMaintenanceCost
+    } else {
+        when (this.level) {
+            "Klinik" -> 15000L
+            "RS Umum" -> 80000L
+            "RS Khusus" -> 200000L
+            "RS Internasional" -> 600000L
+            else -> 15000L
+        }
+    }
+
+    val physicalCost = (baseBldg + activeFacCost) * getServiceTypeMultiplier()
+
+    // 2. Biaya Gaji Seluruh SDM Aktif
+    val medicalCost = (this.medicalStaff.perawat.active * this.medicalStaff.perawat.customSalary) + 
+                      (this.medicalStaff.dokterUmum.active * this.medicalStaff.dokterUmum.customSalary) + 
+                      (this.medicalStaff.dokterSpesialis.active * this.medicalStaff.dokterSpesialis.customSalary)
+                      
+    val supportCost = (this.supportStaff.ob.active * this.supportStaff.ob.customSalary) +
+                      (this.supportStaff.satpam.active * this.supportStaff.satpam.customSalary) +
+                      (this.supportStaff.admin.active * this.supportStaff.admin.customSalary) +
+                      (this.supportStaff.chef.active * this.supportStaff.chef.customSalary)
+
+    return physicalCost.toLong() + medicalCost + supportCost
+}
+
+fun HealthInstitution.calculateTotalMonthlyOpsCost(): Long {
+    return this.calculateTotalOpsCost()
+}
+

@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 fun formatMarketCap(value: Double): String {
@@ -600,6 +601,328 @@ fun StaffHireRow(
                         contentDescription = "Edit Gaji",
                         tint = Color(0xFFD4AF37),
                         modifier = Modifier.size(10.dp)
+                    )
+                }
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(
+                onClick = onFire,
+                enabled = target > 0,
+                modifier = Modifier.size(28.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color(0xFFE57373).copy(alpha = 0.2f),
+                    disabledContainerColor = Color.White.copy(alpha = 0.05f)
+                )
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Kurangi", tint = if (target > 0) Color(0xFFE57373) else Color.Gray, modifier = Modifier.size(16.dp))
+            }
+            Text(
+                text = target.toString(),
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                fontSize = 14.sp,
+                modifier = Modifier.widthIn(min = 20.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            IconButton(
+                onClick = onHire,
+                modifier = Modifier.size(28.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color(0xFF81C784).copy(alpha = 0.2f),
+                    disabledContainerColor = Color.White.copy(alpha = 0.05f)
+                )
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Tambah Target", tint = Color(0xFF81C784), modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+fun MedicalSdmManagementPanel(
+    foundationId: String,
+    institution: com.example.data.HealthInstitution,
+    viewModel: GameViewModel
+) {
+    var activeTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
+    
+    val premiumList = listOf("VIP", "VVIP")
+    val isPremium = premiumList.contains(institution.serviceType)
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+            .border(
+                1.dp,
+                Color(0xFF2E7D32).copy(alpha = 0.2f),
+                RoundedCornerShape(16.dp)
+            ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF102722)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Groups,
+                        contentDescription = null,
+                        tint = Color(0xFF81C784),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Manajemen Staff Medis & Penunjang",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            TabRow(
+                selectedTabIndex = activeTab,
+                containerColor = Color(0xFF091E1A),
+                contentColor = Color(0xFF81C784),
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[activeTab]),
+                        color = Color(0xFF81C784)
+                    )
+                }
+            ) {
+                Tab(
+                    selected = activeTab == 0,
+                    onClick = { activeTab = 0 },
+                    text = { Text("Tenaga Medis", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                )
+                Tab(
+                    selected = activeTab == 1,
+                    onClick = { activeTab = 1 },
+                    text = { Text("Staff Penunjang", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            var showSalaryDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            var salaryTargetRole by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var salaryIsMedical by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+            var salaryInputValue by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            
+            if (activeTab == 0) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MedicalStaffStepper(
+                        label = "Perawat",
+                        role = institution.medicalStaff.perawat,
+                        onHire = { viewModel.hireMedicalStaff(foundationId, institution.id, "perawat") },
+                        onFire = { viewModel.fireMedicalStaff(foundationId, institution.id, "perawat") },
+                        onEditSalary = {
+                            salaryTargetRole = "perawat"
+                            salaryIsMedical = true
+                            salaryInputValue = institution.medicalStaff.perawat.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                    
+                    MedicalStaffStepper(
+                        label = "Dokter Umum",
+                        role = institution.medicalStaff.dokterUmum,
+                        onHire = { viewModel.hireMedicalStaff(foundationId, institution.id, "dokterUmum") },
+                        onFire = { viewModel.fireMedicalStaff(foundationId, institution.id, "dokterUmum") },
+                        onEditSalary = {
+                            salaryTargetRole = "dokterUmum"
+                            salaryIsMedical = true
+                            salaryInputValue = institution.medicalStaff.dokterUmum.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                    
+                    MedicalStaffStepper(
+                        label = "Dokter Spesialis",
+                        role = institution.medicalStaff.dokterSpesialis,
+                        onHire = { viewModel.hireMedicalStaff(foundationId, institution.id, "dokterSpesialis") },
+                        onFire = { viewModel.fireMedicalStaff(foundationId, institution.id, "dokterSpesialis") },
+                        onEditSalary = {
+                            salaryTargetRole = "dokterSpesialis"
+                            salaryIsMedical = true
+                            salaryInputValue = institution.medicalStaff.dokterSpesialis.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MedicalStaffStepper(
+                        label = "Staff Kebersihan (Janitor)",
+                        role = institution.supportStaff.ob,
+                        onHire = { viewModel.hireHealthSupportStaff(foundationId, institution.id, "janitor") },
+                        onFire = { viewModel.fireHealthSupportStaff(foundationId, institution.id, "janitor") },
+                        onEditSalary = {
+                            salaryTargetRole = "janitor"
+                            salaryIsMedical = false
+                            salaryInputValue = institution.supportStaff.ob.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                    
+                    MedicalStaffStepper(
+                        label = "Petugas Keamanan (Security)",
+                        role = institution.supportStaff.satpam,
+                        onHire = { viewModel.hireHealthSupportStaff(foundationId, institution.id, "security") },
+                        onFire = { viewModel.fireHealthSupportStaff(foundationId, institution.id, "security") },
+                        onEditSalary = {
+                            salaryTargetRole = "security"
+                            salaryIsMedical = false
+                            salaryInputValue = institution.supportStaff.satpam.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                    
+                    MedicalStaffStepper(
+                        label = "Staf Administrasi (Admin)",
+                        role = institution.supportStaff.admin,
+                        onHire = { viewModel.hireHealthSupportStaff(foundationId, institution.id, "admin") },
+                        onFire = { viewModel.fireHealthSupportStaff(foundationId, institution.id, "admin") },
+                        onEditSalary = {
+                            salaryTargetRole = "admin"
+                            salaryIsMedical = false
+                            salaryInputValue = institution.supportStaff.admin.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                    
+                    MedicalStaffStepper(
+                        label = "Ahli Gizi (Chef)",
+                        role = institution.supportStaff.chef,
+                        onHire = { viewModel.hireHealthSupportStaff(foundationId, institution.id, "chef") },
+                        onFire = { viewModel.fireHealthSupportStaff(foundationId, institution.id, "chef") },
+                        onEditSalary = {
+                            salaryTargetRole = "chef"
+                            salaryIsMedical = false
+                            salaryInputValue = institution.supportStaff.chef.customSalary.toString()
+                            showSalaryDialog = true
+                        }
+                    )
+                }
+            }
+            
+            if (showSalaryDialog) {
+                androidx.compose.ui.window.Dialog(onDismissRequest = { showSalaryDialog = false }) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF102722)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("Atur Gaji Kustom", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                            Text("Tentukan gaji bulanan per kepala staff untuk mempercepat rekruitmen atau menghemat anggaran.", color = Color.LightGray, fontSize = 11.sp)
+                            
+                            OutlinedTextField(
+                                value = salaryInputValue,
+                                onValueChange = { salaryInputValue = it },
+                                label = { Text("Gaji Bulanan (Rp)", color = Color.Gray) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF81C784),
+                                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(onClick = { showSalaryDialog = false }) {
+                                    Text("Batal", color = Color.Gray)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        val amt = salaryInputValue.toLongOrNull() ?: 0L
+                                        if (amt > 0) {
+                                            viewModel.updateHealthStaffSalary(
+                                                foundationId = foundationId,
+                                                institutionId = institution.id,
+                                                isMedical = salaryIsMedical,
+                                                roleType = salaryTargetRole,
+                                                newSalary = amt
+                                            )
+                                        }
+                                        showSalaryDialog = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                                ) {
+                                    Text("Simpan", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+fun MedicalStaffStepper(
+    label: String,
+    role: com.example.data.StaffRole,
+    onHire: () -> Unit,
+    onFire: () -> Unit,
+    onEditSalary: () -> Unit
+) {
+    val active = role.active
+    val target = role.target
+    val salary = role.customSalary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF091E1A), RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(text = "Aktif: $active", color = Color.LightGray, fontSize = 11.sp)
+                Text(text = "•", color = Color.Gray, fontSize = 11.sp)
+                Text(
+                    text = "Gaji: ${com.example.ui.formatCurrency(salary)}",
+                    color = Color(0xFF81C784),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onEditSalary, modifier = Modifier.size(16.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Gaji",
+                        tint = Color(0xFF81C784),
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
