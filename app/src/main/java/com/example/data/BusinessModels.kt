@@ -399,7 +399,12 @@ data class OwnedBusiness(
     val hospitalityProperties: List<HotelProperty> = emptyList(),
     val cruiseShips: List<CruiseShip> = emptyList(),
     val cruisePortsUnlocked: List<String> = emptyList(),
-    val cruiseBrandPrestige: Int = 50
+    val cruiseBrandPrestige: Int = 50,
+    val contentCreatorProgress: Float = 0f,
+    val contentCreatorSubscribers: Long = 100L,
+    val contentCreatorEmployees: Int = 0,
+    val contentCreatorOfficeUnlocked: Boolean = false,
+    val contentCreatorCash: Long = 5000L
 )
 
 enum class BiddingPhase {

@@ -260,11 +260,8 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
         }
         composable("content_creator_screen") {
             com.example.ui.ContentCreatorScreen(
-                externalCash = viewModel.playerState.collectAsState().value.cash,
-                onAddCash = { viewModel.addCash(it) },
-                onDeductCash = { viewModel.deductCash(it) },
-                onSyncData = { level, income -> viewModel.syncContentCreator(level, income) },
-                onBack = { navController.popBackStack() }
+                navController = navController,
+                gameViewModel = viewModel
             )
         }
         composable(BottomNavItem.Earnings.screen_route) { EarningsScreen(viewModel) }

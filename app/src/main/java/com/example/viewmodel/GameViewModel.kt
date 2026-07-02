@@ -2331,24 +2331,54 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         // Process Active Upgrades for regular businesses
         var businessesChanged = false
         val newBusinesses = currentState.ownedBusinesses.map { business ->
-            val completedUpgrades = business.activeUpgrades.filter { now >= it.finishTimeMs }
+            var updatedBusiness = business
+            if (business.catalogId == "content_creator") {
+                businessesChanged = true
+                val addedProgress = 1f / 1200f // 120 seconds cycle, update is every 100ms (0.1s)
+                var newProgress = business.contentCreatorProgress + addedProgress
+                var newSubs = business.contentCreatorSubscribers
+                var newCash = business.contentCreatorCash
+                if (newProgress >= 1f) {
+                    newProgress = 0f
+                    var income = (newSubs * 0.05).toLong()
+                    val multiplier = 1.0 + (business.contentCreatorEmployees * 0.05)
+                    income = (income * multiplier).toLong()
+                    
+                    newSubs += (business.level * (business.contentCreatorEmployees + 1) * (5..15).random())
+                    
+                    if (business.level >= 61) {
+                        if ((1..100).random() < 10) {
+                            val brandBonus = (100_000..500_000).random().toLong() * (business.level / 10)
+                            newCash += brandBonus
+                        }
+                    }
+                    newCash += income
+                }
+                updatedBusiness = updatedBusiness.copy(
+                    contentCreatorProgress = newProgress,
+                    contentCreatorSubscribers = newSubs,
+                    contentCreatorCash = newCash
+                )
+            }
+
+            val completedUpgrades = updatedBusiness.activeUpgrades.filter { now >= it.finishTimeMs }
             if (completedUpgrades.isNotEmpty()) {
                 businessesChanged = true
-                var newUpgradeLevels = business.upgradeLevels
-                var newPurchasedUpgrades = business.purchasedUpgrades
+                var newUpgradeLevels = updatedBusiness.upgradeLevels
+                var newPurchasedUpgrades = updatedBusiness.purchasedUpgrades
                 var levelsGained = 0
                 completedUpgrades.forEach { upgrade ->
                     newUpgradeLevels = newUpgradeLevels + (upgrade.selectedUpgradeId to upgrade.targetLevel)
                     newPurchasedUpgrades = newPurchasedUpgrades + upgrade.selectedUpgradeId
                     levelsGained += 1
                 }
-                business.copy(
-                    activeUpgrades = business.activeUpgrades.filter { now < it.finishTimeMs },
+                updatedBusiness.copy(
+                    activeUpgrades = updatedBusiness.activeUpgrades.filter { now < it.finishTimeMs },
                     upgradeLevels = newUpgradeLevels,
                     purchasedUpgrades = newPurchasedUpgrades,
-                    level = business.level + levelsGained
+                    level = updatedBusiness.level + levelsGained
                 )
-            } else business
+            } else updatedBusiness
         }
 
         // Process Active Upgrades for holding companies
@@ -2356,25 +2386,54 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val newHoldings = currentState.holdingCompanies.map { holding ->
             var holdingSelfChanged = false
             val newSubs = holding.subsidiaries.map { business ->
-                val completedUpgrades = business.activeUpgrades.filter { now >= it.finishTimeMs }
+                var updatedBusiness = business
+                if (business.catalogId == "content_creator") {
+                    holdingsChanged = true
+                    holdingSelfChanged = true
+                    val addedProgress = 1f / 1200f
+                    var newProgress = business.contentCreatorProgress + addedProgress
+                    var newSubsCount = business.contentCreatorSubscribers
+                    var newCash = business.contentCreatorCash
+                    if (newProgress >= 1f) {
+                        newProgress = 0f
+                        var income = (newSubsCount * 0.05).toLong()
+                        val multiplier = 1.0 + (business.contentCreatorEmployees * 0.05)
+                        income = (income * multiplier).toLong()
+                        newSubsCount += (business.level * (business.contentCreatorEmployees + 1) * (5..15).random())
+                        if (business.level >= 61) {
+                            if ((1..100).random() < 10) {
+                                val brandBonus = (100_000..500_000).random().toLong() * (business.level / 10)
+                                newCash += brandBonus
+                            }
+                        }
+                        newCash += income
+                    }
+                    updatedBusiness = updatedBusiness.copy(
+                        contentCreatorProgress = newProgress,
+                        contentCreatorSubscribers = newSubsCount,
+                        contentCreatorCash = newCash
+                    )
+                }
+
+                val completedUpgrades = updatedBusiness.activeUpgrades.filter { now >= it.finishTimeMs }
                 if (completedUpgrades.isNotEmpty()) {
                     holdingsChanged = true
                     holdingSelfChanged = true
-                    var newUpgradeLevels = business.upgradeLevels
-                    var newPurchasedUpgrades = business.purchasedUpgrades
+                    var newUpgradeLevels = updatedBusiness.upgradeLevels
+                    var newPurchasedUpgrades = updatedBusiness.purchasedUpgrades
                     var levelsGained = 0
                     completedUpgrades.forEach { upgrade ->
                         newUpgradeLevels = newUpgradeLevels + (upgrade.selectedUpgradeId to upgrade.targetLevel)
                         newPurchasedUpgrades = newPurchasedUpgrades + upgrade.selectedUpgradeId
                         levelsGained += 1
                     }
-                    business.copy(
-                        activeUpgrades = business.activeUpgrades.filter { now < it.finishTimeMs },
+                    updatedBusiness.copy(
+                        activeUpgrades = updatedBusiness.activeUpgrades.filter { now < it.finishTimeMs },
                         upgradeLevels = newUpgradeLevels,
                         purchasedUpgrades = newPurchasedUpgrades,
-                        level = business.level + levelsGained
+                        level = updatedBusiness.level + levelsGained
                     )
-                } else business
+                } else updatedBusiness
             }
             if (holdingSelfChanged) holding.copy(subsidiaries = newSubs) else holding
         }
@@ -5260,6 +5319,141 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (newBusinesses != currentState.ownedBusinesses) {
             _playerState.value = currentState.copy(ownedBusinesses = newBusinesses)
         }
+    }
+
+    fun injectCashToContentCreator(amount: Long): Boolean {
+        val currentState = _playerState.value
+        if (currentState.cash >= amount && amount > 0) {
+            val newBusinesses = currentState.ownedBusinesses.map { owned ->
+                if (owned.catalogId == "content_creator") {
+                    owned.copy(contentCreatorCash = owned.contentCreatorCash + amount)
+                } else {
+                    owned
+                }
+            }
+            val nextState = currentState.copy(
+                cash = currentState.cash - amount,
+                ownedBusinesses = newBusinesses
+            )
+            _playerState.value = nextState
+            saveState(nextState)
+            return true
+        }
+        return false
+    }
+
+    fun withdrawCashFromContentCreator(amount: Long): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        if (cc.contentCreatorCash >= amount && amount > 0) {
+            val newBusinesses = currentState.ownedBusinesses.map { owned ->
+                if (owned.catalogId == "content_creator") {
+                    owned.copy(contentCreatorCash = owned.contentCreatorCash - amount)
+                } else {
+                    owned
+                }
+            }
+            val nextState = currentState.copy(
+                cash = currentState.cash + amount,
+                ownedBusinesses = newBusinesses
+            )
+            _playerState.value = nextState
+            saveState(nextState)
+            return true
+        }
+        return false
+    }
+
+    fun deleteContentCreatorBusiness() {
+        val currentState = _playerState.value
+        val newBusinesses = currentState.ownedBusinesses.filter { it.catalogId != "content_creator" }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun levelUpContentCreator(): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        if (cc.level >= 100) return false
+        if (cc.level == 40 && !cc.contentCreatorOfficeUnlocked) return false
+
+        val cost = (500.0 * Math.pow(1.18, (cc.level - 1).toDouble())).toLong()
+        if (cc.contentCreatorCash >= cost) {
+            val newLevel = cc.level + 1
+            val newSubs = cc.contentCreatorSubscribers + (100.0 * Math.pow(1.16, newLevel.toDouble())).toLong()
+            val newBusinesses = currentState.ownedBusinesses.map { owned ->
+                if (owned.catalogId == "content_creator") {
+                    owned.copy(
+                        level = newLevel,
+                        contentCreatorSubscribers = newSubs,
+                        contentCreatorCash = owned.contentCreatorCash - cost
+                    )
+                } else {
+                    owned
+                }
+            }
+            val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+            _playerState.value = nextState
+            saveState(nextState)
+            return true
+        }
+        return false
+    }
+
+    fun hireEmployeeContentCreator(): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        val maxEmp = when {
+            cc.level >= 81 -> 100
+            cc.level >= 61 -> 50
+            cc.level >= 41 -> 20
+            cc.level >= 21 -> 5
+            else -> 0
+        }
+        if (cc.contentCreatorEmployees >= maxEmp) return false
+
+        val cost = (1500.0 * Math.pow(1.2, cc.contentCreatorEmployees.toDouble())).toLong()
+        if (cc.contentCreatorCash >= cost) {
+            val newBusinesses = currentState.ownedBusinesses.map { owned ->
+                if (owned.catalogId == "content_creator") {
+                    owned.copy(
+                        contentCreatorEmployees = owned.contentCreatorEmployees + 1,
+                        contentCreatorCash = owned.contentCreatorCash - cost
+                    )
+                } else {
+                    owned
+                }
+            }
+            val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+            _playerState.value = nextState
+            saveState(nextState)
+            return true
+        }
+        return false
+    }
+
+    fun unlockOfficeContentCreator(): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        val cost = 5_000_000L
+        if (cc.level == 40 && !cc.contentCreatorOfficeUnlocked && cc.contentCreatorCash >= cost) {
+            val newBusinesses = currentState.ownedBusinesses.map { owned ->
+                if (owned.catalogId == "content_creator") {
+                    owned.copy(
+                        contentCreatorOfficeUnlocked = true,
+                        contentCreatorCash = owned.contentCreatorCash - cost
+                    )
+                } else {
+                    owned
+                }
+            }
+            val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+            _playerState.value = nextState
+            saveState(nextState)
+            return true
+        }
+        return false
     }
 
     fun deductCash(amount: Long): Boolean {
