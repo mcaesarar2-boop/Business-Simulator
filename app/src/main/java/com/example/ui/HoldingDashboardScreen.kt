@@ -831,6 +831,11 @@ fun MegaHoldingDetailScreen(navController: NavHostController, viewModel: GameVie
                             Text(" ↳ Valuasi Bisnis", color = Color(0xFFE0E0E0), fontSize = 14.sp)
                             Text("$${com.example.ui.formatCurrencyRingkas(baseMegaBusinessValuation, useShortFormat)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("   ↳ Porsi Kepemilikan Anda (${String.format("%.1f", playerState.companyOwnershipPercent)}%)", color = Color(0xFF00FF00), fontSize = 14.sp)
+                            Text("$${com.example.ui.formatCurrencyRingkas(playerState.playerBusinessValuation, useShortFormat)}", color = Color(0xFF00FF00), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
                         if (holdingState.includesInvestments) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(

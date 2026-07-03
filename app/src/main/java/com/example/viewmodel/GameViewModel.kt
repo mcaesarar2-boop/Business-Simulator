@@ -4112,22 +4112,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val depositsValue = remainingDeposits.sumOf { it.principal }
 
         val newNetWorth = try {
-            if (currentState.megaHolding.isActive) {
-                var baseMegaValuation = businessValue
-                val otherAssetsVal = cryptoValue + realEstateValue + collectionValue + metalsValue + housingValue + depositsValue + finalCashAfterDeposits
-                
-                if (currentState.megaHolding.includesInvestments) {
-                    baseMegaValuation += stocksValue
-                    (baseMegaValuation * (currentState.companyOwnershipPercent / 100.0)).toLong() + otherAssetsVal
-                } else {
-                    (baseMegaValuation * (currentState.companyOwnershipPercent / 100.0)).toLong() + stocksValue + otherAssetsVal
-                }
-            } else {
-                finalCashAfterDeposits + stocksValue + cryptoValue + realEstateValue + businessValue + collectionValue + metalsValue + housingValue + depositsValue
-            }
+            val tempState = currentState.copy(
+                cash = finalCashAfterDeposits,
+                timeDeposits = remainingDeposits,
+                ownedBusinesses = mappedBusinessesWithAppVal,
+                holdingCompanies = mappedHoldings
+            )
+            tempState.netAssetValue(
+                stockList = _stockList.value,
+                cryptoList = _cryptoList.value,
+                realEstateMarket = _realEstateMarket.value,
+                collectionList = _collectionList.value,
+                preciousMetalsList = currentMetals
+            )
         } catch (e: Exception) {
             android.util.Log.e("GameViewModel", "Mega Holding Valuation error: ${e.message}")
-            finalCashAfterDeposits + stocksValue + cryptoValue + realEstateValue + businessValue + collectionValue + metalsValue + housingValue + depositsValue
+            finalCashAfterDeposits + stocksValue + businessValue + cryptoValue + realEstateValue + collectionValue + metalsValue + housingValue + depositsValue
         }
 
         var familyOfficeCash = finalCashAfterDeposits
@@ -8230,60 +8230,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 ipLibraryHistory = patchedLibraryTv
             )
 
-            // Step 3: Trigger a dummy payday cycle to recalculate netWorth safely locally, but without advancing the month.
-            // For simplicity and safety, we just recalculate netWorth manually right here so we don't accidentally run side-effects.
-            var businessValue = tempState.ownedBusinesses.sumOf {
-                if (it.acquiredStockTicker != null) {
-                    val stockInPortfolio = tempState.ownedStocks.find { s -> s.ticker == it.acquiredStockTicker }
-                    val livePrice = _stockList.value.find { s -> s.ticker == it.acquiredStockTicker }?.currentPrice ?: stockInPortfolio?.averagePrice ?: 0.0
-                    val baseVal = if (stockInPortfolio != null) {
-                        (stockInPortfolio.shares * livePrice).toLong()
-                    } else 0L
-                    val subsidiariesVal = it.subsidiaries.sumOf { sub ->
-                        val catItem = getCatalogItem(sub.catalogId, tempState)
-                        if (catItem != null) getBusinessValuation(sub, catItem) else 0L
-                    }
-                    baseVal + it.companyCash.toLong() + subsidiariesVal
-                } else {
-                    val cat = getCatalogItem(it.catalogId, tempState)
-                    if (cat != null) getBusinessValuation(it, cat) else 0L
-                }
-            }
-            businessValue += tempState.holdingCompanies.sumOf { h -> 
-                h.subsidiaries.sumOf { s -> 
-                    if (s.acquiredStockTicker != null) {
-                        val stockInPortfolio = tempState.ownedStocks.find { st -> st.ticker == s.acquiredStockTicker }
-                        val livePrice = _stockList.value.find { st -> st.ticker == s.acquiredStockTicker }?.currentPrice ?: stockInPortfolio?.averagePrice ?: 0.0
-                        val baseVal = if (stockInPortfolio != null) {
-                            (stockInPortfolio.shares * livePrice).toLong()
-                        } else 0L
-                        val subsidiariesVal = s.subsidiaries.sumOf { sub ->
-                            val catItem = getCatalogItem(sub.catalogId, tempState)
-                            if (catItem != null) getBusinessValuation(sub, catItem) else 0L
-                        }
-                        baseVal + s.companyCash.toLong() + subsidiariesVal
-                    } else {
-                        val cat = getCatalogItem(s.catalogId, tempState)
-                        if (cat != null) getBusinessValuation(s, cat) else 0L
-                    }
-                } 
-            }
-            val stocksValue = tempState.ownedStocks.sumOf { owned ->
-                val livePrice = _stockList.value.find { it.ticker == owned.ticker }?.currentPrice ?: owned.averagePrice
-                (owned.shares * livePrice).toLong()
-            }
-            val baseMegaValuation = if (tempState.megaHolding.includesInvestments) businessValue + stocksValue else businessValue
-            val activeMegaValue = if (tempState.megaHolding.isActive) (baseMegaValuation * (tempState.megaHolding.ownershipPercentage / 100.0)).toLong() else businessValue
-
-            val otherAssetsVal = tempState.ownedCrypto.sumOf { c ->
-                val livePrice = _cryptoList.value.find { it.symbol == c.symbol }?.currentPrice ?: c.averagePrice
-                (c.amount * livePrice).toLong()
-            } + tempState.ownedProperties.sumOf { it.purchasedPrice } + tempState.ownedCollections.sumOf { it.purchasedPrice } + tempState.ownedMetals.entries.sumOf { (id, amt) ->
-                val cp = _preciousMetalsList.value.find { it.id == id }?.currentPrice ?: 0.0
-                (amt * cp).toLong()
-            } + tempState.ownedHouses.sumOf { it.purchasedPrice } + tempState.timeDeposits.sumOf { it.principal }
-            
-            val newNetWorth = tempState.cash + otherAssetsVal + activeMegaValue + if (tempState.megaHolding.isActive && !tempState.megaHolding.includesInvestments) stocksValue else 0L
+            // Step 3: Recalculate netWorth safely using the single source of truth helper function
+            val newNetWorth = tempState.netAssetValue(
+                stockList = _stockList.value,
+                cryptoList = _cryptoList.value,
+                realEstateMarket = _realEstateMarket.value,
+                collectionList = _collectionList.value,
+                preciousMetalsList = _preciousMetalsList.value
+            )
 
             // Step 4: Save Data
             _playerState.value = tempState.copy(netWorth = newNetWorth)

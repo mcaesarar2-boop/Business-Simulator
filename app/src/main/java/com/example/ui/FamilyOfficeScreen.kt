@@ -24,12 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.viewmodel.GameViewModel
-import com.example.data.PlayerState
-import com.example.data.getCatalogItem
-import com.example.data.getBusinessValuation
-import com.example.data.getBusinessStats
-import com.example.data.totalOutstandingDebt
-import com.example.data.totalMonthlyDebtObligation
+import com.example.data.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,19 +100,18 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
     }
     val holdingValuation = totalDirectBusinessValuation + totalSubsidiaryValuation
 
-    // 1. Gross Asset Value (GAV)
-    val grossAssetValue = playerState.cash + stocksValue + businessValue + cryptoValue + realEstateValue + collectionsValue + vehiclesValue + metalsValue + housingValue
-
     // 2. Liabilities
-    val totalOutstandingDebt = playerState.totalOutstandingDebt
-    val liabilities = playerState.personalDebt + totalOutstandingDebt
+    val liabilities = playerState.totalLiabilities
 
     // 3. Net Asset Value (NAV)
-    val netAssetValue = (grossAssetValue - liabilities).coerceAtLeast(0)
+    val netAssetValue = playerState.netAssetValue(stockList, cryptoList, realEstateMarket, collectionList, viewModel.preciousMetalsList.value)
 
-    val peValue = (holdingValuation * (playerState.companyOwnershipPercent / 100.0)).toLong()
-    val liquidMarketsValue = playerState.cash + stocksValue + cryptoValue
-    val tangibleValue = realEstateValue + collectionsValue + vehiclesValue + metalsValue + housingValue
+    // 1. Gross Asset Value (GAV)
+    val grossAssetValue = netAssetValue + liabilities
+
+    val peValue = playerState.playerBusinessValuation
+    val liquidMarketsValue = playerState.privateBalance + playerState.totalLiquidInvestments(stockList, cryptoList)
+    val tangibleValue = playerState.totalTangibleAssets(realEstateMarket, collectionList, viewModel.preciousMetalsList.value)
     val totalWeight = (peValue + liquidMarketsValue + tangibleValue).coerceAtLeast(1)
 
     val pePct = (peValue.toDouble() / totalWeight * 100).coerceIn(0.0, 100.0)

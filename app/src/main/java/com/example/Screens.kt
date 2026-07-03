@@ -2888,17 +2888,6 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
         val prop = realEstateMarket.find { it.id == owned.propertyId }
         prop?.basePrice ?: owned.purchasedPrice
     }
-    
-    val businessValue = player.ownedBusinesses.sumOf { owned ->
-        val catalogItem = getCatalogItem(owned.catalogId, player)
-        if (catalogItem != null) {
-            getBusinessValuation(owned, catalogItem)
-        } else {
-            0L
-        }
-    } + player.holdingCompanies.sumOf { holding ->
-        com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, player)
-    }
 
     val collectionList by viewModel.collectionList.collectAsState()
     val collectionsValue = player.ownedCollections.filter { owned -> 
@@ -2920,7 +2909,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
     
     val housingValue = player.ownedHouses.sumOf { it.purchasedPrice }
     
-    val totalWealth = player.cash + stocksValue + businessValue + cryptoValue + realEstateValue + collectionsValue + vehiclesValue + metalsValue + housingValue
+    val totalWealth = player.netAssetValue(stockList, cryptoList, realEstateMarket, collectionList, allMetals)
 
     val useShortFormat by viewModel.useShortNumberFormat.collectAsState()
 
@@ -2977,8 +2966,8 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
                     // Dynamic progress bar representing diversification
                     val total = totalWealth.coerceAtLeast(1)
                     val categories = listOf(
-                        Pair(player.cash, Color(0xFF2196F3)),
-                        Pair(businessValue, Color(0xFFF44336)),
+                        Pair(player.privateBalance, Color(0xFF2196F3)),
+                        Pair(player.playerBusinessValuation, Color(0xFFF44336)),
                         Pair(stocksValue, Color(0xFFFF9800)),
                         Pair(realEstateValue, Color(0xFF9C27B0)),
                         Pair(housingValue, Color(0xFFE91E63)),
@@ -3047,8 +3036,8 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
             // 3. WEALTH BREAKDOWN (Grid)
             item {
                 val wealthItems = listOf(
-                    Triple("Balance", com.example.ui.formatCurrencyRingkas(player.cash, useShortFormat), Color(0xFF2196F3)),
-                    Triple("Businesses", com.example.ui.formatCurrencyRingkas(businessValue, useShortFormat), Color(0xFFF44336)),
+                    Triple("Balance", com.example.ui.formatCurrencyRingkas(player.privateBalance, useShortFormat), Color(0xFF2196F3)),
+                    Triple("Businesses", com.example.ui.formatCurrencyRingkas(player.playerBusinessValuation, useShortFormat), Color(0xFFF44336)),
                     Triple("Stocks", com.example.ui.formatCurrencyRingkas(stocksValue, useShortFormat), Color(0xFFFF9800)),
                     Triple("Real estate", com.example.ui.formatCurrencyRingkas(realEstateValue, useShortFormat), Color(0xFF9C27B0)),
                     Triple("Housing", com.example.ui.formatCurrencyRingkas(housingValue, useShortFormat), Color(0xFFE91E63)),

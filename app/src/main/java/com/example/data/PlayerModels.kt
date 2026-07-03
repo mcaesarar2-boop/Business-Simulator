@@ -323,4 +323,94 @@ fun getCatalogItem(catalogId: String, playerState: PlayerState): BusinessCatalog
 val PlayerState.totalOutstandingDebt: Long get() = (activeInvestorsLoans ?: emptyList()).sumOf { it.monthlyPayment * it.remainingMonths }
 val PlayerState.totalMonthlyDebtObligation: Long get() = (activeInvestorsLoans ?: emptyList()).sumOf { it.monthlyPayment }
 
+// 1. TOTAL LIABILITIES (Hutang Keseluruhan)
+val PlayerState.totalLiabilities: Long get() {
+    val lombardDebt = personalDebt
+    val investorDebt = (activeInvestorsLoans ?: emptyList()).sumOf { it.monthlyPayment * it.remainingMonths }
+    return lombardDebt + investorDebt
+}
+
+// 2. TOTAL BUSINESS VALUATION (Murni milik pemain)
+val PlayerState.rawMegaHoldingValuation: Long get() {
+    val totalDirectBusinessValuation = ownedBusinesses.sumOf { owned ->
+        val cat = getCatalogItem(owned.catalogId, this)
+        if (cat != null) getBusinessValuation(owned, cat) else 0L
+    }
+    val totalSubsidiaryValuation = holdingCompanies.sumOf { holding ->
+        holding.subsidiaries.sumOf { sub ->
+            val cat = getCatalogItem(sub.catalogId, this)
+            if (cat != null) getBusinessValuation(sub, cat) else 0L
+        }
+    }
+    return totalDirectBusinessValuation + totalSubsidiaryValuation
+}
+
+val PlayerState.playerBusinessValuation: Long get() {
+    return (rawMegaHoldingValuation * (companyOwnershipPercent / 100.0)).toLong()
+}
+
+// 3. TOTAL INVESTASI LIKUID (Kertas/Digital)
+fun PlayerState.totalLiquidInvestments(
+    stockList: List<StockItem> = emptyList(),
+    cryptoList: List<CryptoItem> = emptyList()
+): Long {
+    val stockValue = ownedStocks.sumOf { owned ->
+        val liveStock = stockList.find { it.ticker == owned.ticker }
+        val livePrice = liveStock?.currentPrice ?: owned.averagePrice
+        (owned.shares * livePrice).toLong()
+    }
+    val cryptoValue = ownedCrypto.sumOf { owned ->
+        val livePrice = cryptoList.find { it.symbol == owned.symbol }?.currentPrice ?: owned.averagePrice
+        (owned.amount * livePrice).toLong()
+    }
+    val bankDeposits = timeDeposits.sumOf { it.principal }
+    return stockValue + cryptoValue + bankDeposits
+}
+
+// 4. TOTAL ASET FISIK (Tangibles)
+fun PlayerState.totalTangibleAssets(
+    realEstateMarket: List<PropertyItem> = emptyList(),
+    collectionList: List<CollectionItem> = emptyList(),
+    preciousMetalsList: List<PreciousMetal> = emptyList()
+): Long {
+    val realEstateValue = ownedProperties.sumOf { owned ->
+        val prop = realEstateMarket.find { it.id == owned.propertyId }
+        prop?.basePrice ?: owned.purchasedPrice
+    }
+    
+    val collectionsValue = ownedCollections.filter { owned ->
+        val cat = collectionList.find { c -> c.id == owned.itemId }?.categoryId
+        val isVehicle = listOf("cars", "motorcycles", "yachts", "airplanes").contains(cat)
+        cat != null && !isVehicle
+    }.sumOf { it.purchasedPrice }
+    
+    val vehiclesValue = ownedCollections.filter { owned ->
+        val cat = collectionList.find { c -> c.id == owned.itemId }?.categoryId
+        listOf("cars", "motorcycles", "yachts", "airplanes").contains(cat)
+    }.sumOf { it.purchasedPrice }
+    
+    val metalsValue = ownedMetals.entries.sumOf { (id, amount) ->
+        val livePrice = preciousMetalsList.find { it.id == id }?.currentPrice ?: 0.0
+        (amount * livePrice).toLong()
+    }
+    
+    val housingValue = ownedHouses.sumOf { it.purchasedPrice }
+    
+    return realEstateValue + vehiclesValue + collectionsValue + metalsValue + housingValue
+}
+
+// 5. THE ULTIMATE NET WORTH (NAV / Total Fortune)
+fun PlayerState.netAssetValue(
+    stockList: List<StockItem> = emptyList(),
+    cryptoList: List<CryptoItem> = emptyList(),
+    realEstateMarket: List<PropertyItem> = emptyList(),
+    collectionList: List<CollectionItem> = emptyList(),
+    preciousMetalsList: List<PreciousMetal> = emptyList()
+): Long {
+    val grossAssets = privateBalance + playerBusinessValuation + 
+            totalLiquidInvestments(stockList, cryptoList) + 
+            totalTangibleAssets(realEstateMarket, collectionList, preciousMetalsList)
+    return grossAssets - totalLiabilities
+}
+
 data class Billionaire(val id: Int, val name: String, val netWorth: Long, val rank: Int = 0)
