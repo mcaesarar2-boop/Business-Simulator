@@ -320,7 +320,7 @@ fun getCatalogItem(catalogId: String, playerState: PlayerState): BusinessCatalog
     return null
 }
 
-val PlayerState.totalOutstandingDebt: Long get() = activeInvestorsLoans.sumOf { it.monthlyPayment * it.remainingMonths }
-val PlayerState.totalMonthlyDebtObligation: Long get() = activeInvestorsLoans.sumOf { it.monthlyPayment }
+val PlayerState.totalOutstandingDebt: Long get() = (activeInvestorsLoans ?: emptyList()).sumOf { it.monthlyPayment * it.remainingMonths }
+val PlayerState.totalMonthlyDebtObligation: Long get() = (activeInvestorsLoans ?: emptyList()).sumOf { it.monthlyPayment }
 
 data class Billionaire(val id: Int, val name: String, val netWorth: Long, val rank: Int = 0)

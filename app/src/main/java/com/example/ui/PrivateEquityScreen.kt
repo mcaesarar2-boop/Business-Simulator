@@ -306,7 +306,7 @@ fun PrivateEquityScreen(navController: NavController, viewModel: GameViewModel) 
                             color = textWhite
                         )
                         Slider(
-                            value = loanSliderValue.toFloat(),
+                            value = loanSliderValue.coerceIn(10_000.0, maxLoanDynamic.toDouble()).toFloat(),
                             onValueChange = { loanSliderValue = it.toDouble() },
                             valueRange = 10_000f..maxLoanDynamic.toFloat(),
                             colors = SliderDefaults.colors(

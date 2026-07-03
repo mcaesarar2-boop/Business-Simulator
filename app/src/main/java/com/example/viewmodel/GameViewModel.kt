@@ -349,6 +349,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     megaHolding = state.megaHolding ?: com.example.data.MegaHoldingState(),
                     ownedBusinesses = patchedBusinesses,
                     holdingCompanies = patchedHoldings,
+                    activeInvestorsLoans = state.activeInvestorsLoans ?: emptyList(),
+                    privateLedgerHistory = state.privateLedgerHistory ?: emptyList(),
+                    financialHistory = state.financialHistory ?: emptyList(),
+                    activeSubscriptions = state.activeSubscriptions ?: emptyList(),
                     allSubscriptions = if (state.allSubscriptions.isNullOrEmpty()) {
                         com.example.data.defaultLifestyleItems.map { defaultItem ->
                             val isActive = state.activeSubscriptions?.contains(defaultItem.name) == true
@@ -404,6 +408,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val finalState = importedState.copy(
                     ownedBusinesses = patchedBusinesses,
                     holdingCompanies = patchedHoldings,
+                    activeInvestorsLoans = importedState.activeInvestorsLoans ?: emptyList(),
+                    privateLedgerHistory = importedState.privateLedgerHistory ?: emptyList(),
+                    financialHistory = importedState.financialHistory ?: emptyList(),
+                    activeSubscriptions = importedState.activeSubscriptions ?: emptyList(),
                     foundations = patchFoundations(importedState.foundations)
                 )
                 _playerState.value = finalState
