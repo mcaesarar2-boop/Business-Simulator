@@ -28,6 +28,8 @@ import com.example.data.PlayerState
 import com.example.data.getCatalogItem
 import com.example.data.getBusinessValuation
 import com.example.data.getBusinessStats
+import com.example.data.totalOutstandingDebt
+import com.example.data.totalMonthlyDebtObligation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +109,8 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
     val grossAssetValue = playerState.cash + stocksValue + businessValue + cryptoValue + realEstateValue + collectionsValue + vehiclesValue + metalsValue + housingValue
 
     // 2. Liabilities
-    val liabilities = playerState.personalDebt
+    val totalOutstandingDebt = playerState.totalOutstandingDebt
+    val liabilities = playerState.personalDebt + totalOutstandingDebt
 
     // 3. Net Asset Value (NAV)
     val netAssetValue = (grossAssetValue - liabilities).coerceAtLeast(0)
@@ -214,7 +217,12 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("Total Liabilities (Debt)", color = textGray, fontSize = 12.sp)
-                                Text("-" + formatCurrencyRingkas(liabilities, useShortFormat), color = if (liabilities > 0) red else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = if (liabilities > 0) "-" + formatCurrency(liabilities) else "$0",
+                                    color = if (liabilities > 0) red else Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -933,7 +941,8 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                         }
 
                         "SHARE_SALE" -> {
-                            var sellPct by remember { mutableStateOf(5.0f) }
+                            val maxAllowedSell = (playerState.companyOwnershipPercent - 51.0).toFloat().coerceAtLeast(0f)
+                            var sellPct by remember { mutableStateOf(if (maxAllowedSell > 0f) Math.min(5.0f, maxAllowedSell) else 0f) }
                             val incomeGained = (holdingValuation * (sellPct / 100.0)).toLong()
 
                             Text(
@@ -960,11 +969,12 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                                 color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Black
                             )
 
-                            if (playerState.companyOwnershipPercent > 0.1) {
+                            if (playerState.companyOwnershipPercent > 51.0) {
+                                val maxAllowedSell = (playerState.companyOwnershipPercent - 51.0).toFloat()
                                 Slider(
-                                    value = sellPct,
+                                    value = sellPct.coerceIn(0.1f, maxAllowedSell),
                                     onValueChange = { sellPct = it },
-                                    valueRange = 0.5f..playerState.companyOwnershipPercent.toFloat(),
+                                    valueRange = 0.1f..maxAllowedSell,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -985,7 +995,7 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                                 Box(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).background(Color.White.copy(alpha=0.04f)).padding(12.dp)
                                 ) {
-                                    Text("Anda tidak memiliki andil saham sisa di holding.", color = red, fontSize = 12.sp, textAlign = TextAlign.Center)
+                                    Text("Anda tidak boleh menjual saham lebih banyak karena harus mempertahankan minimal kepemilikan 51% (kontrol perusahaan).", color = red, fontSize = 12.sp, textAlign = TextAlign.Center)
                                 }
                             }
                         }

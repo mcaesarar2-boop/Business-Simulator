@@ -4621,6 +4621,60 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
+        // 1c. Private Equity Investors Loans Auto-Billing & Buyback
+        var currentEquityShare = currentState.playerEquityShare
+        var currentCompanyOwnership = currentState.companyOwnershipPercent
+        val updatedLoansList = mutableListOf<com.example.data.ActiveLoan>()
+        
+        currentState.activeInvestorsLoans.forEach { loan ->
+            if (loan.remainingMonths > 0) {
+                val nextRemaining = loan.remainingMonths - 1
+                if (familyOfficePrivateBalanceVal >= loan.monthlyPayment) {
+                    familyOfficePrivateBalanceVal -= loan.monthlyPayment
+                    monthlyLedgerRecords.add(
+                        com.example.data.PrivateLedgerRecord(
+                            monthTick = newMonth,
+                            title = "Cicilan Investor (${loan.sectorName})",
+                            amount = loan.monthlyPayment,
+                            isIncome = false
+                        )
+                    )
+                } else {
+                    familyOfficePrivateBalanceVal -= loan.monthlyPayment
+                    monthlyLedgerRecords.add(
+                        com.example.data.PrivateLedgerRecord(
+                            monthTick = newMonth,
+                            title = "Cicilan Gagal Bayar / Denda Investor (${loan.sectorName})",
+                            amount = loan.monthlyPayment,
+                            isIncome = false
+                        )
+                    )
+                }
+                
+                if (nextRemaining == 0) {
+                    currentEquityShare = (currentEquityShare + loan.equityGiven).coerceIn(0.0, 100.0)
+                    currentCompanyOwnership = (currentCompanyOwnership + loan.equityGiven).coerceIn(0.0, 100.0)
+                    
+                    foNews.add(MarketNews(
+                        id = "loan_paid_${System.currentTimeMillis()}_${loan.id}",
+                        text = "INVESTMENT MATURED: Pembiayaan ${loan.sectorName} telah lunas! Kepemilikan saham Anda sebesar ${String.format(java.util.Locale.US, "%.1f", loan.equityGiven)}% otomatis di-buyback (kembali ke Anda) tanpa biaya tambahan.",
+                        type = "BULL"
+                    ))
+                    
+                    monthlyLedgerRecords.add(
+                        com.example.data.PrivateLedgerRecord(
+                            monthTick = newMonth,
+                            title = "Lunas & Buyback Saham (${loan.sectorName})",
+                            amount = 0L,
+                            isIncome = true
+                        )
+                    )
+                } else {
+                    updatedLoansList.add(loan.copy(remainingMonths = nextRemaining))
+                }
+            }
+        }
+
         var totalRevenueSemuaDivisi = 0L
         var totalExpenseSemuaDivisi = 0L
 
@@ -5409,6 +5463,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             ownedHouses = familyOfficeHouses,
             ownedCollections = familyOfficeCollections,
             personalDebt = familyOfficeDebt,
+            playerEquityShare = currentEquityShare,
+            companyOwnershipPercent = currentCompanyOwnership,
+            activeInvestorsLoans = updatedLoansList,
             activeTvPrograms = if (tvProgHasChanges) updatedTvProgs else currentState.activeTvPrograms,
             ipLibraryHistory = if (newIpLibraryItems.isNotEmpty()) finalIpLibrary else currentState.ipLibraryHistory,
             appProjects = if (appProjHasChanges) updatedAppProjects else currentState.appProjects,
@@ -9533,6 +9590,84 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    fun applyForInvestorsLoan(sectorName: String, loanAmount: Long, tenorMonths: Int, interestRate: Double, dilutionMultiplier: Double, fundingType: com.example.data.FundingType): String? {
+        val state = _playerState.value
+        
+        // Calculate business valuation
+        val totalBusinessValuation = state.ownedBusinesses.sumOf {
+            val catalogItem = com.example.data.getCatalogItem(it.catalogId, state)
+            if (catalogItem != null) com.example.data.getBusinessValuation(it, catalogItem) else 0L
+        }
+        val totalHoldingValuation = state.holdingCompanies.sumOf { holding ->
+            holding.subsidiaries.sumOf { sub ->
+                val catalogItem = com.example.data.getCatalogItem(sub.catalogId, state)
+                if (catalogItem != null) com.example.data.getBusinessValuation(sub, catalogItem) else 0L
+            }
+        }
+        val businessValuation = (totalBusinessValuation + totalHoldingValuation).coerceAtLeast(100000L) // Prevent divide-by-zero
+        
+        // Calculate standard equity dilution
+        val baseEquityGiven = (loanAmount.toDouble() / businessValuation.toDouble()) * dilutionMultiplier * 100.0
+        
+        val totalBunga = (loanAmount * interestRate).toLong()
+        val totalPayment = loanAmount + totalBunga
+        val baseMonthlyPayment = totalPayment / tenorMonths
+        
+        val (monthlyPayment, equityGiven) = when (fundingType) {
+            com.example.data.FundingType.DEBT -> {
+                Pair(baseMonthlyPayment, 0.0)
+            }
+            com.example.data.FundingType.HYBRID -> {
+                Pair(baseMonthlyPayment / 2, baseEquityGiven)
+            }
+            com.example.data.FundingType.EQUITY -> {
+                Pair(0L, baseEquityGiven)
+            }
+        }
+        
+        if (state.playerEquityShare - equityGiven < 51.0) {
+            return "Pengajuan ditolak! Total kepemilikan saham Anda akan jatuh di bawah 51% (${String.format(java.util.Locale.US, "%.1f", state.playerEquityShare - equityGiven)}%) yang melanggar syarat mutlak kontrol holding."
+        }
+        
+        val newLoan = com.example.data.ActiveLoan(
+            sectorName = sectorName,
+            fundingType = fundingType,
+            totalLoan = loanAmount,
+            monthlyPayment = monthlyPayment,
+            remainingMonths = tenorMonths,
+            equityGiven = equityGiven
+        )
+        
+        val newEquity = (state.playerEquityShare - equityGiven).coerceAtLeast(0.0)
+        
+        val newState = state.copy(
+            playerEquityShare = newEquity,
+            companyOwnershipPercent = newEquity,
+            privateBalance = state.privateBalance + loanAmount,
+            activeInvestorsLoans = state.activeInvestorsLoans + newLoan,
+            megaHolding = state.megaHolding.copy(ownershipPercentage = newEquity)
+        )
+        
+        _playerState.value = newState
+        saveState(newState)
+        
+        val logFundingText = when (fundingType) {
+            com.example.data.FundingType.DEBT -> "Debt Financing (Cicilan penuh, 0% dilusi)"
+            com.example.data.FundingType.HYBRID -> "Mezzanine (Hybrid: Cicilan 50%, dilusi ${String.format(java.util.Locale.US, "%.1f", equityGiven)}%)"
+            com.example.data.FundingType.EQUITY -> "Venture Capital (0 cicilan, dilusi ${String.format(java.util.Locale.US, "%.1f", equityGiven)}%)"
+        }
+        
+        _newsFeed.value = (listOf(
+            MarketNews(
+                id = "loan_taken_${System.currentTimeMillis()}",
+                text = "PRIVATE EQUITY: Mengambil pendanaan $${com.example.ui.formatCurrencyRingkas(loanAmount.toDouble(), false)} ($logFundingText) dari Sektor $sectorName dengan tenor $tenorMonths bulan.",
+                type = "BULL"
+            )
+        ) + _newsFeed.value).take(20)
+        
+        return null
+    }
+
     fun repayLombardLoan(amount: Long): String? {
         val state = _playerState.value
         if (amount <= 0) return "Jumlah pembayaran harus lebih dari 0"
@@ -9565,6 +9700,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (percent <= 0.0 || percent > state.companyOwnershipPercent) {
             return "Persentase penjualan tidak valid atau melampaui kepemilikan Anda saat ini."
         }
+        if (state.companyOwnershipPercent - percent < 51.0) {
+            return "Anda tidak boleh menjual saham jika total kepemilikan Anda akan jatuh di bawah 51% (Syarat mutlak kontrol perusahaan)."
+        }
         
         val totalBusinessValuation = state.ownedBusinesses.sumOf {
             val catalogItem = com.example.data.getCatalogItem(it.catalogId, state)
@@ -9583,6 +9721,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         
         val newState = state.copy(
             companyOwnershipPercent = newOwnership,
+            playerEquityShare = newOwnership,
             cash = state.cash + transactionValue,
             megaHolding = state.megaHolding.copy(ownershipPercentage = newOwnership)
         )

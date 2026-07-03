@@ -269,6 +269,7 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
         composable("garage") { com.example.ui.GarageScreen(navController, viewModel) }
         composable("housing") { com.example.ui.HousingScreen(navController, viewModel) }
         composable("tax_legal") { com.example.ui.TaxLegalScreen(navController, viewModel) }
+        composable("private_equity") { com.example.ui.PrivateEquityScreen(navController, viewModel) }
         composable("global_tycoon_index") { com.example.ui.GlobalTycoonIndexScreen(navController, viewModel) }
         composable(BottomNavItem.Profile.screen_route) { ProfileScreen(navController, viewModel) }
         composable("family_office") { com.example.ui.FamilyOfficeScreen(navController, viewModel) }

@@ -2125,7 +2125,8 @@ fun EarningsScreen(viewModel: GameViewModel) {
     
     // Hitung estimasi (Projected)
     var projectedIncome = earningsData.monthlyBusinessIncome + earningsData.monthlyRentIncome + earningsData.monthlyDividendIncome
-    var projectedExpense = 0L
+    val totalMonthlyDebtObligation = playerState.totalMonthlyDebtObligation
+    var projectedExpense = totalMonthlyDebtObligation
     
     playerState.ownedBusinesses.forEach { owned ->
         val catalogItem = getCatalogItem(owned.catalogId, playerState)
@@ -2216,12 +2217,13 @@ fun EarningsScreen(viewModel: GameViewModel) {
                                 Text(com.example.ui.formatCurrencyRingkas(projectedIncome, useShortFormat), color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
                             }
                             
-                            val profitColor = if (playerState.lastMonthNetProfit >= 0) Color(0xFF4CAF50) else Color(0xFFFF6B6B)
-                            val profitSign = if (playerState.lastMonthNetProfit >= 0) "+" else "-"
+                            val netProfitVal = playerState.lastMonthNetProfit - totalMonthlyDebtObligation
+                            val profitColor = if (netProfitVal >= 0) Color(0xFF4CAF50) else Color(0xFFFF6B6B)
+                            val profitSign = if (netProfitVal >= 0) "+" else "-"
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Net Profit (Bulan)", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                                 Text(
-                                    "$profitSign ${com.example.ui.formatCurrencyRingkas(kotlin.math.abs(playerState.lastMonthNetProfit.toDouble()), useShortFormat)}", 
+                                    "$profitSign ${com.example.ui.formatCurrencyRingkas(kotlin.math.abs(netProfitVal.toDouble()), useShortFormat)}", 
                                     style = MaterialTheme.typography.titleMedium, 
                                     color = profitColor, 
                                     fontWeight = FontWeight.Bold
@@ -2371,7 +2373,7 @@ fun EarningsScreen(viewModel: GameViewModel) {
             Text("Pengeluaran (Expenses)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         
-        if (playerState.ownedBusinesses.isEmpty() && playerState.holdingCompanies.isEmpty() && playerState.rentedHouses.isEmpty()) {
+        if (playerState.ownedBusinesses.isEmpty() && playerState.holdingCompanies.isEmpty() && playerState.rentedHouses.isEmpty() && totalMonthlyDebtObligation == 0L) {
             item {
                 Text("Belum ada pengeluaran rutin.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
             }
@@ -2461,6 +2463,35 @@ fun EarningsScreen(viewModel: GameViewModel) {
                     )
                 }
                 HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
+            }
+            if (totalMonthlyDebtObligation > 0) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.TrendingDown,
+                            contentDescription = null,
+                            tint = Color(0xFFE57373),
+                            modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                        )
+                        Text(
+                            text = "Beban Cicilan Private Equity",
+                            color = Color.LightGray,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "-${com.example.ui.formatCurrencyRingkas(totalMonthlyDebtObligation, useShortFormat)}",
+                            color = Color(0xFFE57373),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
+                }
             }
         }
     }
@@ -3067,6 +3098,32 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                         }
+                    }
+                }
+            }
+
+            // 3b. PRIVATE EQUITY & INVESTORS
+            item {
+                Button(
+                    onClick = { navController.navigate("private_equity") },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.05f), 
+                        contentColor = Color(0xFF00E5FF) 
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.TrendingUp, contentDescription = "Private Equity", modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Private Equity & Investors", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = textGray)
                     }
                 }
             }

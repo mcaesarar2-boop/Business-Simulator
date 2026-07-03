@@ -131,6 +131,18 @@ val defaultLifestyleItems = listOf(
     LifestyleItem(tabCategory = "filantropi", sectionName = "Healthcare", name = "Pusat Riset Medis", price = 1000000L, imgUrl = "", desc = "Mendanai laboratorium penelitian obat langka dan terapi mutakhir.")
 )
 
+enum class FundingType { DEBT, HYBRID, EQUITY }
+
+data class ActiveLoan(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val sectorName: String,
+    val fundingType: FundingType, // Tipe pendanaan
+    val totalLoan: Long,
+    val monthlyPayment: Long, // (Pokok + Bunga) per bulan
+    var remainingMonths: Int,
+    val equityGiven: Double // Persentase saham yang dilepas
+)
+
 data class PlayerState(
     val lastSavedTimeMs: Long = System.currentTimeMillis(),
     val cash: Long = 5000,
@@ -167,6 +179,8 @@ data class PlayerState(
     val customHousingAssets: List<com.example.data.HousingItem>? = null,
     val personalDebt: Long = 0L,
     val companyOwnershipPercent: Double = 100.0,
+    val playerEquityShare: Double = 100.0,
+    val activeInvestorsLoans: List<ActiveLoan> = emptyList(),
     val monthlyCeoSalary: Long = 0L,
     val currentCeoSalaryPercent: Double = 4.0,
     val pendingCeoSalaryPercent: Double? = null,
@@ -305,5 +319,8 @@ fun getCatalogItem(catalogId: String, playerState: PlayerState): BusinessCatalog
     
     return null
 }
+
+val PlayerState.totalOutstandingDebt: Long get() = activeInvestorsLoans.sumOf { it.monthlyPayment * it.remainingMonths }
+val PlayerState.totalMonthlyDebtObligation: Long get() = activeInvestorsLoans.sumOf { it.monthlyPayment }
 
 data class Billionaire(val id: Int, val name: String, val netWorth: Long, val rank: Int = 0)
