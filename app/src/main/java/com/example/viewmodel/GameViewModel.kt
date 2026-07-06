@@ -13,6 +13,138 @@ import android.app.Application
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("tycoon_prefs", android.content.Context.MODE_PRIVATE)
     private val gson = Gson()
+
+    // Cloud Save & Authentication Repositories
+    private val authRepository = com.example.data.AuthRepository()
+    private val saveGameRepository = com.example.data.SaveGameRepository()
+
+    // Cloud Save & Authentication UI status flows
+    private val _cloudSyncProgress = MutableStateFlow(false)
+    val cloudSyncProgress: StateFlow<Boolean> = _cloudSyncProgress.asStateFlow()
+
+    private val _cloudSyncMessage = MutableStateFlow<String?>(null)
+    val cloudSyncMessage: StateFlow<String?> = _cloudSyncMessage.asStateFlow()
+
+    private val _lastSyncTimeMs = MutableStateFlow(prefs.getLong("last_cloud_sync_time", 0L))
+    val lastSyncTimeMs: StateFlow<Long> = _lastSyncTimeMs.asStateFlow()
+
+    fun getCurrentUserEmail(): String? {
+        return authRepository.getCurrentUserEmail()
+    }
+
+    fun isUserLoggedIn(): Boolean {
+        return authRepository.getCurrentUserId() != null
+    }
+
+    fun signUpWithEmail(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            _cloudSyncProgress.value = true
+            _cloudSyncMessage.value = "Mendaftarkan akun..."
+            val result = authRepository.signUp(email, password)
+            _cloudSyncProgress.value = false
+            if (result.isSuccess) {
+                _cloudSyncMessage.value = "Pendaftaran berhasil!"
+                onSuccess()
+            } else {
+                val errMsg = result.exceptionOrNull()?.message ?: "Terjadi kesalahan."
+                _cloudSyncMessage.value = "Pendaftaran gagal: $errMsg"
+                onError(errMsg)
+            }
+        }
+    }
+
+    fun signInWithEmail(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            _cloudSyncProgress.value = true
+            _cloudSyncMessage.value = "Menghubungkan ke server..."
+            val result = authRepository.signIn(email, password)
+            _cloudSyncProgress.value = false
+            if (result.isSuccess) {
+                _cloudSyncMessage.value = "Koneksi berhasil terjalin!"
+                onSuccess()
+                restoreGameFromCloud()
+            } else {
+                val errMsg = result.exceptionOrNull()?.message ?: "Terjadi kesalahan."
+                _cloudSyncMessage.value = "Login gagal: $errMsg"
+                onError(errMsg)
+            }
+        }
+    }
+
+    fun signOut() {
+        authRepository.signOut()
+        _cloudSyncMessage.value = "Keluar dari akun."
+    }
+
+    fun backupGameToCloud() {
+        val userId = authRepository.getCurrentUserId() ?: return
+        viewModelScope.launch {
+            _cloudSyncProgress.value = true
+            _cloudSyncMessage.value = "Menyinkronkan data ke Cloud..."
+            
+            val currentState = _playerState.value
+            val totalFortuneVal = currentState.calculatePlayerBusinessWealth() + currentState.privateBalance
+            
+            val gameState = com.example.data.PlayerGameState(
+                userId = userId,
+                lastSavedMs = System.currentTimeMillis(),
+                privateBalance = currentState.privateBalance,
+                totalFortune = totalFortuneVal,
+                inGameMonth = currentState.inGameMonth,
+                inGameYear = currentState.inGameYear,
+                ownedBusinessesCount = currentState.ownedBusinesses.size,
+                fullStateJson = exportSaveGame()
+            )
+
+            val result = saveGameRepository.saveGameToCloud(userId, gameState)
+            _cloudSyncProgress.value = false
+            if (result.isSuccess) {
+                _cloudSyncMessage.value = "Sinkronisasi berhasil!"
+                _lastSyncTimeMs.value = System.currentTimeMillis()
+                prefs.edit().putLong("last_cloud_sync_time", _lastSyncTimeMs.value).apply()
+            } else {
+                val errMsg = result.exceptionOrNull()?.message ?: "Koneksi terputus."
+                _cloudSyncMessage.value = "Sinkronisasi gagal: $errMsg"
+            }
+        }
+    }
+
+    fun restoreGameFromCloud() {
+        val userId = authRepository.getCurrentUserId() ?: return
+        viewModelScope.launch {
+            _cloudSyncProgress.value = true
+            _cloudSyncMessage.value = "Memuat data dari Cloud..."
+            val result = saveGameRepository.loadGameFromCloud(userId)
+            _cloudSyncProgress.value = false
+            if (result.isSuccess) {
+                val gameState = result.getOrThrow()
+                if (gameState.fullStateJson.isNotEmpty()) {
+                    val importSuccess = importSaveGame(gameState.fullStateJson)
+                    if (importSuccess) {
+                        _cloudSyncMessage.value = "Restorasi berhasil!"
+                        _lastSyncTimeMs.value = gameState.lastSavedMs
+                        prefs.edit().putLong("last_cloud_sync_time", _lastSyncTimeMs.value).apply()
+                    } else {
+                        _cloudSyncMessage.value = "Gagal memproses data game."
+                    }
+                } else {
+                    _cloudSyncMessage.value = "Data simpanan kosong."
+                }
+            } else {
+                val errMsg = result.exceptionOrNull()?.message ?: "Koneksi terputus."
+                _cloudSyncMessage.value = "Gagal memuat: $errMsg"
+            }
+        }
+    }
+
+    private suspend fun startCloudAutoSaveLoop() {
+        while (true) {
+            delay(300_000L) // 5 minutes
+            if (isUserLoggedIn()) {
+                backupGameToCloud()
+            }
+        }
+    }
     
     // helper: return <NewCompanyCash, AmountForGlobal>
     fun processDecentralizedCashFlow(netProfit: Long, currentCompanyCash: Double): Pair<Double, Long> {
@@ -498,6 +630,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         prefs.edit().putString("player_state", gson.toJson(state.copy(lastSavedTimeMs = System.currentTimeMillis()))).apply()
+        if (isUserLoggedIn()) {
+            backupGameToCloud()
+        }
     }
     val monthProgress: kotlinx.coroutines.flow.StateFlow<Float> = _monthProgress.asStateFlow()
 
@@ -2201,7 +2336,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     ) { state, stockList, realEstateMarket, cryptoList ->
         var business = 0L
         state.ownedBusinesses.forEach { owned ->
-            business += owned.calculateGrossRevenue()
+            if (owned.parentId.isNullOrEmpty()) {
+                business += owned.calculateGrossRevenue()
+            }
         }
         state.holdingCompanies.forEach { holding ->
             business += com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(holding, state)
@@ -2244,6 +2381,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     init { 
         try {
+            if (com.google.firebase.FirebaseApp.getApps(application).isEmpty()) {
+                try {
+                    com.google.firebase.FirebaseApp.initializeApp(application)
+                } catch (e: Exception) {
+                    val options = com.google.firebase.FirebaseOptions.Builder()
+                        .setApplicationId("1:354378335041:android:b37d60e8709c411f809c41")
+                        .setApiKey("AIzaSyDummyKeyForGracefulDegradation")
+                        .setProjectId("mega-holding-simulator")
+                        .build()
+                    com.google.firebase.FirebaseApp.initializeApp(application, options)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FirebaseInit", "Error: ${e.message}")
+        }
+
+        try {
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     // Safe Initialization inside IO Thread
@@ -2283,6 +2437,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         startStockMarketLoop()
                         startCryptoMarketLoop()
                         startTycoonMarketLoop()
+                        launch {
+                            startCloudAutoSaveLoop()
+                        }
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("AppDebug", "Init error in IO thread: ${e.message}")

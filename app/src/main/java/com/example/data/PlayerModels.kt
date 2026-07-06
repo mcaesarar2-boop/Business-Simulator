@@ -330,28 +330,47 @@ val PlayerState.totalLiabilities: Long get() {
     return lombardDebt + investorDebt
 }
 
+fun PlayerState.calculateMegaHoldingValuation(): Long {
+    // 1. Bisnis yang sudah masuk holding
+    val holdingsValue = holdingCompanies.sumOf { it.calculateHoldingValuation() }
+    
+    // 2. Bisnis yang BELUM masuk holding (Independent)
+    val independentBusinessValue = ownedBusinesses.filter { it.parentId.isNullOrEmpty() }.sumOf { it.calculateBusinessValuation() }
+    
+    // 3. Ditambah cash pool Mega Holding (retainedEarnings)
+    return holdingsValue + independentBusinessValue + retainedEarnings
+}
+
+val PlayerState.playerBusinessWealth: Long get() {
+    val ownershipDecimal = companyOwnershipPercent / 100.0
+    return (calculateMegaHoldingValuation() * ownershipDecimal).toLong()
+}
+
 // 2. TOTAL BUSINESS VALUATION (Murni milik pemain)
 fun PlayerState.calculatePlayerBusinessWealth(): Long {
-    val directWealth = ownedBusinesses.sumOf { it.calculateTotalValuation() }
-    val holdingWealth = holdingCompanies.sumOf { holding ->
-        val ownershipDecimal = holding.ownershipPercentage / 100.0
-        val holdingValuation = com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, this)
-        (holdingValuation * ownershipDecimal).toLong()
-    }
-    val rawMegaValuation = directWealth + holdingWealth
-    return (rawMegaValuation * (companyOwnershipPercent / 100.0)).toLong()
+    return playerBusinessWealth
 }
 
 val PlayerState.rawMegaHoldingValuation: Long get() {
-    val directWealth = ownedBusinesses.sumOf { it.calculateTotalValuation() }
-    val holdingWealth = holdingCompanies.sumOf { holding ->
-        com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, this)
-    }
-    return directWealth + holdingWealth
+    return calculateMegaHoldingValuation()
 }
 
 val PlayerState.playerBusinessValuation: Long get() {
-    return calculatePlayerBusinessWealth()
+    return playerBusinessWealth
+}
+
+fun PlayerState.totalFortune(
+    stockList: List<StockItem> = emptyList(),
+    cryptoList: List<CryptoItem> = emptyList(),
+    realEstateMarket: List<PropertyItem> = emptyList(),
+    collectionList: List<CollectionItem> = emptyList(),
+    preciousMetalsList: List<PreciousMetal> = emptyList()
+): Long {
+    return netAssetValue(stockList, cryptoList, realEstateMarket, collectionList, preciousMetalsList)
+}
+
+val PlayerState.totalFortune: Long get() {
+    return netAssetValue()
 }
 
 // 3. TOTAL INVESTASI LIKUID (Kertas/Digital)

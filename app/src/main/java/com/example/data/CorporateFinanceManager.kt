@@ -9,15 +9,14 @@ object CorporateFinanceManager {
         holding: HoldingCompany,
         playerState: PlayerState? = null
     ): Long {
-        return holding.subsidiaries.sumOf { it.calculateNetMargin() }
+        return holding.calculateHoldingMargin()
     }
 
     fun calculateHoldingValuation(
         holding: HoldingCompany,
         playerState: PlayerState? = null
     ): Long {
-        val subsValuation = holding.subsidiaries.sumOf { it.calculateTotalValuation() }
-        return subsValuation + holding.holdingCash.toLong()
+        return holding.calculateHoldingValuation()
     }
 
     fun calculateHoldingMonthlyRevenue(

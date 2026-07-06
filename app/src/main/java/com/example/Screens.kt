@@ -421,10 +421,12 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
 
     var totalProjectedIncome = 0L
     playerState.ownedBusinesses.forEach { owned ->
-        val catalogItem = getCatalogItem(owned.catalogId, playerState)
-        if (catalogItem != null) {
-            val (rev, _) = getBusinessStats(owned, catalogItem, playerState)
-            totalProjectedIncome += rev
+        if (owned.parentId.isNullOrEmpty()) {
+            val catalogItem = getCatalogItem(owned.catalogId, playerState)
+            if (catalogItem != null) {
+                val (rev, _) = getBusinessStats(owned, catalogItem, playerState)
+                totalProjectedIncome += rev
+            }
         }
     }
     playerState.holdingCompanies.forEach { holding ->
@@ -2124,12 +2126,12 @@ fun EarningsScreen(viewModel: GameViewModel) {
     val earningsData by viewModel.earningsReport.collectAsState()
     
     // Hitung estimasi (Projected)
-    var projectedIncome = playerState.ownedBusinesses.sumOf { it.calculateGrossRevenue() } +
+    var projectedIncome = playerState.ownedBusinesses.filter { it.parentId.isNullOrEmpty() }.sumOf { it.calculateGrossRevenue() } +
             playerState.holdingCompanies.sumOf { com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(it, playerState) } +
             earningsData.monthlyRentIncome + earningsData.monthlyDividendIncome
     val totalMonthlyDebtObligation = playerState.totalMonthlyDebtObligation
     var projectedExpense = totalMonthlyDebtObligation +
-            playerState.ownedBusinesses.sumOf { it.calculateTotalExpenses() } +
+            playerState.ownedBusinesses.filter { it.parentId.isNullOrEmpty() }.sumOf { it.calculateTotalExpenses() } +
             playerState.holdingCompanies.sumOf { com.example.data.CorporateFinanceManager.calculateHoldingMonthlyMaintenance(it, playerState) } +
             playerState.rentedHouses.sumOf { it.monthlyRent.toLong() }
     
@@ -3317,6 +3319,10 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
         
         var showResetProgressConfirm by remember { mutableStateOf(false) }
 
+        // Cloud save login inputs
+        var emailInput by remember { mutableStateOf("") }
+        var passwordInput by remember { mutableStateOf("") }
+
         // States for Adding Real Estate
         var customPropName by remember { mutableStateOf("") }
         var customPropLocation by remember { mutableStateOf("") }
@@ -3495,7 +3501,222 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
 
                             // DATA BACKUP & RECOVERY
                             Text("DATA BACKUP & RECOVERY", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            
+
+                            // CLOUD BACKUP & SYNC (Firebase Firestore & Auth)
+                            val isCloudSyncInProgress by viewModel.cloudSyncProgress.collectAsState()
+                            val cloudSyncMessage by viewModel.cloudSyncMessage.collectAsState()
+                            val lastSyncTimeMs by viewModel.lastSyncTimeMs.collectAsState()
+                            val isUserLoggedIn = viewModel.isUserLoggedIn()
+                            val userEmail = viewModel.getCurrentUserEmail() ?: ""
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF1E2330).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)), RoundedCornerShape(16.dp))
+                                    .padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "☁️ Cloud Backup & Sync",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        )
+                                        if (isCloudSyncInProgress) {
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                color = gold,
+                                                strokeWidth = 2.dp
+                                            )
+                                        }
+                                    }
+
+                                    // Status Akun
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isUserLoggedIn) neonGreen else Color.Red)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (isUserLoggedIn) "Terhubung: $userEmail" else "Status: Belum Terhubung ke Cloud",
+                                            color = if (isUserLoggedIn) Color.White else textGray,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    // Sync messages / last updated
+                                    cloudSyncMessage?.let { msg ->
+                                        Text(
+                                            text = msg,
+                                            color = if (msg.contains("berhasil") || msg.contains("terjalin")) neonGreen else Color(0xFFFFA726),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    if (lastSyncTimeMs > 0L) {
+                                        val timeAgo = run {
+                                            val diff = System.currentTimeMillis() - lastSyncTimeMs
+                                            if (diff < 60_000) "Baru saja"
+                                            else if (diff < 3600_000) "${diff / 60000} menit yang lalu"
+                                            else if (diff < 86400_000) "${diff / 3600000} jam yang lalu"
+                                            else "${diff / 86400000} hari yang lalu"
+                                        }
+                                        Text(
+                                            text = "Terakhir disinkronkan: $timeAgo",
+                                            color = textGray,
+                                            fontSize = 11.sp
+                                        )
+                                    } else {
+                                        if (isUserLoggedIn) {
+                                            Text(
+                                                text = "Terakhir disinkronkan: Belum pernah",
+                                                color = textGray,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+
+                                    if (!isUserLoggedIn) {
+                                        // Email & Password Fields
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(
+                                                value = emailInput,
+                                                onValueChange = { emailInput = it },
+                                                label = { Text("Email", color = textGray, fontSize = 12.sp) },
+                                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White,
+                                                    focusedBorderColor = gold,
+                                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                                    focusedLabelColor = gold
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                singleLine = true
+                                            )
+
+                                            OutlinedTextField(
+                                                value = passwordInput,
+                                                onValueChange = { passwordInput = it },
+                                                label = { Text("Password", color = textGray, fontSize = 12.sp) },
+                                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White,
+                                                    focusedBorderColor = gold,
+                                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                                    focusedLabelColor = gold
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                singleLine = true,
+                                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    viewModel.signInWithEmail(
+                                                        emailInput,
+                                                        passwordInput,
+                                                        onSuccess = {
+                                                            emailInput = ""
+                                                            passwordInput = ""
+                                                        },
+                                                        onError = {}
+                                                    )
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C3E50)),
+                                                modifier = Modifier.weight(1f).height(44.dp),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text("Masuk", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    viewModel.signUpWithEmail(
+                                                        emailInput,
+                                                        passwordInput,
+                                                        onSuccess = {
+                                                            emailInput = ""
+                                                            passwordInput = ""
+                                                        },
+                                                        onError = {}
+                                                    )
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B2A4A)),
+                                                modifier = Modifier.weight(1f).height(44.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                border = BorderStroke(1.dp, gold.copy(alpha = 0.5f))
+                                            ) {
+                                                Text("Daftar", color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        Text(
+                                            text = "⚠️ Silakan masuk/daftar terlebih dahulu untuk menikmati pencadangan cloud otomatis gratis.",
+                                            color = Color(0xFFFF6B6B),
+                                            fontSize = 10.sp,
+                                            lineHeight = 12.sp
+                                        )
+                                    } else {
+                                        // Backup & Restore & Log Out Buttons
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Button(
+                                                    onClick = { viewModel.backupGameToCloud() },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F4E79)),
+                                                    modifier = Modifier.weight(1f).height(44.dp),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    border = BorderStroke(1.dp, gold.copy(alpha = 0.3f))
+                                                ) {
+                                                    Text("☁️ Backup Cloud", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+
+                                                Button(
+                                                    onClick = { viewModel.restoreGameFromCloud() },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF196F3D)),
+                                                    modifier = Modifier.weight(1f).height(44.dp),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text("📥 Restore Cloud", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+
+                                            Button(
+                                                onClick = { viewModel.signOut() },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E333F)),
+                                                modifier = Modifier.fillMaxWidth().height(40.dp),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text("Keluar Akun", color = textGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text("LOCAL BACKUP & OFFLINE PORT", color = textGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
                             showBackupMessage?.let { msg ->
                                 Text(msg, color = if(msg.contains("berhasil", ignoreCase = true)) neonGreen else Color.Red, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }

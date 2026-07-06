@@ -395,15 +395,14 @@ enum class RoomClassStrategy(val title: String, val priceMultiplier: Double, val
 
 fun getSectorMultiplier(sector: String): Int {
     return when (sector.uppercase()) {
-        "TECH", "APP DEV", "AI" -> 25 // Valuasi tinggi
+        "TECH", "APP DEV", "AI" -> 25 
         "ENTERTAINMENT", "MEDIA", "FILM", "TV STATION" -> 18
         "FINANCE", "BANK SWASTA", "PRIVATE WEALTH" -> 15
-        "HEALTHCARE", "HOSPITAL" -> 14
-        "AVIATION", "CRUISE LINE", "THEME PARK", "RESORT" -> 12 // Padat karya/aset
-        "RETAIL", "SUPERMARKET", "MINIMARKET" -> 10
-        "CONSTRUCTION", "REAL ESTATE" -> 10
-        "CULINARY", "F&B", "COFFEE SHOP" -> 8 // Valuasi standar
-        "CONTENT CREATOR" -> 5 // Valuasi rendah/personal
+        "HEALTHCARE", "HOSPITAL", "AVIATION", "CRUISE LINE", "THEME PARK", "RESORT" -> 12
+        "RETAIL", "SUPERMARKET", "MINIMARKET", "MEGA DEPT STORE" -> 10
+        "CONSTRUCTION", "REAL ESTATE", "LOGISTICS", "KURIR EXPRESS" -> 10
+        "CULINARY", "F&B RESTAURANT", "COFFEE SHOP" -> 8 
+        "CONTENT CREATOR" -> 5 
         else -> 10
     }
 }
@@ -411,19 +410,22 @@ fun getSectorMultiplier(sector: String): Int {
 fun getSectorForCatalogId(catalogId: String): String {
     return when (catalogId) {
         "content_creator" -> "CONTENT CREATOR"
-        "fine_dining" -> "CULINARY"
+        "fine_dining" -> "F&B RESTAURANT"
         "mid_cafe" -> "COFFEE SHOP"
         "construction" -> "CONSTRUCTION"
         "upper_realestate" -> "REAL ESTATE"
-        "shop_local" -> "RETAIL"
+        "shop_local" -> "MINIMARKET"
         "shop_small_chain" -> "MINIMARKET"
         "shop_large_chain" -> "SUPERMARKET"
-        "shop_department_store" -> "RETAIL"
-        "mid_logistics" -> "RETAIL"
+        "shop_department_store" -> "MEGA DEPT STORE"
+        "mid_logistics" -> "LOGISTICS"
         "upper_tech" -> "TECH"
         "tycoon_bank" -> "BANK SWASTA"
         "tycoon_corp" -> "FINANCE"
-        "media_print", "media_radio", "media_tv", "media_production" -> "MEDIA"
+        "media_print" -> "MEDIA"
+        "media_radio" -> "ENTERTAINMENT"
+        "media_tv" -> "TV STATION"
+        "media_production" -> "FILM"
         "healthcare" -> "HEALTHCARE"
         "aviation_group" -> "AVIATION"
         "theme_park_holding" -> "THEME PARK"
@@ -441,36 +443,49 @@ interface BusinessEntity {
 
     fun calculateGrossRevenue(): Long 
     fun calculateTotalExpenses(): Long 
-    
+
+    val internalCash: Long get() {
+        return if (this is OwnedBusiness) {
+            if (this.catalogId == "content_creator") this.contentCreatorCash else this.companyCash.toLong()
+        } else {
+            0L
+        }
+    }
+
+    val sector: String get() {
+        return if (this is OwnedBusiness) {
+            getSectorForCatalogId(this.catalogId)
+        } else {
+            ""
+        }
+    }
+
     fun calculateNetIncome(): Long {
-        return calculateGrossRevenue() - calculateTotalExpenses()
+        return calculateNetMargin()
     }
 
     fun calculateNetMargin(): Long {
         return calculateGrossRevenue() - calculateTotalExpenses()
     }
 
-    fun calculateValuation(): Long {
+    fun calculateBusinessValuation(): Long {
         val annualMargin = calculateNetMargin() * 12
-        val sectorStr = getSectorForCatalogId(if (this is OwnedBusiness) this.catalogId else "")
-        val peRatio = getSectorMultiplier(sectorStr)
+        val peRatio = getSectorMultiplier(this.sector)
         
-        val businessValue = if (annualMargin > 0) {
-            (annualMargin * peRatio)
+        val baseValue = if (annualMargin > 0) {
+            annualMargin * peRatio
         } else {
-            (calculateGrossRevenue() * 12 * 2) // Fallback valuasi aset
+            calculateGrossRevenue() * 12 * 2 // Fallback jika merugi
         }
-        
-        val internalCashVal = if (this is OwnedBusiness) {
-            if (this.catalogId == "content_creator") this.contentCreatorCash else this.companyCash.toLong()
-        } else {
-            0L
-        }
-        return businessValue + internalCashVal
+        return baseValue + this.internalCash
+    }
+
+    fun calculateValuation(): Long {
+        return calculateBusinessValuation()
     }
 
     fun calculateTotalValuation(): Long {
-        return calculateValuation()
+        return calculateBusinessValuation()
     }
 
     fun calculateOwnedValuation(): Long {
