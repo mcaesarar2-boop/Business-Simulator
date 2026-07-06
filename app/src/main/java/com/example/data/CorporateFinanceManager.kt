@@ -5,55 +5,33 @@ object CorporateFinanceManager {
     // Synergy Multiplier (+15% bonus)
     const val SYNERGY_MULTIPLIER = 1.15f
 
+    fun calculateHoldingMargin(
+        holding: HoldingCompany,
+        playerState: PlayerState? = null
+    ): Long {
+        return holding.subsidiaries.sumOf { it.calculateNetMargin() }
+    }
+
     fun calculateHoldingValuation(
         holding: HoldingCompany,
-        playerState: PlayerState
+        playerState: PlayerState? = null
     ): Long {
-        var totalValuation = 0L
-        holding.subsidiaries.forEach { sub ->
-            val catalogItem = getCatalogItem(sub.catalogId, playerState)
-            if (catalogItem != null) {
-                totalValuation += getBusinessValuation(sub, catalogItem)
-            }
-        }
-        return (totalValuation * SYNERGY_MULTIPLIER).toLong()
+        val subsValuation = holding.subsidiaries.sumOf { it.calculateTotalValuation() }
+        return subsValuation + holding.holdingCash.toLong()
     }
 
     fun calculateHoldingMonthlyRevenue(
         holding: HoldingCompany,
-        playerState: PlayerState
+        playerState: PlayerState? = null
     ): Long {
-        var totalRevenue = 0L
-        holding.subsidiaries.forEach { sub ->
-            val catalogItem = getCatalogItem(sub.catalogId, playerState)
-            if (catalogItem != null) {
-                val (baseRev, _) = getBusinessStats(sub, catalogItem, playerState) // We take gross revenue here for calculation, or net profit? Instructions: "Total Pendapatan Semua Divisi"
-                val rev = if (catalogItem.isFluctuating) {
-                    (baseRev / 1.5).toLong() // Average projection
-                } else {
-                    baseRev
-                }
-                totalRevenue += rev
-            }
-        }
-        // Ownership percentage applies to the overall subsidiary revenue
-        return (totalRevenue * SYNERGY_MULTIPLIER * (holding.ownershipPercentage / 100.0f)).toLong()
+        return holding.subsidiaries.sumOf { it.calculateGrossRevenue() }
     }
 
     fun calculateHoldingMonthlyMaintenance(
         holding: HoldingCompany,
-        playerState: PlayerState
+        playerState: PlayerState? = null
     ): Long {
-        var totalMaint = 0L
-        holding.subsidiaries.forEach { sub ->
-            val catalogItem = getCatalogItem(sub.catalogId, playerState)
-            if (catalogItem != null) {
-                val (_, baseMaint) = getBusinessStats(sub, catalogItem, playerState)
-                totalMaint += baseMaint
-            }
-        }
-        // Maintenance is also split according to ownership? Usually yes, or holding pays full. Let's apply ownership
-        return (totalMaint * SYNERGY_MULTIPLIER * (holding.ownershipPercentage / 100.0f)).toLong()
+        return holding.subsidiaries.sumOf { it.calculateTotalExpenses() }
     }
 
     fun processIPO(

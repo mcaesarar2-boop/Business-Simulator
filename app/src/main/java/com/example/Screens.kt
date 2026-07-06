@@ -772,7 +772,7 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
                 items(playerState.holdingCompanies) { holding ->
                     com.example.ui.HoldingItemCard(
                         holding = holding,
-                        rev = com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(holding, playerState),
+                        rev = com.example.data.CorporateFinanceManager.calculateHoldingMargin(holding, playerState),
                         useShortFormat = useShortFormat,
                         onClick = { navController.navigate("holding_dashboard/${holding.instanceId}") }
                     )
@@ -2124,26 +2124,14 @@ fun EarningsScreen(viewModel: GameViewModel) {
     val earningsData by viewModel.earningsReport.collectAsState()
     
     // Hitung estimasi (Projected)
-    var projectedIncome = earningsData.monthlyBusinessIncome + earningsData.monthlyRentIncome + earningsData.monthlyDividendIncome
+    var projectedIncome = playerState.ownedBusinesses.sumOf { it.calculateGrossRevenue() } +
+            playerState.holdingCompanies.sumOf { com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(it, playerState) } +
+            earningsData.monthlyRentIncome + earningsData.monthlyDividendIncome
     val totalMonthlyDebtObligation = playerState.totalMonthlyDebtObligation
-    var projectedExpense = totalMonthlyDebtObligation
-    
-    playerState.ownedBusinesses.forEach { owned ->
-        val catalogItem = getCatalogItem(owned.catalogId, playerState)
-        if (catalogItem != null) {
-            val (_, maint) = getBusinessStats(owned, catalogItem, playerState)
-            projectedExpense += maint
-        }
-    }
-    
-    playerState.holdingCompanies.forEach { holding ->
-        val maint = com.example.data.CorporateFinanceManager.calculateHoldingMonthlyMaintenance(holding, playerState)
-        projectedExpense += maint
-    }
-    
-    playerState.rentedHouses.forEach { rented ->
-        projectedExpense += rented.monthlyRent
-    }
+    var projectedExpense = totalMonthlyDebtObligation +
+            playerState.ownedBusinesses.sumOf { it.calculateTotalExpenses() } +
+            playerState.holdingCompanies.sumOf { com.example.data.CorporateFinanceManager.calculateHoldingMonthlyMaintenance(it, playerState) } +
+            playerState.rentedHouses.sumOf { it.monthlyRent.toLong() }
     
     LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
@@ -2249,36 +2237,33 @@ fun EarningsScreen(viewModel: GameViewModel) {
             }
         } else {
             items(playerState.ownedBusinesses) { owned ->
-                val catalogItem = getCatalogItem(owned.catalogId, playerState)
-                if (catalogItem != null) {
-                    val (rev, _) = getBusinessStats(owned, catalogItem, playerState)
-                    val revStr = if (catalogItem.isFluctuating) "~${com.example.ui.formatCurrencyRingkas(rev, useShortFormat)}" else com.example.ui.formatCurrencyRingkas(rev, useShortFormat)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.TrendingUp,
-                            contentDescription = null,
-                            tint = Color.Green,
-                            modifier = Modifier.size(24.dp).padding(end = 8.dp)
-                        )
-                        Text(
-                            text = "${catalogItem.name} (Lvl ${owned.level})",
-                            color = Color.LightGray,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "+$revStr",
-                            color = Color.Green,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
+                val rev = owned.calculateGrossRevenue()
+                val revStr = com.example.ui.formatCurrencyRingkas(rev, useShortFormat)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.TrendingUp,
+                        contentDescription = null,
+                        tint = Color.Green,
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    )
+                    Text(
+                        text = "${owned.name} (Lvl ${owned.level})",
+                        color = Color.LightGray,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "+$revStr",
+                        color = Color.Green,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
                 }
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
             }
             items(playerState.holdingCompanies) { holding ->
                 Row(
@@ -2298,7 +2283,7 @@ fun EarningsScreen(viewModel: GameViewModel) {
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    val rev = com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(holding, playerState)
+                    val rev = com.example.data.CorporateFinanceManager.calculateHoldingMargin(holding, playerState)
                     Text(
                         text = "+${com.example.ui.formatCurrencyRingkas(rev, useShortFormat)}",
                         color = Color.Green,
@@ -2373,41 +2358,38 @@ fun EarningsScreen(viewModel: GameViewModel) {
             Text("Pengeluaran (Expenses)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         
-        if (playerState.ownedBusinesses.isEmpty() && playerState.holdingCompanies.isEmpty() && playerState.rentedHouses.isEmpty() && totalMonthlyDebtObligation == 0L) {
+        if (playerState.ownedBusinesses.isEmpty() && playerState.holdingCompanies.isEmpty() && playerState.rentedHouses.isEmpty()) {
             item {
                 Text("Belum ada pengeluaran rutin.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
             }
         } else {
             items(playerState.ownedBusinesses) { owned ->
-                val catalogItem = getCatalogItem(owned.catalogId, playerState)
-                if (catalogItem != null) {
-                    val (_, maint) = getBusinessStats(owned, catalogItem, playerState)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.TrendingDown,
-                            contentDescription = null,
-                            tint = Color(0xFFE57373),
-                            modifier = Modifier.size(24.dp).padding(end = 8.dp)
-                        )
-                        Text(
-                            text = "${catalogItem.name} (Maintenance)",
-                            color = Color.LightGray,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "-${com.example.ui.formatCurrencyRingkas(maint, useShortFormat)}",
-                            color = Color(0xFFE57373),
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
+                val maint = owned.calculateTotalExpenses()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.TrendingDown,
+                        contentDescription = null,
+                        tint = Color(0xFFE57373),
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    )
+                    Text(
+                        text = "${owned.name} (Maintenance)",
+                        color = Color.LightGray,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "-${com.example.ui.formatCurrencyRingkas(maint, useShortFormat)}",
+                        color = Color(0xFFE57373),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
                 }
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
             }
             items(playerState.holdingCompanies) { holding ->
                 val maint = com.example.data.CorporateFinanceManager.calculateHoldingMonthlyMaintenance(holding, playerState)
@@ -2464,34 +2446,39 @@ fun EarningsScreen(viewModel: GameViewModel) {
                 }
                 HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
             }
-            if (totalMonthlyDebtObligation > 0) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.TrendingDown,
-                            contentDescription = null,
-                            tint = Color(0xFFE57373),
-                            modifier = Modifier.size(24.dp).padding(end = 8.dp)
-                        )
-                        Text(
-                            text = "Beban Cicilan Private Equity",
-                            color = Color.LightGray,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "-${com.example.ui.formatCurrencyRingkas(totalMonthlyDebtObligation, useShortFormat)}",
-                            color = Color(0xFFE57373),
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
+        }
+
+        if (totalMonthlyDebtObligation > 0) {
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Beban Keuangan/Investor", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.TrendingDown,
+                        contentDescription = null,
+                        tint = Color(0xFFE57373),
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    )
+                    Text(
+                        text = "Beban Cicilan Private Equity",
+                        color = Color.LightGray,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "-${com.example.ui.formatCurrencyRingkas(totalMonthlyDebtObligation, useShortFormat)}",
+                        color = Color(0xFFE57373),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
                 }
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f), thickness = 0.5.dp)
             }
         }
     }

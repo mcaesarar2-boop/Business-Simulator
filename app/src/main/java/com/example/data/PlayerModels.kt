@@ -331,22 +331,27 @@ val PlayerState.totalLiabilities: Long get() {
 }
 
 // 2. TOTAL BUSINESS VALUATION (Murni milik pemain)
+fun PlayerState.calculatePlayerBusinessWealth(): Long {
+    val directWealth = ownedBusinesses.sumOf { it.calculateTotalValuation() }
+    val holdingWealth = holdingCompanies.sumOf { holding ->
+        val ownershipDecimal = holding.ownershipPercentage / 100.0
+        val holdingValuation = com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, this)
+        (holdingValuation * ownershipDecimal).toLong()
+    }
+    val rawMegaValuation = directWealth + holdingWealth
+    return (rawMegaValuation * (companyOwnershipPercent / 100.0)).toLong()
+}
+
 val PlayerState.rawMegaHoldingValuation: Long get() {
-    val totalDirectBusinessValuation = ownedBusinesses.sumOf { owned ->
-        val cat = getCatalogItem(owned.catalogId, this)
-        if (cat != null) getBusinessValuation(owned, cat) else 0L
+    val directWealth = ownedBusinesses.sumOf { it.calculateTotalValuation() }
+    val holdingWealth = holdingCompanies.sumOf { holding ->
+        com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, this)
     }
-    val totalSubsidiaryValuation = holdingCompanies.sumOf { holding ->
-        holding.subsidiaries.sumOf { sub ->
-            val cat = getCatalogItem(sub.catalogId, this)
-            if (cat != null) getBusinessValuation(sub, cat) else 0L
-        }
-    }
-    return totalDirectBusinessValuation + totalSubsidiaryValuation
+    return directWealth + holdingWealth
 }
 
 val PlayerState.playerBusinessValuation: Long get() {
-    return (rawMegaHoldingValuation * (companyOwnershipPercent / 100.0)).toLong()
+    return calculatePlayerBusinessWealth()
 }
 
 // 3. TOTAL INVESTASI LIKUID (Kertas/Digital)

@@ -393,6 +393,119 @@ enum class RoomClassStrategy(val title: String, val priceMultiplier: Double, val
     PRESIDENTIAL("Presidential / Penthouse", 12.0, 150)
 }
 
+fun getSectorMultiplier(sector: String): Int {
+    return when (sector.uppercase()) {
+        "TECH", "APP DEV", "AI" -> 25 // Valuasi tinggi
+        "ENTERTAINMENT", "MEDIA", "FILM", "TV STATION" -> 18
+        "FINANCE", "BANK SWASTA", "PRIVATE WEALTH" -> 15
+        "HEALTHCARE", "HOSPITAL" -> 14
+        "AVIATION", "CRUISE LINE", "THEME PARK", "RESORT" -> 12 // Padat karya/aset
+        "RETAIL", "SUPERMARKET", "MINIMARKET" -> 10
+        "CONSTRUCTION", "REAL ESTATE" -> 10
+        "CULINARY", "F&B", "COFFEE SHOP" -> 8 // Valuasi standar
+        "CONTENT CREATOR" -> 5 // Valuasi rendah/personal
+        else -> 10
+    }
+}
+
+fun getSectorForCatalogId(catalogId: String): String {
+    return when (catalogId) {
+        "content_creator" -> "CONTENT CREATOR"
+        "fine_dining" -> "CULINARY"
+        "mid_cafe" -> "COFFEE SHOP"
+        "construction" -> "CONSTRUCTION"
+        "upper_realestate" -> "REAL ESTATE"
+        "shop_local" -> "RETAIL"
+        "shop_small_chain" -> "MINIMARKET"
+        "shop_large_chain" -> "SUPERMARKET"
+        "shop_department_store" -> "RETAIL"
+        "mid_logistics" -> "RETAIL"
+        "upper_tech" -> "TECH"
+        "tycoon_bank" -> "BANK SWASTA"
+        "tycoon_corp" -> "FINANCE"
+        "media_print", "media_radio", "media_tv", "media_production" -> "MEDIA"
+        "healthcare" -> "HEALTHCARE"
+        "aviation_group" -> "AVIATION"
+        "theme_park_holding" -> "THEME PARK"
+        "hospitality_holding" -> "RESORT"
+        "cruise_line_holding" -> "CRUISE LINE"
+        else -> "RETAIL"
+    }
+}
+
+interface BusinessEntity {
+    val id: String
+    val name: String
+    val sectorMultiplier: Float
+    val ownershipPercent: Double
+
+    fun calculateGrossRevenue(): Long 
+    fun calculateTotalExpenses(): Long 
+    
+    fun calculateNetIncome(): Long {
+        return calculateGrossRevenue() - calculateTotalExpenses()
+    }
+
+    fun calculateNetMargin(): Long {
+        return calculateGrossRevenue() - calculateTotalExpenses()
+    }
+
+    fun calculateValuation(): Long {
+        val annualMargin = calculateNetMargin() * 12
+        val sectorStr = getSectorForCatalogId(if (this is OwnedBusiness) this.catalogId else "")
+        val peRatio = getSectorMultiplier(sectorStr)
+        
+        val businessValue = if (annualMargin > 0) {
+            (annualMargin * peRatio)
+        } else {
+            (calculateGrossRevenue() * 12 * 2) // Fallback valuasi aset
+        }
+        
+        val internalCashVal = if (this is OwnedBusiness) {
+            if (this.catalogId == "content_creator") this.contentCreatorCash else this.companyCash.toLong()
+        } else {
+            0L
+        }
+        return businessValue + internalCashVal
+    }
+
+    fun calculateTotalValuation(): Long {
+        return calculateValuation()
+    }
+
+    fun calculateOwnedValuation(): Long {
+        return (calculateTotalValuation() * (ownershipPercent / 100.0)).toLong()
+    }
+}
+
+fun getCatalogNameForId(catalogId: String): String {
+    return when (catalogId) {
+        "content_creator" -> "Content Creator"
+        "fine_dining" -> "F&B Restaurant Chain"
+        "construction" -> "Construction Firm"
+        "shop_local" -> "Toko Kelontong"
+        "shop_small_chain" -> "Minimarket"
+        "shop_large_chain" -> "Supermarket"
+        "shop_department_store" -> "Mega Dept Store"
+        "mid_cafe" -> "Coffee Shop"
+        "mid_logistics" -> "Kurir Express"
+        "upper_tech" -> "App Dev"
+        "upper_realestate" -> "Komplek Apartment"
+        "tycoon_bank" -> "Bank Swasta"
+        "tycoon_corp" -> "Konglomerasi Multinasional"
+        "media_print" -> "Print & Digital Media"
+        "media_radio" -> "Mega Event Organizer"
+        "media_tv" -> "TV Station"
+        "media_production" -> "Film Production"
+        "healthcare" -> "Healthcare Group"
+        "aviation_group" -> "Aviation Group"
+        "theme_park_holding" -> "Theme Park"
+        "hospitality_holding" -> "Hospitality Resort"
+        "cruise_line_holding" -> "Cruise Line"
+        else -> catalogId
+    }
+}
+
 data class OwnedBusiness(
     val instanceId: String = java.util.UUID.randomUUID().toString(),
     val catalogId: String = "",
@@ -446,8 +559,270 @@ data class OwnedBusiness(
     val contentCreatorSubscribers: Long = 100L,
     val contentCreatorEmployees: Int = 0,
     val contentCreatorOfficeUnlocked: Boolean = false,
-    val contentCreatorCash: Long = 5000L
-)
+    val contentCreatorCash: Long = 5000L,
+    override val ownershipPercent: Double = 100.0
+) : BusinessEntity {
+    override val id: String get() = instanceId
+    override val name: String get() = customName ?: getCatalogNameForId(catalogId)
+    override val sectorMultiplier: Float get() = when (catalogId) {
+        "upper_tech", "media_tv" -> 15.0f
+        "tycoon_bank" -> 12.0f
+        "tycoon_corp", "healthcare" -> 10.0f
+        "content_creator", "media_print", "media_radio", "media_production" -> 8.0f
+        "upper_realestate", "construction" -> 6.0f
+        "fine_dining", "mid_cafe", "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_logistics" -> 5.0f
+        "aviation_group", "theme_park_holding", "hospitality_holding", "cruise_line_holding" -> 7.0f
+        else -> 5.0f
+    }
+
+    override fun calculateGrossRevenue(): Long {
+        return when (catalogId) {
+            "content_creator" -> {
+                val multiplier = 1.0 + (contentCreatorEmployees * 0.05)
+                val baseRev = (contentCreatorSubscribers * 0.05).toLong()
+                (baseRev * multiplier).toLong()
+            }
+            "fine_dining" -> {
+                val lvl = level
+                when {
+                    lvl in 1..10 -> 5000L + (lvl * 2000L)
+                    lvl in 11..30 -> 25000L + ((lvl - 10) * 8000L)
+                    lvl in 31..40 -> 185000L + ((lvl - 30) * 50000L)
+                    lvl in 41..50 -> 685000L + ((lvl - 40) * 200000L)
+                    else -> 685000L + ((lvl - 40) * 200000L)
+                }
+            }
+            "construction" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseRev = cat?.monthlyRevenue ?: 150000L
+                val contractRev = activeTenders.sumOf { (it.totalContractValue / maxOf(1, it.durationMonths)).toLong() }
+                (baseRev * synergyMultiplier).toLong() + contractRev
+            }
+            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "mid_logistics", "upper_tech", "upper_realestate", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseRev = cat?.monthlyRevenue ?: 5000L
+                (baseRev * synergyMultiplier).toLong()
+            }
+            "media_radio" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseRev = cat?.monthlyRevenue ?: 100000L
+                val eventRev = activeEvents.sumOf { it.eoFee + it.techFee }.toLong()
+                (baseRev * synergyMultiplier).toLong() + eventRev
+            }
+            "media_production" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseRev = cat?.monthlyRevenue ?: 250000L
+                val streamingRev = projectHistory.filter { it.status == "FINISHED" }.sumOf { it.licenseMonthlyFee ?: 0L }
+                val activeTheatersRev = projectHistory.filter { it.status == "IN_THEATERS" }.sumOf { it.currentRevenue / maxOf(1, it.remainingMonths) }
+                (baseRev * synergyMultiplier).toLong() + streamingRev + activeTheatersRev
+            }
+            "healthcare" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseRev = cat?.monthlyRevenue ?: 4000000L
+                val unitsRev = healthcareSubsidiaries.sumOf { it.monthlyRevenue }.toLong()
+                (baseRev * synergyMultiplier).toLong() + unitsRev
+            }
+            "aviation_group" -> {
+                val calculatedRev = customRevenue ?: 0L
+                if (calculatedRev > 0) calculatedRev else (level * 1500000L)
+            }
+            "theme_park_holding" -> {
+                val branchRev = themeParkBranches.sumOf { it.lastMonthRevenue }
+                if (branchRev > 0) branchRev else (level * 800000L)
+            }
+            "hospitality_holding" -> {
+                val hotelRev = hospitalityProperties.sumOf { it.lastMonthRevenue }
+                if (hotelRev > 0) hotelRev else (level * 1200000L)
+            }
+            "cruise_line_holding" -> {
+                val cruiseRev = cruiseShips?.sumOf { it.lastMonthTicketRevenue + it.lastMonthOnboardRevenue } ?: 0L
+                if (cruiseRev > 0) cruiseRev else (level * 2500000L)
+            }
+            else -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseRev = cat?.monthlyRevenue ?: 1000L
+                (baseRev * synergyMultiplier).toLong()
+            }
+        }
+    }
+
+    override fun calculateTotalExpenses(): Long {
+        return when (catalogId) {
+            "content_creator" -> {
+                val employeeExpenses = contentCreatorEmployees * 2000L
+                500L + employeeExpenses
+            }
+            "fine_dining" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 2000L
+                val staffExpenses = level * 1200L
+                baseMaint + staffExpenses
+            }
+            "construction" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 50000L
+                val staffExpenses = level * 6000L
+                baseMaint + staffExpenses
+            }
+            "shop_local" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 400L
+                val staffExpenses = level * 300L
+                baseMaint + staffExpenses
+            }
+            "shop_small_chain" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 2500L
+                val staffExpenses = level * 1000L
+                baseMaint + staffExpenses
+            }
+            "shop_large_chain" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 22000L
+                val staffExpenses = level * 4000L
+                baseMaint + staffExpenses
+            }
+            "shop_department_store" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 120000L
+                val staffExpenses = level * 20000L
+                baseMaint + staffExpenses
+            }
+            "mid_cafe" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 3500L
+                val staffExpenses = level * 800L
+                baseMaint + staffExpenses
+            }
+            "mid_logistics" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 12000L
+                val staffExpenses = level * 2500L
+                baseMaint + staffExpenses
+            }
+            "upper_tech" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 90000L
+                val staffExpenses = level * 15000L
+                baseMaint + staffExpenses
+            }
+            "upper_realestate" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 70000L
+                val staffExpenses = level * 8000L
+                baseMaint + staffExpenses
+            }
+            "tycoon_bank" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 750000L
+                val staffExpenses = level * 80000L
+                baseMaint + staffExpenses
+            }
+            "tycoon_corp" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 4500000L
+                val staffExpenses = level * 500000L
+                baseMaint + staffExpenses
+            }
+            "media_print" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 6000L
+                val staffExpenses = level * 1500L
+                baseMaint + staffExpenses
+            }
+            "media_radio" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 28000L
+                val staffExpenses = level * 3500L
+                baseMaint + staffExpenses
+            }
+            "media_tv" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 350000L
+                val staffExpenses = level * 40000L
+                baseMaint + staffExpenses
+            }
+            "media_production" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 70000L
+                val staffExpenses = level * 10000L
+                baseMaint + staffExpenses
+            }
+            "healthcare" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 1200000L
+                val unitsOps = (healthcareSubsidiaries.sumOf { it.monthlyRevenue } * 0.3).toLong()
+                val sdmSalaries = healthcareSubsidiaries.sumOf { unit ->
+                    val salaryMultiplier = when (unit.type) {
+                        "HOSPITAL" -> 25000L
+                        "CLINIC" -> 8000L
+                        "INSURANCE" -> 15000L
+                        else -> 10000L
+                    }
+                    unit.level * salaryMultiplier
+                }
+                baseMaint + unitsOps + sdmSalaries
+            }
+            "aviation_group" -> {
+                var totalExp = 0L
+                airlineFleetComplex.forEach { plane ->
+                    if (plane.status != "DELIVERING") {
+                        val baseUpkeep = when (plane.modelId) {
+                            "atr72" -> 100000.0
+                            "a320" -> 250000.0
+                            "b777" -> 600000.0
+                            else -> 150000.0
+                        }
+                        val finalUpkeep = baseUpkeep * (1.5 - plane.condition / 200.0)
+                        totalExp += finalUpkeep.toLong()
+                    }
+                    if (plane.isLeased) {
+                        totalExp += plane.leasePrice
+                    }
+                }
+                airlineHubsComplex.forEach { hub ->
+                    var hubUpkeep = 100000L
+                    hub.activeUpgrades.forEach { upgId ->
+                        val addCost = when (upgId) {
+                            "upg_dom" -> 50000L
+                            "upg_intl_1" -> 150000L
+                            "upg_vip" -> 100000L
+                            "upg_intl_2" -> 300000L
+                            "upg_cargo" -> 120000L
+                            else -> 50000L
+                        }
+                        hubUpkeep += addCost
+                    }
+                    totalExp += hubUpkeep
+                }
+                val staffExpenses = airlineFleetComplex.size * 12000L
+                totalExp + staffExpenses
+            }
+            "theme_park_holding" -> {
+                val branchExp = themeParkBranches.sumOf { it.lastMonthExpense }
+                val sdmSalaries = themeParkBranches.size * 25000L
+                (if (branchExp > 0) branchExp else (level * 200000L)) + sdmSalaries
+            }
+            "hospitality_holding" -> {
+                val hotelExp = hospitalityProperties.sumOf { it.lastMonthExpense }
+                val sdmSalaries = hospitalityProperties.size * 40000L
+                (if (hotelExp > 0) hotelExp else (level * 350000L)) + sdmSalaries
+            }
+            "cruise_line_holding" -> {
+                val cruiseExp = cruiseShips?.sumOf { it.lastMonthExpenses } ?: 0L
+                val sdmSalaries = (cruiseShips?.size ?: 0) * 80000L
+                val baseMaint = 100000L
+                (if (cruiseExp > 0) cruiseExp else (level * 600000L)) + sdmSalaries + baseMaint
+            }
+            else -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 100L
+                val staffExpenses = level * 100L
+                baseMaint + staffExpenses
+            }
+        }
+    }
+}
 
 enum class BiddingPhase {
     WAITING_INITIAL,

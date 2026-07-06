@@ -2201,11 +2201,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     ) { state, stockList, realEstateMarket, cryptoList ->
         var business = 0L
         state.ownedBusinesses.forEach { owned ->
-            val catalogItem = getCatalogItem(owned.catalogId, state)
-            if (catalogItem != null) {
-                val (rev, _) = getBusinessStats(owned, catalogItem, state)
-                business += rev
-            }
+            business += owned.calculateGrossRevenue()
         }
         state.holdingCompanies.forEach { holding ->
             business += com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(holding, state)

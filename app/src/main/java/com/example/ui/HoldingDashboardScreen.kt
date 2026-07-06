@@ -49,7 +49,7 @@ fun HoldingDashboardScreen(navController: NavHostController, viewModel: GameView
     val holdingSubsidiaries = (holding.subsidiaries + playerState.ownedBusinesses.filter { it.parentId == holdingId }).distinctBy { it.instanceId }
 
     val valuation = CorporateFinanceManager.calculateHoldingValuation(holding, playerState)
-    val monthlyRev = CorporateFinanceManager.calculateHoldingMonthlyRevenue(holding, playerState)
+    val monthlyRev = CorporateFinanceManager.calculateHoldingMargin(holding, playerState)
     val isIpoEligible = valuation >= 5_000_000L && !holding.isPublic
 
     val onSubsidiaryClick: (OwnedBusiness, BusinessCatalogItem) -> Unit = { b, ct ->
@@ -714,13 +714,11 @@ fun MegaHoldingDetailScreen(navController: NavHostController, viewModel: GameVie
     }
 
     val totalBusinessValuation = playerState.ownedBusinesses.sumOf {
-        val catalogItem = com.example.data.getCatalogItem(it.catalogId, playerState)
-        if (catalogItem != null) com.example.data.getBusinessValuation(it, catalogItem) else 0L
+        it.calculateTotalValuation()
     }
     val totalHoldingValuation = playerState.holdingCompanies.sumOf { holding ->
         holding.subsidiaries.sumOf { sub ->
-            val catalogItem = com.example.data.getCatalogItem(sub.catalogId, playerState)
-            if (catalogItem != null) com.example.data.getBusinessValuation(sub, catalogItem) else 0L
+            sub.calculateTotalValuation()
         }
     }
     var stocksValue = 0L
@@ -729,12 +727,10 @@ fun MegaHoldingDetailScreen(navController: NavHostController, viewModel: GameVie
     var baseMegaValuation = baseMegaBusinessValuation
 
     var baseMegaBusinessIncome = playerState.ownedBusinesses.sumOf { 
-         val ct = com.example.data.getCatalogItem(it.catalogId, playerState)
-         if (ct != null) com.example.data.getBusinessStats(it, ct, playerState).let { (rev, main) -> rev - main } else 0L
+         it.calculateNetIncome()
     } + playerState.holdingCompanies.sumOf { h -> 
          h.subsidiaries.sumOf { sub -> 
-             val ct = com.example.data.getCatalogItem(sub.catalogId, playerState)
-             if (ct != null) com.example.data.getBusinessStats(sub, ct, playerState).let { (rev, main) -> rev - main } else 0L
+             sub.calculateNetIncome()
          }
     }
     var baseMegaIncome = baseMegaBusinessIncome
@@ -1062,7 +1058,7 @@ fun MegaHoldingDetailScreen(navController: NavHostController, viewModel: GameVie
                 val h = playerState.holdingCompanies[index]
                 HoldingItemCard(
                     holding = h,
-                    rev = com.example.data.CorporateFinanceManager.calculateHoldingMonthlyRevenue(h, playerState),
+                    rev = com.example.data.CorporateFinanceManager.calculateHoldingMargin(h, playerState),
                     useShortFormat = useShortFormat,
                     onClick = { navController.navigate("holding_dashboard/${h.instanceId}") }
                 )
