@@ -47,6 +47,43 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 
+/**
+ * Fungsi untuk menghitung harga baru dari aset yang fluktuatif menggunakan Random Walk dengan Drift.
+ *
+ * @param currentPrice Harga aset saat ini
+ * @param volatility Tingkat keliaran/volatilitas aset (Contoh: 0.05 untuk 5% per tick)
+ * @param trend Kecenderungan pasar / drift (Contoh: 0.001 untuk tren naik tipis)
+ * @param eventShock Efek berita/kejutan eksternal (Contoh: -0.10 jika ada krisis/crash)
+ * @param minPrice Batas bawah harga agar tidak bernilai 0 atau negatif
+ * @return Harga baru aset
+ */
+fun calculateFluctuatingPrice(
+    currentPrice: Double,
+    volatility: Double,
+    trend: Double,
+    eventShock: Double = 0.0,
+    minPrice: Double = 0.01
+): Double {
+    // 1. Random factor antara -1.0 sampai 1.0
+    val randomFactor = (Math.random() * 2.0) - 1.0
+    
+    // 2. Pergerakan pasar murni dari trend + volatilitas
+    val marketMovement = trend + (randomFactor * volatility)
+    
+    // 3. Gabungkan pergerakan pasar dengan kejutan eksternal ( event shock )
+    val totalPercentageChange = marketMovement + eventShock
+    
+    // 4. Hitung harga baru
+    var newPrice = currentPrice * (1.0 + totalPercentageChange)
+    
+    // 5. Pastikan harga tidak pernah berada di bawah batas minimal
+    if (newPrice < minPrice) {
+        newPrice = minPrice
+    }
+    
+    return newPrice
+}
+
 fun formatMarketCap(value: Double): String {
     val absVal = Math.abs(value)
     

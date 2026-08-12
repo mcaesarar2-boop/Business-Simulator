@@ -2265,13 +2265,37 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val initialCryptoPrices = com.example.data.initialCryptoList.associate { it.symbol to it.currentPrice }
             while (true) {
                 delay((_stockIntervalSeconds.value * 1000f).toLong().coerceAtLeast(100L))
-                val volatility = _marketVolatilityFactor.value * 2.5f // Crypto is more volatile
+                val volatilityMultiplier = _marketVolatilityFactor.value * 2.5f // Crypto is highly volatile
                 val triggerNews = Math.random() < 0.10
                 
+                var shock = 0.0
+                var newsItem: MarketNews? = null
+                
+                if (triggerNews) {
+                    val rand = Math.random()
+                    if (rand < 0.5) {
+                        shock = 0.04 + (Math.random() * 0.06) // PUMP: +4% to +10%
+                        newsItem = MarketNews(id = "crypto_b_${System.currentTimeMillis()}", text = "CRYPTO PUMP: Institusi besar mulai adopsi masal blockchain!", type = "BULL")
+                    } else {
+                        shock = -0.04 - (Math.random() * 0.06) // CRASH: -4% to -10%
+                        newsItem = MarketNews(id = "crypto_b_${System.currentTimeMillis()}", text = "CRYPTO CRASH: Regulasi ketat memukul pasar kripto!", type = "BEAR")
+                    }
+                    val newFeeds = listOf(newsItem) + _newsFeed.value
+                    _newsFeed.value = newFeeds.take(20)
+                }
+
                 val updatedCrypto = _cryptoList.value.map { crypto ->
                     val baseline = initialCryptoPrices[crypto.symbol] ?: crypto.currentPrice
-                    val changePct = (Math.random() - 0.5) * 0.015 * volatility
-                    val newPrice = Math.max(0.000001, crypto.currentPrice * (1 + changePct))
+                    val cryptoTrend = 0.0005 // Mild trend
+                    val cryptoVol = 0.015 * volatilityMultiplier
+                    
+                    val newPrice = com.example.ui.calculateFluctuatingPrice(
+                        currentPrice = crypto.currentPrice,
+                        volatility = cryptoVol,
+                        trend = cryptoTrend,
+                        eventShock = shock,
+                        minPrice = 0.000001
+                    )
                     val newChangeAbs = newPrice - baseline
                     val newChangePct = (newChangeAbs / baseline) * 100
                     
@@ -2280,32 +2304,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         changePercentage = newChangePct
                     )
                 }.toMutableList()
-
-                if (triggerNews) {
-                    val rand = Math.random()
-                    val newsItem = when {
-                        rand < 0.5 -> {
-                            val boost = 0.03 + (Math.random() * 0.05)
-                            updatedCrypto.replaceAll { c -> 
-                                val baseline = initialCryptoPrices[c.symbol] ?: c.currentPrice
-                                val newP = c.currentPrice * (1 + boost)
-                                c.copy(currentPrice = newP, changePercentage = ((newP - baseline) / baseline) * 100)
-                            }
-                            MarketNews(id = "crypto_b_${System.currentTimeMillis()}", text = "CRYPTO PUMP: Institusi besar mulai adopsi masal blockchain!", type = "BULL")
-                        }
-                        else -> {
-                            val drop = -0.03 - (Math.random() * 0.05)
-                            updatedCrypto.replaceAll { c -> 
-                                val baseline = initialCryptoPrices[c.symbol] ?: c.currentPrice
-                                val newP = c.currentPrice * (1 + drop)
-                                c.copy(currentPrice = newP, changePercentage = ((newP - baseline) / baseline) * 100)
-                            }
-                            MarketNews(id = "crypto_b_${System.currentTimeMillis()}", text = "CRYPTO CRASH: Regulasi ketat memukul pasar kripto!", type = "BEAR")
-                        }
-                    }
-                    val newFeeds = listOf(newsItem) + _newsFeed.value
-                    _newsFeed.value = newFeeds.take(20)
-                }
                 
                 _cryptoList.value = updatedCrypto
             }
@@ -2591,14 +2589,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     
-                    // Calculation with Game Settings Volatility integrated
-                    val changePct = baseDrift + ((Math.random() - 0.5) * randVolatility)
-                    val changeApplied = changePct * volatility
-                    
-                    // Zero Price Bug Recovery
+                    // Calculation using Random Walk with Drift algorithm
                     val safeCurrentPrice = if (stock.currentPrice <= 0.00) 0.05 else stock.currentPrice
-                    val calculatedPrice = safeCurrentPrice * (1 + changeApplied)
-                    val newPrice = Math.max(0.01, calculatedPrice)
+                    val effectiveVolatility = randVolatility * volatility
+                    val newPrice = com.example.ui.calculateFluctuatingPrice(
+                        currentPrice = safeCurrentPrice,
+                        volatility = effectiveVolatility,
+                        trend = baseDrift,
+                        eventShock = 0.0,
+                        minPrice = 0.01
+                    )
                     val newChangeAbs = newPrice - baseline
                     val newChangePct = (newChangeAbs / baseline) * 100
                     val newHistory = (stock.priceHistory + newPrice).takeLast(40)
@@ -2617,6 +2617,36 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }.toMutableList()
 
                 _stockList.value = updatedList
+
+                // Inverse Correlation: Global Stock Market vs. Gold & Precious Metals (Safe Haven Assets)
+                val totalStocksCount = stockTrends.size
+                val bearCount = stockTrends.values.count { 
+                    it.currentTrend == MarketTrend.BEAR_MARKET || it.currentTrend == MarketTrend.STEADY_BLEED || it.currentTrend == MarketTrend.THE_LOST_DECADE
+                }
+                val bearRatio = if (totalStocksCount > 0) bearCount.toDouble() / totalStocksCount else 0.0
+
+                val updatedMetals = _preciousMetalsList.value.map { metal ->
+                    val metalVolatility = 0.005 * volatility // Low volatility commodity
+                    val metalTrend = 0.001 // Baseline inflation drift
+
+                    // Safe Haven Inverse Shock: Stock Crash -> Gold Surge; Stock Bull -> Gold Stagnation
+                    val metalEventShock = when {
+                        bearRatio > 0.45 -> 0.020 + (Math.random() * 0.015) // Flight to safety during stock panic
+                        bearRatio > 0.30 -> 0.008 + (Math.random() * 0.008) // Mild market uncertainty
+                        bearRatio < 0.15 -> -0.003 - (Math.random() * 0.004) // Strong bull market, gold/metals stagnate
+                        else -> 0.0
+                    }
+
+                    val newPrice = com.example.ui.calculateFluctuatingPrice(
+                        currentPrice = metal.currentPrice,
+                        volatility = metalVolatility,
+                        trend = metalTrend,
+                        eventShock = metalEventShock,
+                        minPrice = 0.01
+                    )
+                    metal.copy(currentPrice = newPrice)
+                }
+                _preciousMetalsList.value = updatedMetals
             }
         }
     }
@@ -4257,14 +4287,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val bearCount = stockTrends.values.count { it.currentTrend == MarketTrend.BEAR_MARKET || it.currentTrend == MarketTrend.STEADY_BLEED || it.currentTrend == MarketTrend.THE_LOST_DECADE }
         val bearRatio = if (totalStocks > 0) bearCount.toDouble() / totalStocks else 0.0
 
-        // Update Metal Prices (Safe Haven)
+        // Update Metal Prices (Safe Haven Asset Fluctuation)
         val currentMetals = _preciousMetalsList.value.map { metal ->
-            // If bear ratio > 0.5, commodities go up significantly. If bull ratio > 0.5, they stagnate or slowly drop.
-            val bearShift = (bearRatio - 0.5) * 0.15 // e.g. bear=0.8 -> shift = +0.045
-            val randVol = (Math.random() - 0.4) * 0.05 * _marketVolatilityFactor.value // slightly upward biased random
-            val totalShift = bearShift + randVol
-            val newPrice = metal.currentPrice * (1.0 + totalShift)
-            metal.copy(currentPrice = newPrice.coerceAtLeast(0.1))
+            val volatility = 0.005 * _marketVolatilityFactor.value
+            val trend = 0.001 // Baseline inflation drift
+            val goldEventShock = when {
+                bearRatio > 0.45 -> 0.020 + (Math.random() * 0.015)
+                bearRatio > 0.30 -> 0.008 + (Math.random() * 0.008)
+                bearRatio < 0.15 -> -0.003 - (Math.random() * 0.004)
+                else -> 0.0
+            }
+
+            val newPrice = com.example.ui.calculateFluctuatingPrice(
+                currentPrice = metal.currentPrice,
+                volatility = volatility,
+                trend = trend,
+                eventShock = goldEventShock,
+                minPrice = 0.01
+            )
+            metal.copy(currentPrice = newPrice)
         }
         _preciousMetalsList.value = currentMetals
 
