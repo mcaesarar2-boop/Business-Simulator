@@ -105,6 +105,7 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
 
     // 3. Net Asset Value (NAV)
     val netAssetValue = playerState.netAssetValue(stockList, cryptoList, realEstateMarket, collectionList, viewModel.preciousMetalsList.value)
+    val isUnlocked = netAssetValue >= 100_000L
 
     // 1. Gross Asset Value (GAV)
     val grossAssetValue = netAssetValue + liabilities
@@ -224,44 +225,116 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { navController.navigate("private_ledger") }
-                        .border(2.dp, Color(0xFF00FF00).copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1D12))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                if (!isUnlocked) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, gold.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1C12))
                     ) {
-                        Text(
-                            text = "💰 KAS PRIBADI (LIQUID WEALTH)",
-                            color = Color(0xFF00FF00),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = formatCurrencyRingkas(playerState.privateBalance, false),
-                            color = Color(0xFF00FF00),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Uang tunai pribadi hasil Gaji & Dividen yang siap dibelanjakan.\n(Klik untuk membuka Buku Besar / Riwayat Transaksi)",
-                            color = textGray,
-                            fontSize = 11.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(text = "🔒", fontSize = 42.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Family Office & Private Wealth Terkunci",
+                                color = gold,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Layanan eksklusif Family Office dan Kas Pribadi hanya terbuka untuk pengusaha & investor dengan Kekayaan Total (Total Fortune / NAV) minimal $100,000 USD.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            val progress = (netAssetValue.toFloat() / 100_000f).coerceIn(0f, 1f)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Progres Total Fortune:",
+                                        color = textGray,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = "${formatCurrencyRingkas(netAssetValue, false)} / $100,000 USD",
+                                        color = gold,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp)),
+                                    color = gold,
+                                    trackColor = Color.White.copy(alpha = 0.1f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Text(
+                                text = "💡 Tips: Kembangkan bisnis, tingkatkan pendapatan, atau akumulasi investasi aset hingga kekayaan Anda mencapai $100,000 USD untuk membuka akses Kas Pribadi, Gaji CEO, Dividen, Utang Lombard, dan Layanan Concierge VVIP.",
+                                color = textGray,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate("private_ledger") }
+                            .border(2.dp, Color(0xFF00FF00).copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1D12))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "💰 KAS PRIBADI (LIQUID WEALTH)",
+                                color = Color(0xFF00FF00),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = formatCurrencyRingkas(playerState.privateBalance, false),
+                                color = Color(0xFF00FF00),
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Uang tunai pribadi hasil Gaji & Dividen yang siap dibelanjakan.\n(Klik untuk membuka Buku Besar / Riwayat Transaksi)",
+                                color = textGray,
+                                fontSize = 11.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
 
-            // B. ASSET ALLOCATION
+            if (isUnlocked) {
+                // B. ASSET ALLOCATION
             item {
                 Column {
                     Text(
@@ -738,6 +811,7 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                         )
                     }
                 }
+            }
             }
         }
     }

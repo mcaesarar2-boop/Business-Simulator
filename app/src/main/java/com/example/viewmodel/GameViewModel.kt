@@ -83,7 +83,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             _cloudSyncMessage.value = "Menyinkronkan data ke Cloud..."
             
             val currentState = _playerState.value
-            val totalFortuneVal = currentState.calculatePlayerBusinessWealth() + currentState.privateBalance
+            val totalFortuneVal = currentState.netAssetValue(
+                stockList = _stockList.value,
+                cryptoList = _cryptoList.value,
+                realEstateMarket = _realEstateMarket.value,
+                collectionList = _collectionList.value,
+                preciousMetalsList = _preciousMetalsList.value
+            )
             
             val gameState = com.example.data.PlayerGameState(
                 userId = userId,
@@ -1942,10 +1948,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPlayerCash(amount: Long) {
         val currentState = _playerState.value
-        _playerState.value = currentState.copy(
-            cash = amount,
-            netWorth = amount + (currentState.netWorth - currentState.cash)
+        val updatedState = currentState.copy(
+            cash = amount
         )
+        val newNetWorth = updatedState.netAssetValue(
+            stockList = _stockList.value,
+            cryptoList = _cryptoList.value,
+            realEstateMarket = _realEstateMarket.value,
+            collectionList = _collectionList.value,
+            preciousMetalsList = _preciousMetalsList.value
+        )
+        _playerState.value = updatedState.copy(netWorth = newNetWorth)
         saveState(_playerState.value)
     }
 

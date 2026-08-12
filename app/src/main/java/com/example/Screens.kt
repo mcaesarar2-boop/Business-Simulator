@@ -2899,8 +2899,44 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
     val housingValue = player.ownedHouses.sumOf { it.purchasedPrice }
     
     val totalWealth = player.netAssetValue(stockList, cryptoList, realEstateMarket, collectionList, allMetals)
+    val isFamilyOfficeUnlocked = totalWealth >= 100_000L
+    var showLockedFoDialog by remember { mutableStateOf(false) }
 
     val useShortFormat by viewModel.useShortNumberFormat.collectAsState()
+
+    if (showLockedFoDialog) {
+        AlertDialog(
+            onDismissRequest = { showLockedFoDialog = false },
+            title = {
+                Text("🏛️ Family Office Terkunci", fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+            },
+            text = {
+                Column {
+                    Text(
+                        "Fitur Family Office & Private Wealth hanya terbuka jika Kekayaan Total (Net Worth) Anda mencapai minimal $100,000 USD.",
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Kekayaan Total Saat Ini: ${com.example.ui.formatCurrencyRingkas(totalWealth, useShortFormat)} / $100,000 USD",
+                        fontSize = 12.sp,
+                        color = Color(0xFFFFD700),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showLockedFoDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700), contentColor = Color.Black)
+                ) {
+                    Text("Mengerti", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
+        )
+    }
 
     Scaffold(
         containerColor = bgDark
@@ -2955,6 +2991,7 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
                     // Dynamic progress bar representing diversification
                     val total = totalWealth.coerceAtLeast(1)
                     val categories = listOf(
+                        Pair(player.cash, Color(0xFF00E676)),
                         Pair(player.privateBalance, Color(0xFF2196F3)),
                         Pair(player.playerBusinessValuation, Color(0xFFF44336)),
                         Pair(stocksValue, Color(0xFFFF9800)),
@@ -2989,13 +3026,22 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
 
                     Spacer(modifier = Modifier.height(18.dp))
                     Button(
-                        onClick = { navController.navigate("family_office") },
+                        onClick = {
+                            if (isFamilyOfficeUnlocked) {
+                                navController.navigate("family_office")
+                            } else {
+                                showLockedFoDialog = true
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1B2A4A), // Deep Navy
-                            contentColor = Color(0xFFFFD700) // Gold
+                            containerColor = if (isFamilyOfficeUnlocked) Color(0xFF1B2A4A) else Color(0xFF1C222E),
+                            contentColor = if (isFamilyOfficeUnlocked) Color(0xFFFFD700) else Color.Gray
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f)),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isFamilyOfficeUnlocked) Color(0xFFFFD700).copy(alpha = 0.5f) else Color(0xFFFFC107).copy(alpha = 0.3f)
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 4.dp)
@@ -3005,14 +3051,17 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
                             modifier = Modifier.padding(vertical = 6.dp)
                         ) {
                             Text(
-                                text = "🏛️ Family Office & Private Wealth",
+                                text = if (isFamilyOfficeUnlocked) "🏛️ Family Office & Private Wealth" else "🔒 Family Office & Private Wealth (Terkunci)",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFD700)
+                                color = if (isFamilyOfficeUnlocked) Color(0xFFFFD700) else Color(0xFFFFC107)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Mecanik Likuiditas, Pengelolaan Aset Kertas & Utang Lombard",
+                                text = if (isFamilyOfficeUnlocked)
+                                    "Mecanik Likuiditas, Pengelolaan Aset Kertas & Utang Lombard"
+                                else
+                                    "Syarat Buka: Total Kekayaan Minimal $100,000 USD (Saat Ini: ${com.example.ui.formatCurrencyRingkas(totalWealth, useShortFormat)})",
                                 fontSize = 11.sp,
                                 color = Color.White.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Center
@@ -3025,7 +3074,8 @@ fun ProfileScreen(navController: NavHostController, viewModel: GameViewModel) {
             // 3. WEALTH BREAKDOWN (Grid)
             item {
                 val wealthItems = listOf(
-                    Triple("Balance", com.example.ui.formatCurrencyRingkas(player.privateBalance, useShortFormat), Color(0xFF2196F3)),
+                    Triple("Cash", com.example.ui.formatCurrencyRingkas(player.cash, useShortFormat), Color(0xFF00E676)),
+                    Triple("Private Balance", if (isFamilyOfficeUnlocked) com.example.ui.formatCurrencyRingkas(player.privateBalance, useShortFormat) else "🔒 Terkunci ($100k NAV)", Color(0xFF2196F3)),
                     Triple("Businesses", com.example.ui.formatCurrencyRingkas(player.playerBusinessValuation, useShortFormat), Color(0xFFF44336)),
                     Triple("Stocks", com.example.ui.formatCurrencyRingkas(stocksValue, useShortFormat), Color(0xFFFF9800)),
                     Triple("Real estate", com.example.ui.formatCurrencyRingkas(realEstateValue, useShortFormat), Color(0xFF9C27B0)),

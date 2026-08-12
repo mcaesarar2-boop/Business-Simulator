@@ -431,7 +431,7 @@ fun PlayerState.netAssetValue(
     collectionList: List<CollectionItem> = emptyList(),
     preciousMetalsList: List<PreciousMetal> = emptyList()
 ): Long {
-    val grossAssets = privateBalance + playerBusinessValuation + 
+    val grossAssets = cash + privateBalance + playerBusinessValuation + 
             totalLiquidInvestments(stockList, cryptoList) + 
             totalTangibleAssets(realEstateMarket, collectionList, preciousMetalsList)
     return grossAssets - totalLiabilities
