@@ -4814,31 +4814,42 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     )
                 } else {
-                    familyOfficePrivateBalanceVal -= loan.monthlyPayment
+                    // Late payment penalty: 15% penalty charged on top of monthly payment
+                    val penaltyFee = (loan.monthlyPayment * 0.15).toLong()
+                    val totalCharged = loan.monthlyPayment + penaltyFee
+                    familyOfficePrivateBalanceVal -= totalCharged
                     monthlyLedgerRecords.add(
                         com.example.data.PrivateLedgerRecord(
                             monthTick = newMonth,
-                            title = "Cicilan Gagal Bayar / Denda Investor (${loan.sectorName})",
-                            amount = loan.monthlyPayment,
+                            title = "DENDA GAGAL BAYAR: Cicilan Investor (${loan.sectorName}) (+15% Denda)",
+                            amount = totalCharged,
                             isIncome = false
                         )
                     )
                 }
                 
                 if (nextRemaining == 0) {
-                    currentEquityShare = (currentEquityShare + loan.equityGiven).coerceIn(0.0, 100.0)
-                    currentCompanyOwnership = (currentCompanyOwnership + loan.equityGiven).coerceIn(0.0, 100.0)
+                    // Tenor ended. Equity dilution given to investors for VC / Hybrid funding is permanent equity ownership.
+                    // Equity is NOT automatically returned for free ($0 buyback).
+                    val endMsg = when (loan.fundingType) {
+                        com.example.data.FundingType.DEBT -> 
+                            "PEMBIAYAAN UTANG LUNAS: Pinjaman sektor ${loan.sectorName} telah lunas sepenuhnya!"
+                        com.example.data.FundingType.HYBRID -> 
+                            "PEMBIAYAAN MEZZANINE LUNAS: Cicilan utang ${loan.sectorName} telah lunas. Investor memegang ${String.format(java.util.Locale.US, "%.1f", loan.equityGiven)}% porsi ekuitas secara permanen."
+                        com.example.data.FundingType.EQUITY -> 
+                            "PENDANAAN VC MATURED: Masa pendanaan ${loan.sectorName} telah selesai. Investor memegang ${String.format(java.util.Locale.US, "%.1f", loan.equityGiven)}% saham secara permanen."
+                    }
                     
                     foNews.add(MarketNews(
                         id = "loan_paid_${System.currentTimeMillis()}_${loan.id}",
-                        text = "INVESTMENT MATURED: Pembiayaan ${loan.sectorName} telah lunas! Kepemilikan saham Anda sebesar ${String.format(java.util.Locale.US, "%.1f", loan.equityGiven)}% otomatis di-buyback (kembali ke Anda) tanpa biaya tambahan.",
+                        text = endMsg,
                         type = "BULL"
                     ))
                     
                     monthlyLedgerRecords.add(
                         com.example.data.PrivateLedgerRecord(
                             monthTick = newMonth,
-                            title = "Lunas & Buyback Saham (${loan.sectorName})",
+                            title = "Kontrak Investor Selesai (${loan.sectorName})",
                             amount = 0L,
                             isIncome = true
                         )
@@ -9742,14 +9753,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         
         val totalBunga = (loanAmount * interestRate).toLong()
         val totalPayment = loanAmount + totalBunga
-        val baseMonthlyPayment = totalPayment / tenorMonths
+        val baseMonthlyPayment = Math.ceil(totalPayment.toDouble() / tenorMonths).toLong()
         
         val (monthlyPayment, equityGiven) = when (fundingType) {
             com.example.data.FundingType.DEBT -> {
                 Pair(baseMonthlyPayment, 0.0)
             }
             com.example.data.FundingType.HYBRID -> {
-                Pair(baseMonthlyPayment / 2, baseEquityGiven)
+                Pair(baseMonthlyPayment / 2, baseEquityGiven / 2.0)
             }
             com.example.data.FundingType.EQUITY -> {
                 Pair(0L, baseEquityGiven)
@@ -9866,6 +9877,57 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         ) + _newsFeed.value
         _newsFeed.value = newsList.take(20)
         
+        _playerState.value = newState
+        saveState(_playerState.value)
+        return null
+    }
+
+    fun buybackMegaHoldingShares(percent: Double): String? {
+        val state = _playerState.value
+        if (percent <= 0.0) {
+            return "Persentase buyback tidak valid."
+        }
+        if (state.companyOwnershipPercent >= 100.0) {
+            return "Kepemilikan saham Anda sudah 100%."
+        }
+        val maxBuyback = 100.0 - state.companyOwnershipPercent
+        val actualPercent = percent.coerceAtMost(maxBuyback)
+
+        val totalBusinessValuation = state.ownedBusinesses.sumOf {
+            val catalogItem = com.example.data.getCatalogItem(it.catalogId, state)
+            if (catalogItem != null) com.example.data.getBusinessValuation(it, catalogItem) else 0L
+        }
+        val totalHoldingValuation = state.holdingCompanies.sumOf { holding ->
+            holding.subsidiaries.sumOf { sub ->
+                val catalogItem = com.example.data.getCatalogItem(sub.catalogId, state)
+                if (catalogItem != null) com.example.data.getBusinessValuation(sub, catalogItem) else 0L
+            }
+        }
+        val businessValuation = (totalBusinessValuation + totalHoldingValuation).coerceAtLeast(100000L)
+        val buybackCost = (businessValuation * (actualPercent / 100.0)).toLong()
+
+        if (state.cash < buybackCost) {
+            return "Kas pribadi tidak mencukupi untuk buyback ${String.format(java.util.Locale.US, "%.1f", actualPercent)}% saham ($${com.example.ui.formatCurrencyRingkas(buybackCost.toDouble(), false)})."
+        }
+
+        val newOwnership = (state.companyOwnershipPercent + actualPercent).coerceAtMost(100.0)
+
+        val newState = state.copy(
+            companyOwnershipPercent = newOwnership,
+            playerEquityShare = newOwnership,
+            cash = state.cash - buybackCost,
+            megaHolding = state.megaHolding.copy(ownershipPercentage = newOwnership)
+        )
+
+        val newsList = listOf(
+            MarketNews(
+                id = "fo_shares_buyback_${System.currentTimeMillis()}",
+                text = "SHARE BUYBACK: Membeli kembali ${String.format(java.util.Locale.US, "%.1f", actualPercent)}% saham holding seharga $${com.example.ui.formatCurrencyRingkas(buybackCost.toDouble(), false)} dari investor.",
+                type = "BULL"
+            )
+        ) + _newsFeed.value
+        _newsFeed.value = newsList.take(20)
+
         _playerState.value = newState
         saveState(_playerState.value)
         return null

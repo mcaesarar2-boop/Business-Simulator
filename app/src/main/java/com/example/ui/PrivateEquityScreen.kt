@@ -114,13 +114,13 @@ fun PrivateEquityScreen(navController: NavController, viewModel: GameViewModel) 
     
     val totalBunga = (loanAmount * selectedSector.interestRate).toLong()
     val totalPayment = loanAmount + totalBunga
-    val baseMonthlyPayment = totalPayment / selectedSector.tenor
+    val baseMonthlyPayment = Math.ceil(totalPayment.toDouble() / selectedSector.tenor).toLong()
 
     // 3 Options details
     val (monthlyPayment, equityGiven) = remember(selectedFundingType, baseMonthlyPayment, baseEquityGiven) {
         when (selectedFundingType) {
             FundingType.DEBT -> Pair(baseMonthlyPayment, 0.0)
-            FundingType.HYBRID -> Pair(baseMonthlyPayment / 2, baseEquityGiven)
+            FundingType.HYBRID -> Pair(baseMonthlyPayment / 2, baseEquityGiven / 2.0)
             FundingType.EQUITY -> Pair(0L, baseEquityGiven)
         }
     }

@@ -1066,6 +1066,45 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
                                     Text("Anda tidak boleh menjual saham lebih banyak karena harus mempertahankan minimal kepemilikan 51% (kontrol perusahaan).", color = red, fontSize = 12.sp, textAlign = TextAlign.Center)
                                 }
                             }
+
+                            if (playerState.companyOwnershipPercent < 100.0) {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                val maxBuyback = (100.0 - playerState.companyOwnershipPercent).toFloat()
+                                var buybackPct by remember { mutableStateOf(Math.min(5.0f, maxBuyback)) }
+                                val buybackCost = (holdingValuation * (buybackPct / 100.0)).toLong()
+
+                                Text(
+                                    text = "Buyback Saham Dari Investor: ${String.format("%.1f", buybackPct)}%",
+                                    color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Biaya Buyback: ${formatCurrencyRingkas(buybackCost, false)}",
+                                    color = gold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                                )
+                                Slider(
+                                    value = buybackPct.coerceIn(0.1f, maxBuyback),
+                                    onValueChange = { buybackPct = it },
+                                    valueRange = 0.1f..maxBuyback,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        val err = viewModel.buybackMegaHoldingShares(buybackPct.toDouble())
+                                        if (err != null) {
+                                            dialogError = err
+                                        } else {
+                                            dialogSuccess = "Berhasil membeli kembali ${String.format("%.1f", buybackPct)}% saham dari investor!"
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = neonGreen, contentColor = Color.Black)
+                                ) {
+                                    Text("Buyback Saham Investor", fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }
