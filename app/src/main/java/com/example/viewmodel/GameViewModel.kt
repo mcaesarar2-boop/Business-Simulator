@@ -155,9 +155,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // helper: return <NewCompanyCash, AmountForGlobal>
     fun processDecentralizedCashFlow(netProfit: Long, currentCompanyCash: Double): Pair<Double, Long> {
         if (netProfit > 0) {
-            val internalRetained = netProfit * 0.6
-            val dividendToGlobal = netProfit - internalRetained.toLong()
-            return Pair(currentCompanyCash + internalRetained, dividendToGlobal)
+            val internalRetained = (netProfit * 0.6).toLong()
+            val dividendToGlobal = netProfit - internalRetained
+            return Pair(currentCompanyCash + internalRetained.toDouble(), dividendToGlobal)
         } else {
             val loss = -netProfit.toDouble()
             // Subtract loss entirely from company cash without taking anything from global/parent cash
@@ -9658,10 +9658,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val netToPlayer = (amountRequested * 0.85).toLong()
         val taxPaid = (amountRequested * 0.15).toLong()
         
+        val newRetainedEarnings = (state.retainedEarnings - amountRequested.toLong()).coerceAtLeast(0L)
+        
         val newState = state.copy(
             holdingCompanies = updatedHoldings,
             ownedBusinesses = updatedBusinesses,
-            cash = state.cash + netToPlayer
+            cash = state.cash + netToPlayer,
+            retainedEarnings = newRetainedEarnings
         )
         
         val newsList = listOf(

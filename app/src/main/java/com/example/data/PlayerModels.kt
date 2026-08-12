@@ -331,14 +331,13 @@ val PlayerState.totalLiabilities: Long get() {
 }
 
 fun PlayerState.calculateMegaHoldingValuation(): Long {
-    // 1. Bisnis yang sudah masuk holding
+    // 1. Bisnis yang sudah masuk holding (termasuk holdingCash & companyCash subsidiary)
     val holdingsValue = holdingCompanies.sumOf { it.calculateHoldingValuation() }
     
-    // 2. Bisnis yang BELUM masuk holding (Independent)
+    // 2. Bisnis yang BELUM masuk holding / Independent (termasuk companyCash)
     val independentBusinessValue = ownedBusinesses.filter { it.parentId.isNullOrEmpty() }.sumOf { it.calculateBusinessValuation() }
     
-    // 3. Ditambah cash pool Mega Holding (retainedEarnings)
-    return holdingsValue + independentBusinessValue + retainedEarnings
+    return holdingsValue + independentBusinessValue
 }
 
 val PlayerState.playerBusinessWealth: Long get() {
