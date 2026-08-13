@@ -1533,6 +1533,8 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
         return
     }
 
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+
     if (ownedData.catalogId == "media_radio") {
         com.example.ui.EventOrganizerScreen(navController, viewModel, instanceId)
         return
@@ -1809,7 +1811,9 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
                     if (error != null) android.widget.Toast.makeText(ctx, error, android.widget.Toast.LENGTH_SHORT).show()
                 },
                 onUpgradeParent = { cost ->
-                    viewModel.startParentBusinessRealtimeUpgrade(instanceId, cost)
+                    val error = viewModel.startParentBusinessRealtimeUpgrade(instanceId, cost)
+                    if (error != null) android.widget.Toast.makeText(ctx, error, android.widget.Toast.LENGTH_SHORT).show()
+                    else android.widget.Toast.makeText(ctx, "Upgrade restoran dimulai!", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 onFinishParentUpgrade = {
                     viewModel.finishBusinessRealtimeUpgrade(instanceId)
@@ -1973,7 +1977,7 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
                 val currentLevel = ownedData.upgradeLevels[upgrade.id] ?: if (ownedData.purchasedUpgrades.contains(upgrade.id)) 1 else 0
                 val isMaxedOut = currentLevel >= upgrade.maxLevel
                 val cost = getUpgradeCost(upgrade, currentLevel)
-                val canAfford = playerState.cash >= cost
+                val canAfford = ownedData.companyCash >= cost
 
                 Box(modifier = Modifier.fillMaxWidth().premiumUpgradeContainer()) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -1986,6 +1990,44 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(upgrade.description, style = MaterialTheme.typography.bodySmall, color = if(isMaxedOut) MaterialTheme.colorScheme.primary.copy(alpha=0.7f) else Color.White.copy(alpha = 0.6f))
                         
+                        if (!isMaxedOut && !isUpgrading) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Kas Perusahaan (Internal):",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = "${com.example.ui.formatCurrencyRingkas(ownedData.companyCash.toLong(), useShortFormat)} / ${com.example.ui.formatCurrencyRingkas(cost, useShortFormat)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (canAfford) Color(0xFF00C853) else Color(0xFFFF5252)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val progress = if (cost > 0) (ownedData.companyCash / cost.toDouble()).coerceIn(0.0, 1.0).toFloat() else 1.0f
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                color = if (canAfford) Color(0xFF00C853) else Color(0xFFFF9800),
+                                trackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                            if (!canAfford) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "💡 Uang kurang? Gunakan 'Suntik Dana' dari Dompet Pribadi (${com.example.ui.formatCurrencyRingkas(playerState.cash, useShortFormat)}) di menu Treasury atas.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFFFB74D),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         if (isUpgrading) {
@@ -1998,12 +2040,23 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
                             }
                         } else if (!isMaxedOut) {
                             Button(
-                                onClick = { viewModel.purchaseUpgrade(instanceId, upgrade.id) },
+                                onClick = { 
+                                    val error = viewModel.purchaseUpgrade(instanceId, upgrade.id)
+                                    if (error != null) {
+                                        android.widget.Toast.makeText(ctx, error, android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(ctx, "Upgrade ${upgrade.name} berhasil diproses!", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 enabled = canAfford,
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (canAfford) MaterialTheme.colorScheme.secondary else Color.Gray)
+                                colors = ButtonDefaults.buttonColors(containerColor = if (canAfford) MaterialTheme.colorScheme.secondary else Color(0xFF333333))
                             ) {
-                                Text(if (canAfford) "Upgrade (${com.example.ui.formatCurrencyRingkas(cost, useShortFormat)})" else "Uang Kurang", color = if (canAfford) MaterialTheme.colorScheme.onSecondary else Color.White)
+                                Text(
+                                    if (canAfford) "Upgrade (${com.example.ui.formatCurrencyRingkas(cost, useShortFormat)})" 
+                                    else "Kas Perusahaan Kurang (${com.example.ui.formatCurrencyRingkas(cost, useShortFormat)})", 
+                                    color = if (canAfford) MaterialTheme.colorScheme.onSecondary else Color.LightGray
+                                )
                             }
                         } else {
                             Text("Level Maksimal", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)

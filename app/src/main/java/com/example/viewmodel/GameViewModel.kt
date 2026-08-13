@@ -7525,7 +7525,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
-    fun purchaseUpgrade(instanceId: String, upgradeId: String) {
+    fun purchaseUpgrade(instanceId: String, upgradeId: String): String? {
         val currentState = _playerState.value
         
         // Find if it's in regular businesses
@@ -7545,58 +7545,63 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         
-        if (owned == null) return
+        if (owned == null) return "Bisnis tidak ditemukan"
 
-        val catalogItem = getCatalogItem(owned.catalogId, currentState) ?: return
-        val upgrade = catalogItem.upgrades.find { it.id == upgradeId } ?: return
+        val catalogItem = getCatalogItem(owned.catalogId, currentState) ?: return "Katalog bisnis tidak ditemukan"
+        val upgrade = catalogItem.upgrades.find { it.id == upgradeId } ?: return "Upgrade tidak ditemukan"
 
         val currentLevel = owned.upgradeLevels[upgradeId] ?: if (owned.purchasedUpgrades.contains(upgradeId)) 1 else 0
-        if (currentLevel >= upgrade.maxLevel) return
+        if (currentLevel >= upgrade.maxLevel) return "Level upgrade sudah maksimal"
 
         var costMultiplierTotal = 1.0f
         repeat(currentLevel) { costMultiplierTotal *= upgrade.costMultiplier }
         val cost = (upgrade.baseCost * costMultiplierTotal).toLong()
 
-        if (owned.companyCash >= cost) {
-            val durationMs = (60000L * Math.pow(1.3, currentLevel.toDouble())).toLong()
-            val now = System.currentTimeMillis()
-            
-            val newActiveUpgrade = ActiveUpgrade(
-                selectedUpgradeId = upgradeId,
-                targetLevel = currentLevel + 1,
-                startTimeMs = now,
-                finishTimeMs = now + durationMs
-            )
-
-            val newOwned = owned.copy(
-                activeUpgrades = owned.activeUpgrades + newActiveUpgrade,
-                companyCash = owned.companyCash - cost
-            )
-            
-            if (isNested && holdingId != null) {
-                val newHoldings = currentState.holdingCompanies.map { holding ->
-                    if (holding.instanceId == holdingId) {
-                        val newSubs = holding.subsidiaries.map { 
-                            if (it.instanceId == instanceId) newOwned else it 
-                        }
-                        holding.copy(subsidiaries = newSubs)
-                    } else holding
-                }
-                _playerState.value = currentState.copy(
-                    holdingCompanies = newHoldings
-                )
-            } else {
-                _playerState.value = currentState.copy(
-                    ownedBusinesses = currentState.ownedBusinesses.map {
-                        if (it.instanceId == instanceId) newOwned else it
-                    }
-                )
-            }
-            saveState(_playerState.value)
+        if (owned.companyCash < cost) {
+            val shortCost = com.example.ui.formatCurrencyRingkas(cost, false)
+            val shortCash = com.example.ui.formatCurrencyRingkas(owned.companyCash.toLong(), false)
+            return "Kas Perusahaan tidak mencukupi! (Kas: $shortCash, Butuh: $shortCost). Silakan suntik modal dari dompet pribadi."
         }
+
+        val durationMs = (60000L * Math.pow(1.3, currentLevel.toDouble())).toLong()
+        val now = System.currentTimeMillis()
+        
+        val newActiveUpgrade = ActiveUpgrade(
+            selectedUpgradeId = upgradeId,
+            targetLevel = currentLevel + 1,
+            startTimeMs = now,
+            finishTimeMs = now + durationMs
+        )
+
+        val newOwned = owned.copy(
+            activeUpgrades = owned.activeUpgrades + newActiveUpgrade,
+            companyCash = owned.companyCash - cost
+        )
+        
+        if (isNested && holdingId != null) {
+            val newHoldings = currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == holdingId) {
+                    val newSubs = holding.subsidiaries.map { 
+                        if (it.instanceId == instanceId) newOwned else it 
+                    }
+                    holding.copy(subsidiaries = newSubs)
+                } else holding
+            }
+            _playerState.value = currentState.copy(
+                holdingCompanies = newHoldings
+            )
+        } else {
+            _playerState.value = currentState.copy(
+                ownedBusinesses = currentState.ownedBusinesses.map {
+                    if (it.instanceId == instanceId) newOwned else it
+                }
+            )
+        }
+        saveState(_playerState.value)
+        return null
     }
 
-    fun startParentBusinessRealtimeUpgrade(instanceId: String, cost: Long) {
+    fun startParentBusinessRealtimeUpgrade(instanceId: String, cost: Long): String? {
         val currentState = _playerState.value
         var owned = currentState.ownedBusinesses.find { it.instanceId == instanceId }
         var isNested = false
@@ -7613,38 +7618,44 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         
-        if (owned == null) return
-        if (owned.level >= 50 || owned.isUpgradingRealTime) return
+        if (owned == null) return "Bisnis tidak ditemukan"
+        if (owned.level >= 50) return "Level bisnis sudah maksimal (Level 50)"
+        if (owned.isUpgradingRealTime) return "Bisnis sedang dalam proses upgrade"
         
-        if (owned.companyCash >= cost) {
-            val durationInSeconds = 30 + (owned.level * 12)
-            val newOwned = owned.copy(
-                companyCash = owned.companyCash - cost,
-                isUpgradingRealTime = true,
-                upgradeEndTimeRealTime = System.currentTimeMillis() + (durationInSeconds * 1000L)
-            )
-            
-            if (isNested && holdingId != null) {
-                val newHoldings = currentState.holdingCompanies.map { holding ->
-                    if (holding.instanceId == holdingId) {
-                        val newSubs = holding.subsidiaries.map { 
-                            if (it.instanceId == instanceId) newOwned else it 
-                        }
-                        holding.copy(subsidiaries = newSubs)
-                    } else holding
-                }
-                _playerState.value = currentState.copy(
-                    holdingCompanies = newHoldings
-                )
-            } else {
-                _playerState.value = currentState.copy(
-                    ownedBusinesses = currentState.ownedBusinesses.map {
-                        if (it.instanceId == instanceId) newOwned else it
-                    }
-                )
-            }
-            saveState(_playerState.value)
+        if (owned.companyCash < cost) {
+            val shortCost = com.example.ui.formatCurrencyRingkas(cost, false)
+            val shortCash = com.example.ui.formatCurrencyRingkas(owned.companyCash.toLong(), false)
+            return "Kas Perusahaan tidak mencukupi! (Kas: $shortCash, Butuh: $shortCost). Silakan suntik modal dari dompet pribadi."
         }
+
+        val durationInSeconds = 30 + (owned.level * 12)
+        val newOwned = owned.copy(
+            companyCash = owned.companyCash - cost,
+            isUpgradingRealTime = true,
+            upgradeEndTimeRealTime = System.currentTimeMillis() + (durationInSeconds * 1000L)
+        )
+        
+        if (isNested && holdingId != null) {
+            val newHoldings = currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == holdingId) {
+                    val newSubs = holding.subsidiaries.map { 
+                        if (it.instanceId == instanceId) newOwned else it 
+                    }
+                    holding.copy(subsidiaries = newSubs)
+                } else holding
+            }
+            _playerState.value = currentState.copy(
+                holdingCompanies = newHoldings
+            )
+        } else {
+            _playerState.value = currentState.copy(
+                ownedBusinesses = currentState.ownedBusinesses.map {
+                    if (it.instanceId == instanceId) newOwned else it
+                }
+            )
+        }
+        saveState(_playerState.value)
+        return null
     }
 
     fun finishBusinessRealtimeUpgrade(instanceId: String) {
