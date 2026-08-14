@@ -666,10 +666,38 @@ fun OverviewTabContent(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2630)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val monthlyRev = ownedData.customRevenue ?: 0L
+                        val totalExp = ownedData.calculateTotalExpenses()
+                        val netProfit = monthlyRev - totalExp
+                        val activePlanes = ownedData.airlineFleetComplex.count { it.status != "DELIVERING" }
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Estimasi Log Pendapatan", color = Color.LightGray)
-                            Text("+ ${formatCurrencyRingkas(ownedData.customRevenue?.toLong() ?: 0L, useShortFormat)} /bln", color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                            Text("Estimasi Pendapatan Rute", color = Color.LightGray, fontSize = 13.sp)
+                            Text("+ ${formatCurrencyRingkas(monthlyRev, useShortFormat)} /bln", color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                        }
+
+                        val expenseLabel = if (activePlanes == 0 && ownedData.airlineHubsComplex.isNotEmpty()) {
+                            "Biaya Sewa Hub (Idle)"
+                        } else {
+                            "Biaya Operasional & Upkeep Hub"
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(expenseLabel, color = Color.LightGray, fontSize = 13.sp)
+                            Text("- ${formatCurrencyRingkas(totalExp, useShortFormat)} /bln", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                        }
+
+                        androidx.compose.material3.HorizontalDivider(color = Color(0xFF2C3848), modifier = Modifier.padding(vertical = 4.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Estimasi Net Cashflow", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            val profitColor = if (netProfit >= 0) Color(0xFF81C784) else Color(0xFFFF5252)
+                            val profitSign = if (netProfit >= 0) "+" else "-"
+                            Text("$profitSign ${formatCurrencyRingkas(kotlin.math.abs(netProfit), useShortFormat)} /bln", color = profitColor, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                         }
                     }
                 }
@@ -989,6 +1017,35 @@ fun HubsTabContent(
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
+
+                        var hubUpkeep = 100000L
+                        hub.activeUpgrades.forEach { upgId ->
+                            val addCost = when (upgId) {
+                                "upg_dom" -> 50000L
+                                "upg_intl_1" -> 150000L
+                                "upg_vip" -> 100000L
+                                "upg_intl_2" -> 300000L
+                                "upg_cargo" -> 120000L
+                                else -> 50000L
+                            }
+                            hubUpkeep += addCost
+                        }
+                        val upkeepLabel = if (assignedPlanesCount == 0) "Biaya Sewa Hub (Idle):" else "Biaya Upkeep Hub:"
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(upkeepLabel, color = Color.Gray, fontSize = 12.sp)
+                            Text(
+                                text = "${formatCurrencyRingkas(hubUpkeep, useShortFormat)} /bln",
+                                color = Color(0xFFFF8A80),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Button(
                             onClick = { onOpenUpgrade(hub) },

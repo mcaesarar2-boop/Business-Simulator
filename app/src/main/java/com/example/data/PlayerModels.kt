@@ -217,24 +217,11 @@ data class PlayerState(
 )
 
 fun getBusinessStats(owned: OwnedBusiness, catalog: BusinessCatalogItem, playerState: PlayerState? = null): Pair<Long, Long> {
-    var flatRev = 0L
-    var multRev = 1.0f
-    var flatMaint = 0L
-    var multMaint = 1.0f
-
-    catalog.upgrades.forEach { upgrade ->
-        val level = owned.upgradeLevels[upgrade.id] ?: if (owned.purchasedUpgrades.contains(upgrade.id)) 1 else 0
-        if (level > 0) {
-            flatRev += upgrade.revenueFlatBoost * level
-            repeat(level) { multRev *= upgrade.revenueMultiplier }
-            flatMaint += upgrade.maintenanceFlatReduction * level
-            repeat(level) { multMaint *= upgrade.maintenanceMultiplier }
-        }
+    if (owned.isUpgradingRealTime) {
+        return Pair(0L, owned.calculateTotalExpenses())
     }
-
-    var totalRev = (owned.customRevenue ?: ((catalog.monthlyRevenue + flatRev) * multRev).toLong())
-    totalRev = (totalRev * owned.synergyMultiplier).toLong()
-    var totalMaint = ((catalog.monthlyMaintenanceCost - flatMaint) * multMaint).toLong().coerceAtLeast(0)
+    var totalRev = owned.calculateGrossRevenue()
+    var totalMaint = owned.calculateTotalExpenses()
 
     if (playerState != null && catalog.id == "media_tv") {
         var tvRev = 0.0
@@ -247,26 +234,6 @@ fun getBusinessStats(owned: OwnedBusiness, catalog: BusinessCatalogItem, playerS
         }
         totalRev += tvRev.toLong()
         totalMaint += tvMaint.toLong()
-    }
-
-    if (catalog.id == "fine_dining") {
-        val lvl = owned.level
-        totalRev = when {
-            lvl in 1..10 -> 5000L + (lvl * 2000L)
-            lvl in 11..30 -> 25000L + ((lvl - 10) * 8000L)
-            lvl in 31..40 -> 185000L + ((lvl - 30) * 50000L)
-            lvl in 41..50 -> 685000L + ((lvl - 40) * 200000L)
-            else -> 685000L + ((lvl - 40) * 200000L)
-        }
-    }
-
-    if (catalog.category == com.example.data.BusinessCategory.HOSPITALITY) {
-        totalRev = owned.hospitalityProperties.sumOf { it.lastMonthRevenue }
-        totalMaint = owned.hospitalityProperties.sumOf { it.lastMonthExpense }
-    }
-
-    if (owned.isUpgradingRealTime) {
-        totalRev = 0L
     }
 
     return Pair(totalRev, totalMaint)

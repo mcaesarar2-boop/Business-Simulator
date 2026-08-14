@@ -6971,44 +6971,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun calculateAviationExpenses(owned: com.example.data.OwnedBusiness): Long {
-        var totalExp = 0L
-        owned.airlineFleetComplex.forEach { plane ->
-            if (plane.status != "DELIVERING") {
-                val pDef = com.example.data.AVIATION_AIRCRAFT_CATALOG.find { it.id == plane.modelId }
-                    ?: com.example.data.DUMMY_AIRCRAFTS.find { it.id == plane.modelId }
-                val baseUpkeep = if (pDef != null) {
-                    pDef.price * 0.005
-                } else {
-                    when (plane.modelId) {
-                        "atr72" -> 100000.0
-                        "a320" -> 250000.0
-                        "b777" -> 600000.0
-                        else -> 150000.0
-                    }
-                }
-                val finalUpkeep = baseUpkeep * (1.5 - plane.condition / 200.0)
-                totalExp += finalUpkeep.toLong()
-            }
-            if (plane.isLeased) {
-                totalExp += plane.leasePrice
-            }
-        }
-        owned.airlineHubsComplex.forEach { hub ->
-            var hubUpkeep = 100000L // Base upkeep
-            hub.activeUpgrades.forEach { upgId ->
-                val addCost = when (upgId) {
-                    "upg_dom" -> 50000L
-                    "upg_intl_1" -> 150000L
-                    "upg_vip" -> 100000L
-                    "upg_intl_2" -> 300000L
-                    "upg_cargo" -> 120000L
-                    else -> 50000L
-                }
-                hubUpkeep += addCost
-            }
-            totalExp += hubUpkeep
-        }
-        return totalExp
+        return owned.calculateTotalExpenses()
     }
 
     fun processAviationMonthlyTick(owned: com.example.data.OwnedBusiness): com.example.data.OwnedBusiness {

@@ -720,7 +720,16 @@ data class OwnedBusiness(
             }
             "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "mid_logistics", "upper_tech", "upper_realestate", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
-                val baseRev = cat?.monthlyRevenue ?: 5000L
+                var flatRev = 0L
+                var multRev = 1.0f
+                cat?.upgrades?.forEach { upgrade ->
+                    val lvl = upgradeLevels[upgrade.id] ?: if (purchasedUpgrades.contains(upgrade.id)) 1 else 0
+                    if (lvl > 0) {
+                        flatRev += upgrade.revenueFlatBoost * lvl
+                        repeat(lvl) { multRev *= upgrade.revenueMultiplier }
+                    }
+                }
+                val baseRev = ((cat?.monthlyRevenue ?: 5000L) + flatRev) * multRev
                 (baseRev * synergyMultiplier).toLong()
             }
             "media_radio" -> {
@@ -743,20 +752,16 @@ data class OwnedBusiness(
                 (baseRev * synergyMultiplier).toLong() + unitsRev
             }
             "aviation_group" -> {
-                val calculatedRev = customRevenue ?: 0L
-                if (calculatedRev > 0) calculatedRev else (level * 1500000L)
+                customRevenue ?: 0L
             }
             "theme_park_holding" -> {
-                val branchRev = themeParkBranches.sumOf { it.lastMonthRevenue }
-                if (branchRev > 0) branchRev else (level * 800000L)
+                themeParkBranches.sumOf { it.lastMonthRevenue }
             }
             "hospitality_holding" -> {
-                val hotelRev = hospitalityProperties.sumOf { it.lastMonthRevenue }
-                if (hotelRev > 0) hotelRev else (level * 1200000L)
+                hospitalityProperties.sumOf { it.lastMonthRevenue }
             }
             "cruise_line_holding" -> {
-                val cruiseRev = cruiseShips?.sumOf { it.lastMonthTicketRevenue + it.lastMonthOnboardRevenue } ?: 0L
-                if (cruiseRev > 0) cruiseRev else (level * 2500000L)
+                cruiseShips?.sumOf { it.lastMonthTicketRevenue + it.lastMonthOnboardRevenue } ?: 0L
             }
             else -> {
                 val cat = businessCatalog.find { it.id == catalogId }
@@ -887,11 +892,17 @@ data class OwnedBusiness(
                 var totalExp = 0L
                 airlineFleetComplex.forEach { plane ->
                     if (plane.status != "DELIVERING") {
-                        val baseUpkeep = when (plane.modelId) {
-                            "atr72" -> 100000.0
-                            "a320" -> 250000.0
-                            "b777" -> 600000.0
-                            else -> 150000.0
+                        val pDef = AVIATION_AIRCRAFT_CATALOG.find { it.id == plane.modelId }
+                            ?: DUMMY_AIRCRAFTS.find { it.id == plane.modelId }
+                        val baseUpkeep = if (pDef != null) {
+                            pDef.price * 0.005
+                        } else {
+                            when (plane.modelId) {
+                                "atr72" -> 100000.0
+                                "a320" -> 250000.0
+                                "b777" -> 600000.0
+                                else -> 150000.0
+                            }
                         }
                         val finalUpkeep = baseUpkeep * (1.5 - plane.condition / 200.0)
                         totalExp += finalUpkeep.toLong()
@@ -921,18 +932,18 @@ data class OwnedBusiness(
             "theme_park_holding" -> {
                 val branchExp = themeParkBranches.sumOf { it.lastMonthExpense }
                 val sdmSalaries = themeParkBranches.size * 25000L
-                (if (branchExp > 0) branchExp else (level * 200000L)) + sdmSalaries
+                branchExp + sdmSalaries
             }
             "hospitality_holding" -> {
                 val hotelExp = hospitalityProperties.sumOf { it.lastMonthExpense }
                 val sdmSalaries = hospitalityProperties.size * 40000L
-                (if (hotelExp > 0) hotelExp else (level * 350000L)) + sdmSalaries
+                hotelExp + sdmSalaries
             }
             "cruise_line_holding" -> {
                 val cruiseExp = cruiseShips?.sumOf { it.lastMonthExpenses } ?: 0L
                 val sdmSalaries = (cruiseShips?.size ?: 0) * 80000L
-                val baseMaint = 100000L
-                (if (cruiseExp > 0) cruiseExp else (level * 600000L)) + sdmSalaries + baseMaint
+                val baseMaint = if ((cruiseShips?.size ?: 0) > 0) 100000L else 0L
+                cruiseExp + sdmSalaries + baseMaint
             }
             else -> {
                 val cat = businessCatalog.find { it.id == catalogId }
