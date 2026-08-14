@@ -55,16 +55,7 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
         prop?.basePrice ?: owned.purchasedPrice
     }
 
-    val businessValue = playerState.ownedBusinesses.sumOf { owned ->
-        val catalogItem = getCatalogItem(owned.catalogId, playerState)
-        if (catalogItem != null) {
-            getBusinessValuation(owned, catalogItem)
-        } else {
-            0L
-        }
-    } + playerState.holdingCompanies.sumOf { holding ->
-        com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, playerState)
-    }
+    val businessValue = playerState.calculateMegaHoldingValuation()
 
     val collectionsValue = playerState.ownedCollections.filter { owned ->
         val cat = collectionList.find { c -> c.id == owned.itemId }?.categoryId
@@ -88,17 +79,7 @@ fun FamilyOfficeScreen(navController: NavHostController, viewModel: GameViewMode
     // FAMILY OFFICE CORE METRICS
     // ----------------------------------------------------
     // VALUASI MEGA HOLDING
-    val totalDirectBusinessValuation = playerState.ownedBusinesses.sumOf {
-        val cat = getCatalogItem(it.catalogId, playerState)
-        if (cat != null) getBusinessValuation(it, cat) else 0L
-    }
-    val totalSubsidiaryValuation = playerState.holdingCompanies.sumOf { holding ->
-        holding.subsidiaries.sumOf { sub ->
-            val cat = getCatalogItem(sub.catalogId, playerState)
-            if (cat != null) getBusinessValuation(sub, cat) else 0L
-        }
-    }
-    val holdingValuation = totalDirectBusinessValuation + totalSubsidiaryValuation
+    val holdingValuation = playerState.calculateMegaHoldingValuation()
 
     // 2. Liabilities
     val liabilities = playerState.totalLiabilities

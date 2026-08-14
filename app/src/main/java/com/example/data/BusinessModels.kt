@@ -469,15 +469,120 @@ interface BusinessEntity {
     }
 
     fun calculateBusinessValuation(): Long {
-        val annualMargin = calculateNetMargin() * 12
-        val peRatio = getSectorMultiplier(this.sector)
-        
-        val baseValue = if (annualMargin > 0) {
-            annualMargin * peRatio
-        } else {
-            calculateGrossRevenue() * 12 * 2 // Fallback jika merugi
-        }
-        return baseValue + this.internalCash
+        val owned = this as? OwnedBusiness
+        val catItem = if (owned != null) businessCatalog.find { it.id == owned.catalogId } else null
+        val costToBuyOriginal = catItem?.costToBuy ?: 0L
+
+        // 1. Modal akuisisi awal / baseline license cost (Nilai wajar awal tepat 100% harga beli)
+        val baseCost = costToBuyOriginal
+
+        // 2. Akumulasi investasi modal riil dari upgrade, armada, cabang, wahana, properti & aset
+        val upgradeInvestments: Long = if (owned != null) {
+            var uCost = 0L
+            catItem?.upgrades?.forEach { upg ->
+                val lvl = owned.upgradeLevels[upg.id] ?: if (owned.purchasedUpgrades.contains(upg.id)) 1 else 0
+                var curCost = upg.baseCost.toDouble()
+                for (i in 0 until lvl) {
+                    uCost += curCost.toLong()
+                    curCost *= upg.costMultiplier
+                }
+            }
+            
+            val specializedAssets = when (owned.catalogId) {
+                "fine_dining" -> {
+                    ((owned.level - 1) * 25000L) + (owned.restaurantBranches * 50000L) + (owned.michelinStars * 250000L)
+                }
+                "content_creator" -> {
+                    var ccSum = 0L
+                    var ccCost = 500.0
+                    for (i in 1 until owned.level) {
+                        ccSum += ccCost.toLong()
+                        ccCost *= 1.18
+                    }
+                    ccSum + (owned.contentCreatorEmployees * 5000L) + (if (owned.contentCreatorOfficeUnlocked) 50000L else 0L)
+                }
+                "aviation_group" -> {
+                    val fleetVal = owned.airlineFleetComplex.sumOf { plane ->
+                        if (!plane.isLeased) {
+                            when (plane.modelId) {
+                                "atr72" -> 15000000L
+                                "a320" -> 35000000L
+                                "b777" -> 90000000L
+                                else -> 20000000L
+                            }
+                        } else 0L
+                    }
+                    val hubsVal = owned.airlineHubsComplex.size * 10000000L
+                    fleetVal + hubsVal
+                }
+                "theme_park_holding" -> {
+                    owned.themeParkBranches.sumOf { branch ->
+                        20000000L + (branch.rides.size * 5000000L) + (branch.facilities.size * 1500000L)
+                    }
+                }
+                "hospitality_holding" -> {
+                    owned.hospitalityProperties.sumOf { prop ->
+                        25000000L + (prop.builtFacilities.size * 3000000L)
+                    }
+                }
+                "cruise_line_holding" -> {
+                    owned.cruiseShips?.sumOf { ship ->
+                        when (ship.shipClass.name) {
+                            "TITAN" -> 150000000L
+                            "MEGA_SHIP" -> 100000000L
+                            "LARGE" -> 70000000L
+                            "MIDSIZE" -> 50000000L
+                            else -> 25000000L
+                        }
+                    } ?: 0L
+                }
+                "healthcare" -> {
+                    owned.healthcareSubsidiaries.sumOf { unit ->
+                        val unitMultiplier = when (unit.type) {
+                            "HOSPITAL" -> 5000000L
+                            "CLINIC" -> 1000000L
+                            "INSURANCE" -> 3000000L
+                            else -> 1000000L
+                        }
+                        unitMultiplier * unit.level
+                    }
+                }
+                "construction" -> {
+                    ((owned.level - 1) * 100000L) + (owned.activeTenders.size * 250000L)
+                }
+                "media_production" -> {
+                    val streamingVal = owned.projectHistory.filter { it.status == "FINISHED" }.sumOf { (it.licenseMonthlyFee ?: 0L) * 24L }
+                    val activeTheaters = owned.projectHistory.filter { it.status == "IN_THEATERS" }.sumOf { it.currentRevenue }
+                    streamingVal + activeTheaters
+                }
+                "media_radio" -> {
+                    val eventAssetsVal = owned.eoOwnedAssets.values.sum() * 5000L
+                    val hqVal = when (owned.eoCompanyHqLevel) {
+                        "INTERNATIONAL" -> 2000000L
+                        "NATIONAL" -> 1000000L
+                        "REGIONAL" -> 400000L
+                        "OFFICE" -> 100000L
+                        else -> 0L
+                    }
+                    eventAssetsVal + hqVal
+                }
+                else -> 0L
+            }
+            uCost + specializedAssets
+        } else 0L
+
+        // 3. Profit Growth Goodwill (Hanya mengkapitalisasi penambahan laba di atas base level 1)
+        val baseMonthlyMargin = catItem?.let { maxOf(0L, it.monthlyRevenue - it.monthlyMaintenanceCost) } ?: 0L
+        val currentMonthlyMargin = calculateNetMargin()
+        val addedMonthlyMargin = maxOf(0L, currentMonthlyMargin - baseMonthlyMargin)
+        val addedAnnualProfit = addedMonthlyMargin * 12
+        val peMultiplier = (getSectorMultiplier(this.sector) / 10.0).coerceIn(1.0, 2.5)
+        val profitGrowthGoodwill = (addedAnnualProfit * peMultiplier).toLong()
+
+        val extraVal = owned?.extraValuation ?: 0L
+
+        val baseEnterpriseValue = baseCost + upgradeInvestments + profitGrowthGoodwill
+        return maxOf(costToBuyOriginal, baseEnterpriseValue) + this.internalCash + extraVal
     }
 
     fun calculateValuation(): Long {

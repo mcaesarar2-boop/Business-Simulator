@@ -24,6 +24,7 @@ import com.example.viewmodel.GameViewModel
 import com.example.data.getCatalogItem
 import com.example.data.getBusinessValuation
 import com.example.data.getBusinessStats
+import com.example.data.calculateMegaHoldingValuation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,16 +64,7 @@ fun TaxAndAuditScreen(navController: NavController, viewModel: GameViewModel) {
         prop?.basePrice ?: owned.purchasedPrice
     }
 
-    val businessValue = playerState.ownedBusinesses.sumOf { owned ->
-        val catalogItem = getCatalogItem(owned.catalogId, playerState)
-        if (catalogItem != null) {
-            getBusinessValuation(owned, catalogItem)
-        } else {
-            0L
-        }
-    } + playerState.holdingCompanies.sumOf { holding ->
-        com.example.data.CorporateFinanceManager.calculateHoldingValuation(holding, playerState)
-    }
+    val businessValue = playerState.calculateMegaHoldingValuation()
 
     val collectionsValue = playerState.ownedCollections.filter { owned ->
         val cat = collectionList.find { c -> c.id == owned.itemId }?.categoryId

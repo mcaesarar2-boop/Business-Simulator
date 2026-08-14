@@ -42,10 +42,7 @@ fun TaxLegalScreen(navController: NavController, viewModel: GameViewModel) {
     
     val format = remember { NumberFormat.getCurrencyInstance(Locale.US).apply { maximumFractionDigits = 0 } }
     
-    val totalBusiness = playerState.ownedBusinesses.sumOf {
-        val cat = com.example.data.getCatalogItem(it.catalogId, playerState)
-        if (cat != null) com.example.data.getBusinessValuation(it, cat) else 0L
-    }
+    val totalBusiness = playerState.calculateMegaHoldingValuation()
     
     // Monthly Corporate Net Profit before taxes
     var megaHoldingMonthlyProfit = playerState.ownedBusinesses.sumOf {

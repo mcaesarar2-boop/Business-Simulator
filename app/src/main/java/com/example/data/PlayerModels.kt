@@ -273,35 +273,7 @@ fun getBusinessStats(owned: OwnedBusiness, catalog: BusinessCatalogItem, playerS
 }
 
 fun getBusinessValuation(owned: OwnedBusiness, catalog: BusinessCatalogItem): Long {
-    var totalUpgradeCost = 0L
-    
-    // Calculate regular catalog upgrades
-    for ((upgradeId, level) in owned.upgradeLevels) {
-        val upgradeDef = catalog.upgrades.find { it.id == upgradeId }
-        if (upgradeDef != null) {
-            var currentCost = upgradeDef.baseCost.toDouble()
-            for (i in 0 until level) {
-                totalUpgradeCost += currentCost.toLong()
-                currentCost *= upgradeDef.costMultiplier
-            }
-        }
-    }
-    
-    // Calculate Content Creator upgrades based on its exponential curve
-    if (owned.catalogId == "content_creator") {
-        totalUpgradeCost = 0L
-        var ccCost = 500.0
-        for (i in 1 until owned.level) {
-            totalUpgradeCost += ccCost.toLong()
-            ccCost *= 1.18
-        }
-    }
-
-    val (revenue, maintenance) = getBusinessStats(owned, catalog)
-    val netProfit = revenue - maintenance
-    val annualProfit = if (netProfit > 0) netProfit * 12 else 0
-
-    return catalog.costToBuy + totalUpgradeCost + annualProfit + owned.extraValuation
+    return owned.calculateBusinessValuation()
 }
 
 fun getUpgradeCost(upgrade: BusinessUpgrade, currentLevel: Int): Long {

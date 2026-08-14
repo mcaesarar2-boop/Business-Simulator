@@ -1584,7 +1584,7 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
         val estIncomeTotal = estIncomeFromShares + totalSubsValProfit
         monthlyIncomeStrOriginal = "+${com.example.ui.formatCurrencyRingkas(estIncomeTotal, useShortFormat)}"
     } else {
-        valuationOriginal = getBusinessValuation(ownedData, catalogItem) + ownedData.companyCash.toLong()
+        valuationOriginal = getBusinessValuation(ownedData, catalogItem)
         monthlyIncomeStrOriginal = "+${com.example.ui.formatCurrencyRingkas(currentRev, useShortFormat)}"
         monthlyMaintStrOriginal = "-${com.example.ui.formatCurrencyRingkas(currentMaint, useShortFormat)}"
     }

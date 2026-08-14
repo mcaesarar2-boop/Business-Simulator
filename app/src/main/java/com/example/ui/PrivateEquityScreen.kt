@@ -45,17 +45,7 @@ fun PrivateEquityScreen(navController: NavController, viewModel: GameViewModel) 
 
     // Calculate total business valuation
     val totalBusinessValuation = remember(playerState) {
-        val totalBusinessValuation = playerState.ownedBusinesses.sumOf {
-            val catalogItem = getCatalogItem(it.catalogId, playerState)
-            if (catalogItem != null) getBusinessValuation(it, catalogItem) else 0L
-        }
-        val totalHoldingValuation = playerState.holdingCompanies.sumOf { holding ->
-            holding.subsidiaries.sumOf { sub ->
-                val catalogItem = getCatalogItem(sub.catalogId, playerState)
-                if (catalogItem != null) getBusinessValuation(sub, catalogItem) else 0L
-            }
-        }
-        (totalBusinessValuation + totalHoldingValuation).coerceAtLeast(100_000L)
+        playerState.calculateMegaHoldingValuation().coerceAtLeast(100_000L)
     }
 
     // Dynamic max loan limit based on 20% of valuation, capped between 100k and 50M
