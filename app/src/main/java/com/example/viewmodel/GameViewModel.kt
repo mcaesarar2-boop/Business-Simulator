@@ -2674,6 +2674,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 var newProgress = business.contentCreatorProgress + addedProgress
                 var newSubs = business.contentCreatorSubscribers
                 var newCash = business.contentCreatorCash
+                var currentContracts = business.contentCreatorContracts
+
                 if (newProgress >= 1f) {
                     newProgress = 0f
                     var income = (newSubs * 0.05).toLong()
@@ -2689,11 +2691,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     newCash += income
+
+                    // Process Active Brand Deal Contracts
+                    if (currentContracts.isNotEmpty()) {
+                        val updatedContracts = mutableListOf<ActiveCreatorContract>()
+                        for (contract in currentContracts) {
+                            newCash += contract.monthlyPayout
+                            val newRemaining = contract.remainingMonths - 1
+                            val newPaid = contract.totalPaidSoFar + contract.monthlyPayout
+                            if (newRemaining > 0) {
+                                updatedContracts.add(
+                                    contract.copy(
+                                        remainingMonths = newRemaining,
+                                        totalPaidSoFar = newPaid
+                                    )
+                                )
+                            }
+                        }
+                        currentContracts = updatedContracts
+                    }
                 }
                 updatedBusiness = updatedBusiness.copy(
                     contentCreatorProgress = newProgress,
                     contentCreatorSubscribers = newSubs,
-                    contentCreatorCash = newCash
+                    contentCreatorCash = newCash,
+                    contentCreatorContracts = currentContracts
                 )
             }
 
@@ -6043,6 +6065,105 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             return true
         }
         return false
+    }
+
+    fun acceptContentCreatorBrandDealOffer(offer: BrandDealOffer): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            if (owned.catalogId == "content_creator") {
+                when (offer.dealType) {
+                    BrandDealType.ONE_OFF -> {
+                        owned.copy(
+                            contentCreatorCash = owned.contentCreatorCash + offer.contractValue
+                        )
+                    }
+                    BrandDealType.CONTRACT -> {
+                        val currentList = owned.contentCreatorContracts
+                        if (currentList.size >= 3) {
+                            return false // Slot penuh
+                        }
+                        val newContract = ActiveCreatorContract(
+                            id = offer.id,
+                            brandName = offer.brandName,
+                            tierLevel = offer.tierLevel,
+                            categoryTag = offer.categoryTag,
+                            monthlyPayout = offer.monthlyPayout,
+                            totalMonths = offer.durationMonths,
+                            remainingMonths = offer.durationMonths,
+                            totalPaidSoFar = 0L
+                        )
+                        owned.copy(
+                            contentCreatorContracts = currentList + newContract
+                        )
+                    }
+                }
+            } else {
+                owned
+            }
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun terminateContentCreatorContract(contractId: String, penaltyFee: Long = 0L): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            if (owned.catalogId == "content_creator") {
+                owned.copy(
+                    contentCreatorCash = (owned.contentCreatorCash - penaltyFee).coerceAtLeast(0L),
+                    contentCreatorContracts = owned.contentCreatorContracts.filterNot { it.id == contractId }
+                )
+            } else {
+                owned
+            }
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun acceptContentCreatorBrandDeal(amount: Long, subsReward: Long = 0): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            if (owned.catalogId == "content_creator") {
+                owned.copy(
+                    contentCreatorCash = owned.contentCreatorCash + amount,
+                    contentCreatorSubscribers = owned.contentCreatorSubscribers + subsReward
+                )
+            } else {
+                owned
+            }
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun rejectContentCreatorBrandDeal(subsReward: Long): Boolean {
+        if (subsReward <= 0) return true
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it.catalogId == "content_creator" } ?: return false
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            if (owned.catalogId == "content_creator") {
+                owned.copy(
+                    contentCreatorSubscribers = owned.contentCreatorSubscribers + subsReward
+                )
+            } else {
+                owned
+            }
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
     }
 
     fun deductCash(amount: Long): Boolean {

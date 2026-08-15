@@ -680,6 +680,7 @@ data class OwnedBusiness(
     val contentCreatorEmployees: Int = 0,
     val contentCreatorOfficeUnlocked: Boolean = false,
     val contentCreatorCash: Long = 5000L,
+    val contentCreatorContracts: List<ActiveCreatorContract> = emptyList(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -700,7 +701,8 @@ data class OwnedBusiness(
             "content_creator" -> {
                 val multiplier = 1.0 + (contentCreatorEmployees * 0.05)
                 val baseRev = (contentCreatorSubscribers * 0.05).toLong()
-                (baseRev * multiplier).toLong()
+                val contractsRev = contentCreatorContracts.sumOf { it.monthlyPayout }
+                (baseRev * multiplier).toLong() + contractsRev
             }
             "fine_dining" -> {
                 val lvl = level
