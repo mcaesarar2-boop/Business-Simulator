@@ -268,6 +268,10 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
             val id = backStackEntry.arguments?.getString("id") ?: ""
             com.example.ui.LogisticsScreen(navController, viewModel, id)
         }
+        composable("apartment_property/{id}") { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id") ?: ""
+            com.example.ui.ApartmentPropertyScreen(navController, viewModel, id)
+        }
         composable(BottomNavItem.Earnings.screen_route) { EarningsScreen(viewModel) }
         composable(BottomNavItem.Items.screen_route) { com.example.ui.CollectionScreen(navController, viewModel) }
         composable("garage") { com.example.ui.GarageScreen(navController, viewModel) }

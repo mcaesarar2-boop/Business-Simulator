@@ -2725,6 +2725,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 updatedBusiness = updatedBusiness.copy(logisticsData = updatedLogistics)
             }
 
+            if (business.catalogId == "upper_realestate") {
+                businessesChanged = true
+                val updatedApartment = ApartmentEngine.processTick(business.apartmentData, dtSeconds = 0.1f)
+                updatedBusiness = updatedBusiness.copy(apartmentData = updatedApartment)
+            }
+
             val completedUpgrades = updatedBusiness.activeUpgrades.filter { now >= it.finishTimeMs }
             if (completedUpgrades.isNotEmpty()) {
                 businessesChanged = true
@@ -2784,6 +2790,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     holdingSelfChanged = true
                     val updatedLogistics = LogisticsEngine.processTick(business.logisticsData, dtSeconds = 0.1f)
                     updatedBusiness = updatedBusiness.copy(logisticsData = updatedLogistics)
+                }
+
+                if (business.catalogId == "upper_realestate") {
+                    holdingsChanged = true
+                    holdingSelfChanged = true
+                    val updatedApartment = ApartmentEngine.processTick(business.apartmentData, dtSeconds = 0.1f)
+                    updatedBusiness = updatedBusiness.copy(apartmentData = updatedApartment)
                 }
 
                 val completedUpgrades = updatedBusiness.activeUpgrades.filter { now >= it.finishTimeMs }
@@ -12277,6 +12290,102 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val b = getLogisticsBusiness(instanceId) ?: return
         if (b.logisticsData.internalCash < amount || amount <= 0) return
         updateLogisticsBusiness(instanceId) { data ->
+            data.copy(internalCash = data.internalCash - amount)
+        }
+        _playerState.update { it.copy(cash = it.cash + amount) }
+    }
+
+    // ==========================================
+    // APARTMENT PROPERTY OPERATIONS (SRC Grand Apartment)
+    // ==========================================
+    fun getApartmentBusiness(instanceId: String): OwnedBusiness? {
+        val state = _playerState.value
+        return state.ownedBusinesses.find { it.instanceId == instanceId }
+            ?: state.ownedBusinesses.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+            ?: state.holdingCompanies.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+            ?: state.holdingCompanies.flatMap { it.subsidiaries }.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+    }
+
+    fun updateApartmentBusiness(instanceId: String, transform: (com.example.data.ApartmentPropertyData) -> com.example.data.ApartmentPropertyData) {
+        val currentState = _playerState.value
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) {
+                b.copy(apartmentData = transform(b.apartmentData))
+            } else {
+                val newSubs = b.subsidiaries.map { sub ->
+                    if (sub.instanceId == instanceId) sub.copy(apartmentData = transform(sub.apartmentData)) else sub
+                }
+                b.copy(subsidiaries = newSubs)
+            }
+        }
+        val newHoldings = currentState.holdingCompanies.map { holding ->
+            val newSubs = holding.subsidiaries.map { b ->
+                if (b.instanceId == instanceId) {
+                    b.copy(apartmentData = transform(b.apartmentData))
+                } else {
+                    val newInnerSubs = b.subsidiaries.map { sub ->
+                        if (sub.instanceId == instanceId) sub.copy(apartmentData = transform(sub.apartmentData)) else sub
+                    }
+                    b.copy(subsidiaries = newInnerSubs)
+                }
+            }
+            holding.copy(subsidiaries = newSubs)
+        }
+        _playerState.value = currentState.copy(
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = newHoldings
+        )
+    }
+
+    fun setApartmentRentPrice(instanceId: String, unitType: com.example.data.ApartmentUnitType, newPrice: Long) {
+        updateApartmentBusiness(instanceId) { data ->
+            ApartmentEngine.setRentPrice(data, unitType, newPrice)
+        }
+    }
+
+    fun unlockApartmentUnitType(instanceId: String, unitType: com.example.data.ApartmentUnitType) {
+        updateApartmentBusiness(instanceId) { data ->
+            ApartmentEngine.unlockUnitCategory(data, unitType)
+        }
+    }
+
+    fun expandApartmentFloors(instanceId: String) {
+        updateApartmentBusiness(instanceId) { data ->
+            ApartmentEngine.expandBuildingFloors(data)
+        }
+    }
+
+    fun installApartmentFacility(instanceId: String, facility: com.example.data.ApartmentFacilityType) {
+        updateApartmentBusiness(instanceId) { data ->
+            ApartmentEngine.installFacility(data, facility)
+        }
+    }
+
+    fun resolveApartmentIncident(instanceId: String, incidentId: String) {
+        updateApartmentBusiness(instanceId) { data ->
+            ApartmentEngine.resolveIncident(data, incidentId)
+        }
+    }
+
+    fun ignoreApartmentIncident(instanceId: String, incidentId: String) {
+        updateApartmentBusiness(instanceId) { data ->
+            ApartmentEngine.ignoreIncident(data, incidentId)
+        }
+    }
+
+    fun injectCapitalToApartment(instanceId: String, amount: Long) {
+        val currentState = _playerState.value
+        if (currentState.cash < amount || amount <= 0) return
+        _playerState.value = currentState.copy(cash = currentState.cash - amount)
+        updateApartmentBusiness(instanceId) { data ->
+            data.copy(internalCash = data.internalCash + amount)
+        }
+    }
+
+    fun withdrawCapitalFromApartment(instanceId: String, amount: Long) {
+        val b = getApartmentBusiness(instanceId) ?: return
+        if (b.apartmentData.internalCash < amount || amount <= 0) return
+        updateApartmentBusiness(instanceId) { data ->
             data.copy(internalCash = data.internalCash - amount)
         }
         _playerState.update { it.copy(cash = it.cash + amount) }

@@ -610,7 +610,7 @@ fun getCatalogNameForId(catalogId: String): String {
         "mid_cafe" -> "Coffee Shop"
         "mid_logistics" -> "SRC Express (Logistics)"
         "upper_tech" -> "App Dev"
-        "upper_realestate" -> "Komplek Apartment"
+        "upper_realestate" -> "SRC Grand Apartment (Property)"
         "tycoon_bank" -> "Bank Swasta"
         "tycoon_corp" -> "Konglomerasi Multinasional"
         "media_print" -> "Print & Digital Media"
@@ -682,6 +682,7 @@ data class OwnedBusiness(
     val contentCreatorCash: Long = 5000L,
     val contentCreatorContracts: List<ActiveCreatorContract> = emptyList(),
     val logisticsData: LogisticsCompanyData = LogisticsCompanyData(),
+    val apartmentData: ApartmentPropertyData = ApartmentPropertyData(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -730,7 +731,13 @@ data class OwnedBusiness(
                 val totalGross = ((base + contractsBonus + fleetCapacityBonus) * techMultiplier * synergyMultiplier).toLong()
                 totalGross
             }
-            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "upper_tech", "upper_realestate", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
+            "upper_realestate" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val dynamicRent = apartmentData.grossMonthlyRent
+                val effectiveRent = if (dynamicRent > 0) dynamicRent else (cat?.monthlyRevenue ?: 120000L)
+                (effectiveRent * synergyMultiplier).toLong()
+            }
+            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "upper_tech", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
                 var flatRev = 0L
                 var multRev = 1.0f
@@ -845,8 +852,9 @@ data class OwnedBusiness(
             }
             "upper_realestate" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
-                val baseMaint = cat?.monthlyMaintenanceCost ?: 70000L
-                val staffExpenses = level * 8000L
+                val dynamicExpenses = apartmentData.totalMonthlyExpenses
+                val baseMaint = if (dynamicExpenses > 0) dynamicExpenses else (cat?.monthlyMaintenanceCost ?: 70000L)
+                val staffExpenses = level * 3000L
                 baseMaint + staffExpenses
             }
             "tycoon_bank" -> {

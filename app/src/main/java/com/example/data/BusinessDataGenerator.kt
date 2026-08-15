@@ -86,12 +86,12 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
             )
         ),
         BusinessCatalogItem(
-            id = "upper_realestate", name = "Kompleks Apartemen", category = BusinessCategory.PROPERTY,
+            id = "upper_realestate", name = "SRC Grand Apartment (Property)", category = BusinessCategory.PROPERTY,
             imageUrl = "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80",
             costToBuy = 500000, monthlyRevenue = 120000, monthlyMaintenanceCost = 20000,
             upgrades = listOf(
-                BusinessUpgrade("1", "Kolam Renang Rooftop", "Harga sewa naik drastis (+80000 Rev)", baseCost = 250000, revenueFlatBoost = 80000),
-                BusinessUpgrade("2", "Security 24 Jam", "Zero komplain (-50% Biaya)", baseCost = 50000, maintenanceMultiplier = 0.5f)
+                BusinessUpgrade("1", "Kolam Renang Rooftop", "Tingkatkan batas kepuasan penghuni & sewa wajar", baseCost = 150000, revenueFlatBoost = 50000),
+                BusinessUpgrade("2", "Smart Security 24 Jam", "Zero komplain & kurangi insiden (-40%)", baseCost = 45000, maintenanceMultiplier = 0.6f)
             )
         ),
 
