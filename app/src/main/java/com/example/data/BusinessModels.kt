@@ -810,6 +810,7 @@ data class OwnedBusiness(
     val apartmentData: ApartmentPropertyData = ApartmentPropertyData(),
     val constructionData: ConstructionFirmData = ConstructionFirmData(),
     val softwareHouseData: SoftwareHouseCompanyData = SoftwareHouseCompanyData(),
+    val bankingData: BankingCompanyData = BankingCompanyData(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -864,7 +865,7 @@ data class OwnedBusiness(
                 val effectiveRent = if (dynamicRent > 0) dynamicRent else (cat?.monthlyRevenue ?: 120000L)
                 (effectiveRent * synergyMultiplier).toLong()
             }
-            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "upper_tech", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
+            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "upper_tech", "tycoon_corp", "media_print", "media_tv" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
                 var flatRev = 0L
                 var multRev = 1.0f
@@ -877,6 +878,17 @@ data class OwnedBusiness(
                 }
                 val baseRev = ((cat?.monthlyRevenue ?: 5000L) + flatRev) * multRev
                 (baseRev * synergyMultiplier).toLong()
+            }
+            "tycoon_bank" -> {
+                val activeLoanInterest = bankingData.activeLoans
+                    .filter { it.healthStatus != LoanHealthStatus.SETTLED && it.healthStatus != LoanHealthStatus.NON_PERFORMING }
+                    .sumOf { it.monthlyInterestPayment }
+                if (activeLoanInterest > 0L) {
+                    (activeLoanInterest * synergyMultiplier).toLong()
+                } else {
+                    val cat = businessCatalog.find { it.id == catalogId }
+                    (cat?.monthlyRevenue ?: 8500000L)
+                }
             }
             "media_radio" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
@@ -986,10 +998,9 @@ data class OwnedBusiness(
                 baseMaint + staffExpenses
             }
             "tycoon_bank" -> {
-                val cat = businessCatalog.find { it.id == catalogId }
-                val baseMaint = cat?.monthlyMaintenanceCost ?: 750000L
-                val staffExpenses = level * 80000L
-                baseMaint + staffExpenses
+                val depositExpense = (bankingData.totalCustomerDepositsDpk * (bankingData.depositInterestRate / 12.0)).toLong()
+                val overhead = (bankingData.totalCustomerDepositsDpk * 0.0005).toLong() + 25000L
+                depositExpense + overhead
             }
             "tycoon_corp" -> {
                 val cat = businessCatalog.find { it.id == catalogId }

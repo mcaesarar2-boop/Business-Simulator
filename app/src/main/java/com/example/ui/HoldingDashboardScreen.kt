@@ -59,6 +59,10 @@ fun HoldingDashboardScreen(navController: NavHostController, viewModel: GameView
             navController.navigate("logistics_dashboard/${b.instanceId}")
         } else if (b.catalogId == "upper_realestate") {
             navController.navigate("apartment_property/${b.instanceId}")
+        } else if (b.catalogId == "tycoon_bank" || ct.category == com.example.data.BusinessCategory.FINANCE) {
+            navController.navigate("banking_dashboard/${b.instanceId}")
+        } else if (b.catalogId == "upper_tech") {
+            navController.navigate("software_house_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.AVIATION) {
             navController.navigate("aviation_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.THEME_PARK_HOLDING) {
@@ -708,6 +712,10 @@ fun MegaHoldingDetailScreen(navController: NavHostController, viewModel: GameVie
             navController.navigate("logistics_dashboard/${b.instanceId}")
         } else if (b.catalogId == "upper_realestate") {
             navController.navigate("apartment_property/${b.instanceId}")
+        } else if (b.catalogId == "tycoon_bank" || ct.category == com.example.data.BusinessCategory.FINANCE) {
+            navController.navigate("banking_dashboard/${b.instanceId}")
+        } else if (b.catalogId == "upper_tech") {
+            navController.navigate("software_house_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.AVIATION) {
             navController.navigate("aviation_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.THEME_PARK_HOLDING) {

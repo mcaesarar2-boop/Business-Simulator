@@ -834,6 +834,8 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
                                     navController.navigate("logistics_dashboard/${owned.instanceId}")
                                 } else if (owned.catalogId == "upper_realestate") {
                                     navController.navigate("apartment_property/${owned.instanceId}")
+                                } else if (owned.catalogId == "tycoon_bank" || catalogItem.category == com.example.data.BusinessCategory.FINANCE) {
+                                    navController.navigate("banking_dashboard/${owned.instanceId}")
                                 } else if (catalogItem.category == com.example.data.BusinessCategory.AVIATION) {
                                     navController.navigate("aviation_dashboard/${owned.instanceId}")
                                 } else if (catalogItem.category == com.example.data.BusinessCategory.THEME_PARK_HOLDING) {
