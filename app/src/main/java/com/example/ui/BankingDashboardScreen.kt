@@ -88,7 +88,7 @@ fun BankingDashboardScreen(
     }
 
     val bankingData = bankBusiness.bankingData
-    val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 } }
+    val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale.US).apply { maximumFractionDigits = 0 } }
 
     Scaffold(
         containerColor = NavyDarkBg,
@@ -537,10 +537,10 @@ private fun BankingCoreMetricsSection(
     fun formatAmt(amount: Long): String {
         return if (useShortFormat) {
             when {
-                amount >= 1_000_000_000L -> String.format(Locale.US, "Rp %.2fB", amount / 1_000_000_000.0)
-                amount >= 1_000_000L -> String.format(Locale.US, "Rp %.1fM", amount / 1_000_000.0)
-                amount >= 1_000L -> String.format(Locale.US, "Rp %.0fK", amount / 1_000.0)
-                else -> "Rp $amount"
+                amount >= 1_000_000_000L -> String.format(Locale.US, "$%.2fB", amount / 1_000_000_000.0)
+                amount >= 1_000_000L -> String.format(Locale.US, "$%.1fM", amount / 1_000_000.0)
+                amount >= 1_000L -> String.format(Locale.US, "$%.0fK", amount / 1_000.0)
+                else -> "$$amount"
             }
         } else {
             currencyFormat.format(amount)
@@ -721,14 +721,26 @@ private fun MonthlyFinancialSummaryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
                     Icon(Icons.Default.Analytics, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Kinerja Laba / Rugi Bulanan (NII)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(
+                        text = "Kinerja Laba / Rugi (NII)",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = if (netMonthlyProfit >= 0) EmeraldDark.copy(alpha = 0.5f) else CrimsonRed.copy(alpha = 0.3f)
+                    color = if (netMonthlyProfit >= 0) EmeraldDark.copy(alpha = 0.5f) else CrimsonRed.copy(alpha = 0.3f),
+                    modifier = Modifier.wrapContentWidth()
                 ) {
                     Text(
                         text = if (netMonthlyProfit >= 0) "+${currencyFormat.format(netMonthlyProfit)}/bln" else "${currencyFormat.format(netMonthlyProfit)}/bln",
@@ -736,6 +748,8 @@ private fun MonthlyFinancialSummaryCard(
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -883,25 +897,77 @@ private fun LoanApplicationReviewCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Financial Summary of the Loan
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column {
                     Text("Plafon Pinjaman", color = SlateText, fontSize = 11.sp)
-                    Text(currencyFormat.format(application.principalAmount), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        currencyFormat.format(application.principalAmount),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Suku Bunga Kredit", color = SlateText, fontSize = 11.sp)
-                    Text(String.format(Locale.US, "%.1f%% p.a.", application.annualInterestRate * 100), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        String.format(Locale.US, "%.1f%% p.a.", application.annualInterestRate * 100),
+                        color = GoldAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("Angsuran per Bulan:", color = SlateText, fontSize = 11.sp)
-                Text("${currencyFormat.format(totalMonthlyInstallment)}/bln", color = EmeraldAccent, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Text(
+                    "${currencyFormat.format(totalMonthlyInstallment)}/bln",
+                    color = EmeraldAccent,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("Total Bunga yang Dihasilkan:", color = SlateText, fontSize = 11.sp)
-                Text("+${currencyFormat.format(totalInterestEarned)}", color = GoldAccent, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Text(
+                    "+${currencyFormat.format(totalInterestEarned)}",
+                    color = GoldAccent,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1022,24 +1088,51 @@ private fun ActiveLoanBookItemCard(
             HorizontalDivider(color = NavyCardSecondary)
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column {
                     Text("Sisa Pokok", color = SlateText, fontSize = 10.sp)
-                    Text(currencyFormat.format(loan.remainingPrincipal), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        currencyFormat.format(loan.remainingPrincipal),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Angsuran/Bln", color = SlateText, fontSize = 10.sp)
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        if (isNpl) "Rp 0 (Macet)" else "${currencyFormat.format(loan.monthlyPrincipalPayment + loan.monthlyInterestPayment)}",
+                        if (isNpl) "$0 (Macet)" else "${currencyFormat.format(loan.monthlyPrincipalPayment + loan.monthlyInterestPayment)}",
                         color = if (isNpl) CrimsonRed else EmeraldAccent,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Total Bunga Diterima", color = SlateText, fontSize = 10.sp)
-                    Text(currencyFormat.format(loan.totalInterestCollected), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        currencyFormat.format(loan.totalInterestCollected),
+                        color = GoldAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
 
