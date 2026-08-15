@@ -91,6 +91,7 @@ fun ConstructionDashboard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f, fill = false),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -115,7 +116,7 @@ fun ConstructionDashboard(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Kas Perusahaan: $${formatCurrencyRingkas(business.companyCash.toLong(), useShortFormat)}",
+                                text = "Kas Perusahaan: ${formatCurrencyRingkas(business.companyCash.toLong(), useShortFormat)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF2E7D32),
                                 fontWeight = FontWeight.SemiBold
@@ -123,10 +124,13 @@ fun ConstructionDashboard(
                         }
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     FilledTonalButton(
                         onClick = { showCapacityUpgradeDialog = true },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Icon(
                             imageVector = Icons.Default.Upgrade,
@@ -134,7 +138,13 @@ fun ConstructionDashboard(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ekspansi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Ekspansi",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
 
@@ -634,7 +644,7 @@ fun ProjectPhaseTimelineCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Klien: ${project.clientName} | Nilai Kontrak: $${formatCurrencyRingkas(totalVal, useShortFormat)}",
+                        text = "Klien: ${project.clientName} | Nilai Kontrak: ${formatCurrencyRingkas(totalVal, useShortFormat)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
@@ -807,7 +817,7 @@ fun ProjectPhaseTimelineCard(
                                         color = if (isFuture) Color.Gray else MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Termin ${(phase.payoutPercent * 100).toInt()}% (+$${formatCurrencyRingkas(terminAmt, useShortFormat)}) • Durasi ${phase.durationMonths} Bulan",
+                                        text = "Termin ${(phase.payoutPercent * 100).toInt()}% (+${formatCurrencyRingkas(terminAmt, useShortFormat)}) • Durasi ${phase.durationMonths} Bulan",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (isPast) Color(0xFF2E7D32) else Color.Gray
                                     )
@@ -920,8 +930,9 @@ fun TenderMarketItemCard(
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Header Row: Scale Badge + Client on Left, Duration on Right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -929,7 +940,8 @@ fun TenderMarketItemCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Surface(
                         color = when (tender.projectScale) {
@@ -953,7 +965,9 @@ fun TenderMarketItemCard(
                         text = tender.clientName,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.Gray,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -966,7 +980,9 @@ fun TenderMarketItemCard(
                         text = "Durasi: ${tender.durationMonths} Bulan",
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        color = Color.Gray
+                        color = Color.Gray,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -985,63 +1001,111 @@ fun TenderMarketItemCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Financial & Resource Specs
+            // Financial & Resource Specs (Clean 3-Column Grid)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column {
-                    Text("Pagu Anggaran (OE):", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                // Column 1: Pagu Anggaran (OE)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
-                        text = "$${formatCurrencyRingkas(tender.ownerEstimateBudget, useShortFormat)}",
+                        text = "Pagu Anggaran (OE):",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = formatCurrencyRingkas(tender.ownerEstimateBudget, useShortFormat),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32)
+                        color = Color(0xFF2E7D32),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Column {
-                    Text("Estimasi HPP Dasar:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                // Column 2: Estimasi HPP Dasar
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "Estimasi HPP Dasar:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     val effCost = if (hasLogisticsSynergy) (tender.estimatedBaseCost * 0.85).toLong() else tender.estimatedBaseCost
                     Text(
-                        text = "$${formatCurrencyRingkas(effCost, useShortFormat)}",
+                        text = formatCurrencyRingkas(effCost, useShortFormat),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFE65100)
+                        color = Color(0xFFE65100),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Kebutuhan Armada:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                // Column 3: Kebutuhan Armada
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "Kebutuhan Armada:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Text(
                         text = "${tender.requiredCrews} Kru • ${tender.requiredMachinery} Alat",
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
+            // Footer Row: Bid Bond & Action Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("Jaminan Penawaran (Bid Bond 5%):", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
-                        text = "$${formatCurrencyRingkas(tender.minBidBond, useShortFormat)} (Dikembalikan jika selesai)",
+                        text = "Jaminan Penawaran (Bid Bond 5%):",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = "${formatCurrencyRingkas(tender.minBidBond, useShortFormat)} (Dikembalikan jika selesai)",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Button(
                     onClick = onBidClick,
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.wrapContentWidth()
                 ) {
                     Icon(
                         imageVector = Icons.Default.Gavel,
@@ -1049,7 +1113,13 @@ fun TenderMarketItemCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ikuti Lelang", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Ikuti Lelang",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -1145,7 +1215,7 @@ fun TenderBiddingModal(
                     }
 
                     Text(
-                        text = "$${formatCurrencyRingkas(playerBidAmount, useShortFormat)}",
+                        text = formatCurrencyRingkas(playerBidAmount, useShortFormat),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -1198,7 +1268,7 @@ fun TenderBiddingModal(
                         ) {
                             Text("Estimasi Laba Bersih:", style = MaterialTheme.typography.bodySmall)
                             Text(
-                                text = "$${formatCurrencyRingkas(estimatedProfit, useShortFormat)} (${marginPercent.toInt()}%)",
+                                text = "${formatCurrencyRingkas(estimatedProfit, useShortFormat)} (${marginPercent.toInt()}%)",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (estimatedProfit > 0) Color(0xFF2E7D32) else Color(0xFFE53935)
@@ -1224,7 +1294,7 @@ fun TenderBiddingModal(
                 // Bid Bond & Payment Source
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Jaminan Penawaran Tender: $${formatCurrencyRingkas(bond, useShortFormat)}",
+                        text = "Jaminan Penawaran Tender: ${formatCurrencyRingkas(bond, useShortFormat)}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFD84315)
@@ -1237,13 +1307,13 @@ fun TenderBiddingModal(
                         FilterChip(
                             selected = useCompanyCash,
                             onClick = { useCompanyCash = true },
-                            label = { Text("Kas Perusahaan ($${formatCurrencyRingkas(companyCash, useShortFormat)})", fontSize = 11.sp) }
+                            label = { Text("Kas Perusahaan (${formatCurrencyRingkas(companyCash, useShortFormat)})", fontSize = 11.sp) }
                         )
 
                         FilterChip(
                             selected = !useCompanyCash,
                             onClick = { useCompanyCash = false },
-                            label = { Text("Kas Pribadi ($${formatCurrencyRingkas(playerCash, useShortFormat)})", fontSize = 11.sp) }
+                            label = { Text("Kas Pribadi (${formatCurrencyRingkas(playerCash, useShortFormat)})", fontSize = 11.sp) }
                         )
                     }
 
@@ -1338,7 +1408,7 @@ fun BiddingResultAnnouncementDialog(
                                 color = if (result.isWon) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "$${formatCurrencyRingkas(result.winningBid, useShortFormat)}",
+                                text = formatCurrencyRingkas(result.winningBid, useShortFormat),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1356,7 +1426,7 @@ fun BiddingResultAnnouncementDialog(
                                     color = Color.Gray
                                 )
                                 Text(
-                                    text = "$${formatCurrencyRingkas(comp.second, useShortFormat)}",
+                                    text = formatCurrencyRingkas(comp.second, useShortFormat),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color.Gray
                                 )
@@ -1445,12 +1515,12 @@ fun CapacityUpgradeDialog(
                     FilterChip(
                         selected = useCompanyCash,
                         onClick = { useCompanyCash = true },
-                        label = { Text("Kas Perusahaan ($${formatCurrencyRingkas(companyCash, useShortFormat)})", fontSize = 11.sp) }
+                        label = { Text("Kas Perusahaan (${formatCurrencyRingkas(companyCash, useShortFormat)})", fontSize = 11.sp) }
                     )
                     FilterChip(
                         selected = !useCompanyCash,
                         onClick = { useCompanyCash = false },
-                        label = { Text("Kas Pribadi ($${formatCurrencyRingkas(playerCash, useShortFormat)})", fontSize = 11.sp) }
+                        label = { Text("Kas Pribadi (${formatCurrencyRingkas(playerCash, useShortFormat)})", fontSize = 11.sp) }
                     )
                 }
 
@@ -1520,7 +1590,7 @@ fun UpgradeItemCard(
                 Text(text = description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 if (!isMax) {
                     Text(
-                        text = "Biaya: $${formatCurrencyRingkas(cost, useShortFormat)}",
+                        text = "Biaya: ${formatCurrencyRingkas(cost, useShortFormat)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (canAfford) Color(0xFF2E7D32) else Color(0xFFE53935),
                         fontWeight = FontWeight.Bold
@@ -1591,7 +1661,7 @@ fun RngEventResolutionDialog(
                     ) {
                         Text("Dampak Insiden:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         if (event.costImpact > 0) {
-                            Text("• Biaya Ekstra: $${formatCurrencyRingkas(event.costImpact, useShortFormat)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD32F2F))
+                            Text("• Biaya Ekstra: ${formatCurrencyRingkas(event.costImpact, useShortFormat)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD32F2F))
                         }
                         if (event.delayMonths > 0) {
                             Text("• Keterlambatan: +${event.delayMonths} Bulan", style = MaterialTheme.typography.bodySmall, color = Color(0xFFE65100))
@@ -1612,7 +1682,7 @@ fun RngEventResolutionDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Tanggung Biaya Penuh ($${formatCurrencyRingkas(event.costImpact, useShortFormat)})")
+                    Text("Tanggung Biaya Penuh (${formatCurrencyRingkas(event.costImpact, useShortFormat)})")
                 }
 
                 // Option 2: Insurance Claim if cert >= 2
@@ -1623,7 +1693,7 @@ fun RngEventResolutionDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Klaim Asuransi K3 (Deductible $${formatCurrencyRingkas(insDeductible, useShortFormat)})")
+                        Text("Klaim Asuransi K3 (Deductible ${formatCurrencyRingkas(insDeductible, useShortFormat)})")
                     }
                 }
 
@@ -1635,7 +1705,7 @@ fun RngEventResolutionDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Gunakan Material In-House ($${formatCurrencyRingkas(inHouseCost, useShortFormat)})")
+                        Text("Gunakan Material In-House (${formatCurrencyRingkas(inHouseCost, useShortFormat)})")
                     }
                 }
             }
