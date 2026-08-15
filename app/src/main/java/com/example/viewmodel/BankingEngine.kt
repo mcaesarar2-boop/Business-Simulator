@@ -254,7 +254,8 @@ object BankingEngine {
         }
 
         // Net Interest Income for the month = Interest Revenue - Deposit Expense - Operational Overhead
-        val bankOverhead = (currentDpk * 0.0005).toLong() + 25_000L // Standard operational cost
+        val aiOperationalCost = if (bankData.aiRiskManager.isEnabled) bankData.aiRiskManager.monthlyMaintenanceCost else 0L
+        val bankOverhead = (currentDpk * 0.0005).toLong() + 25_000L + aiOperationalCost // Standard operational cost + AI subscription
         val netIncomeMonth = monthlyInterestCollected - monthlyDepositInterestExpense - bankOverhead
 
         // Absorb net income and loan cash flows into internal cash & vault cash
@@ -292,7 +293,7 @@ object BankingEngine {
             bankData.incomingApplications
         }
 
-        val updatedBankData = bankData.copy(
+        var updatedBankData = bankData.copy(
             internalCash = internalCash,
             totalCustomerDepositsDpk = currentDpk,
             activeLoans = updatedLoans,
@@ -306,7 +307,183 @@ object BankingEngine {
             lastRefreshedTimestamp = System.currentTimeMillis()
         )
 
-        return Pair(updatedBankData, ownedBusinesses)
+        var finalOwned = ownedBusinesses
+
+        // 7. Process AI Risk Manager Auto-Approval if active
+        if (updatedBankData.aiRiskManager.isEnabled) {
+            val aiResult = runAiRiskCycle(updatedBankData, ownedBusinesses)
+            updatedBankData = aiResult.first
+            finalOwned = aiResult.second
+        }
+
+        return Pair(updatedBankData, finalOwned)
+    }
+
+    /**
+     * Run an AI Risk Manager automated underwriting cycle.
+     */
+    fun runAiRiskCycle(
+        bankData: BankingCompanyData,
+        ownedBusinesses: List<OwnedBusiness>
+    ): Pair<BankingCompanyData, List<OwnedBusiness>> {
+        val ai = bankData.aiRiskManager
+        if (!ai.isEnabled || bankData.incomingApplications.isEmpty()) {
+            return Pair(bankData, ownedBusinesses)
+        }
+
+        var currentBank = bankData
+        var currentOwned = ownedBusinesses
+        val remainingApps = mutableListOf<LoanApplication>()
+        val newLogs = mutableListOf<AiRiskLogEntry>()
+        val timeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+        val currentTime = timeFormat.format(java.util.Date())
+
+        var approvedCount = 0
+        var rejectedCount = 0
+        var disbursedVol = 0L
+
+        for (app in bankData.incomingApplications) {
+            // 1. Check B2B Synergy auto-approve rule
+            if (ai.autoApproveB2BSynergy && app.isInternalCorporateSynergy) {
+                if (currentBank.vaultCash >= app.principalAmount) {
+                    val res = approveLoan(currentBank, app, currentOwned)
+                    if (res != null) {
+                        currentBank = res.first
+                        currentOwned = res.second
+                        approvedCount++
+                        disbursedVol += app.principalAmount
+                        newLogs.add(
+                            AiRiskLogEntry(
+                                timestampFormatted = currentTime,
+                                applicantName = app.applicantName,
+                                amount = app.principalAmount,
+                                grade = app.creditGrade,
+                                action = "APPROVED",
+                                reason = "B2B Synergy Disbursed to Subsidiary"
+                            )
+                        )
+                        continue
+                    }
+                } else {
+                    newLogs.add(
+                        AiRiskLogEntry(
+                            timestampFormatted = currentTime,
+                            applicantName = app.applicantName,
+                            amount = app.principalAmount,
+                            grade = app.creditGrade,
+                            action = "SKIPPED",
+                            reason = "Vault Cash Insufficient"
+                        )
+                    )
+                    remainingApps.add(app)
+                    continue
+                }
+            }
+
+            // 2. Check Auto-Reject rule
+            if (app.creditGrade in ai.autoRejectGrades && !app.isInternalCorporateSynergy) {
+                rejectedCount++
+                newLogs.add(
+                    AiRiskLogEntry(
+                        timestampFormatted = currentTime,
+                        applicantName = app.applicantName,
+                        amount = app.principalAmount,
+                        grade = app.creditGrade,
+                        action = "REJECTED",
+                        reason = "Grade ${app.creditGrade.name.takeLast(1)} in Auto-Reject Rule"
+                    )
+                )
+                continue
+            }
+
+            // 3. Check Auto-Approve rule
+            if (app.creditGrade in ai.autoApproveGrades && app.principalAmount <= ai.maxAutoApprovePrincipal) {
+                // Accuracy check (Margin of error on level 1 / level 2 AI)
+                val accuracyRoll = Random.nextDouble(0.0, 100.0)
+                val isAccurate = accuracyRoll <= ai.accuracyPercent
+
+                if (!isAccurate && app.creditGrade == CreditGrade.GRADE_A) {
+                    // False negative
+                    rejectedCount++
+                    newLogs.add(
+                        AiRiskLogEntry(
+                            timestampFormatted = currentTime,
+                            applicantName = app.applicantName,
+                            amount = app.principalAmount,
+                            grade = app.creditGrade,
+                            action = "REJECTED",
+                            reason = "AI Algorithmic Prudence (Margin Error)"
+                        )
+                    )
+                    continue
+                }
+
+                if (currentBank.vaultCash >= app.principalAmount) {
+                    val res = approveLoan(currentBank, app, currentOwned)
+                    if (res != null) {
+                        currentBank = res.first
+                        currentOwned = res.second
+                        approvedCount++
+                        disbursedVol += app.principalAmount
+                        newLogs.add(
+                            AiRiskLogEntry(
+                                timestampFormatted = currentTime,
+                                applicantName = app.applicantName,
+                                amount = app.principalAmount,
+                                grade = app.creditGrade,
+                                action = "APPROVED",
+                                reason = "Auto-Approve Grade ${app.creditGrade.name.takeLast(1)} (${ai.accuracyPercent}% Acc.)"
+                            )
+                        )
+                        continue
+                    }
+                } else {
+                    newLogs.add(
+                        AiRiskLogEntry(
+                            timestampFormatted = currentTime,
+                            applicantName = app.applicantName,
+                            amount = app.principalAmount,
+                            grade = app.creditGrade,
+                            action = "SKIPPED",
+                            reason = "Vault Cash Insufficient"
+                        )
+                    )
+                    remainingApps.add(app)
+                    continue
+                }
+            }
+
+            // Not matched by rules -> keep for manual review
+            remainingApps.add(app)
+        }
+
+        val combinedLogs = (newLogs + ai.executionLogs).take(30)
+        val updatedAi = ai.copy(
+            executionLogs = combinedLogs,
+            totalProcessedCount = ai.totalProcessedCount + approvedCount + rejectedCount,
+            totalApprovedCount = ai.totalApprovedCount + approvedCount,
+            totalRejectedCount = ai.totalRejectedCount + rejectedCount,
+            totalDisbursedVolume = ai.totalDisbursedVolume + disbursedVol
+        )
+
+        // If pipeline is now depleted, generate new pipeline
+        val finalApps = if (remainingApps.size < 4) {
+            generateApplicationPipeline(
+                currentTier = currentBank.currentTier,
+                baseLendingRate = currentBank.lendingInterestRate,
+                ownedBusinesses = currentOwned,
+                count = 6
+            )
+        } else {
+            remainingApps
+        }
+
+        val finalBank = currentBank.copy(
+            incomingApplications = finalApps,
+            aiRiskManager = updatedAi
+        )
+
+        return Pair(finalBank, currentOwned)
     }
 
     /**

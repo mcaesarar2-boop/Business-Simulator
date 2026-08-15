@@ -98,7 +98,7 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
         // TYCOON LEVEL
         BusinessCatalogItem(
             id = "tycoon_bank", name = "Bank Swasta Nasional", category = BusinessCategory.FINANCE,
-            imageUrl = "https://images.unsplash.com/photo-1501167733283-6c6fd31ab62c?auto=format&fit=crop&w=400&q=80",
+            imageUrl = "https://images.unsplash.com/photo-1559526324-593bc073d938?q=80&w=1170&auto=format&fit=crop",
             costToBuy = 50000000, monthlyRevenue = 8500000, monthlyMaintenanceCost = 2000000,
             upgrades = listOf(
                 BusinessUpgrade("1", "Aplikasi Mobile Banking", "Jutaan nasabah ritel (1.5x Rev)", baseCost = 20000000, revenueMultiplier = 1.5f),

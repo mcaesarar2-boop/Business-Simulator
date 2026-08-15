@@ -62,9 +62,11 @@ fun BankingDashboardScreen(
     val bankBusiness = viewModel.getBankingBusiness(instanceId)
     val useShortFormat by viewModel.useShortNumberFormat.collectAsState()
 
-    var activeTab by remember { mutableStateOf(0) } // 0: Credit Desk, 1: Active Loan Book, 2: Interest Policy, 3: Tier Expansion
+    var activeTab by remember { mutableStateOf(0) } // 0: Credit Desk, 1: Active Loan Book, 2: Interest Policy, 3: Tier Expansion, 4: Risk Manager AI
     var showCapitalModal by remember { mutableStateOf(false) }
     var capitalModalMode by remember { mutableStateOf("INJECT") } // "INJECT" or "WITHDRAW"
+    var showSettingsMenu by remember { mutableStateOf(false) }
+    var showLiquidationDialog by remember { mutableStateOf(false) }
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
 
     if (bankBusiness == null) {
@@ -161,6 +163,30 @@ fun BankingDashboardScreen(
                     }) {
                         Icon(Icons.Default.AccountBalanceWallet, contentDescription = "Kas Modal", tint = GoldAccent)
                     }
+                    Box {
+                        IconButton(onClick = { showSettingsMenu = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                        }
+                        DropdownMenu(
+                            expanded = showSettingsMenu,
+                            onDismissRequest = { showSettingsMenu = false },
+                            containerColor = NavyCardBg
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.MonetizationOn, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Likuidasi Bisnis (Jual Bank)", color = CrimsonRed, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+                                },
+                                onClick = {
+                                    showSettingsMenu = false
+                                    showLiquidationDialog = true
+                                }
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = NavyCardBg)
             )
@@ -226,10 +252,11 @@ fun BankingDashboardScreen(
                 )
             }
 
-            // 4. NAVIGATION TABS (Credit Desk, Active Book, Suku Bunga, Tiering)
+            // 4. NAVIGATION TABS (Credit Desk, Active Book, Suku Bunga, Tiering, Risk Manager AI)
             item {
-                TabRow(
+                ScrollableTabRow(
                     selectedTabIndex = activeTab,
+                    edgePadding = 0.dp,
                     containerColor = NavyCardSecondary,
                     contentColor = GoldAccent,
                     indicator = { tabPositions ->
@@ -272,6 +299,27 @@ fun BankingDashboardScreen(
                         onClick = { activeTab = 3 },
                         text = { Text("Tier Ekspansi", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                     )
+                    Tab(
+                        selected = activeTab == 4,
+                        onClick = { activeTab = 4 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = if (bankingData.aiRiskManager.isEnabled) EmeraldAccent else GoldAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "Risk Manager AI",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = if (bankingData.aiRiskManager.isEnabled) EmeraldAccent else Color.White
+                                )
+                            }
+                        }
+                    )
                 }
             }
 
@@ -285,7 +333,7 @@ fun BankingDashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                 Text(
                                     text = "Antrean Pengajuan Kredit",
                                     color = Color.White,
@@ -298,18 +346,25 @@ fun BankingDashboardScreen(
                                     fontSize = 11.sp
                                 )
                             }
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.refreshBankLoanApplications(instanceId)
-                                    snackbarMessage = "Pipa pengajuan kredit diperbarui!"
-                                },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = BlueTerminal),
-                                border = BorderStroke(1.dp, BlueTerminal.copy(alpha = 0.5f)),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            Surface(
+                                shape = CircleShape,
+                                color = BlueTerminal.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, BlueTerminal.copy(alpha = 0.6f)),
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clickable {
+                                        viewModel.refreshBankLoanApplications(instanceId)
+                                        snackbarMessage = "Pipa pengajuan kredit diperbarui!"
+                                    }
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Cari Debitur", fontSize = 11.sp)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = "Cari Debitur Baru",
+                                        tint = BlueTerminal,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -329,7 +384,7 @@ fun BankingDashboardScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Text("Semua Pengajuan Telah Ditinjau", color = Color.White, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Tekan tombol 'Cari Debitur' untuk memunculkan aplikasi pinjaman baru dari pasar.", color = SlateText, fontSize = 12.sp, textAlign = TextAlign.Center)
+                                    Text("Tekan tombol putar 'Refresh' untuk memunculkan aplikasi pinjaman baru dari pasar.", color = SlateText, fontSize = 12.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Button(
                                         onClick = { viewModel.refreshBankLoanApplications(instanceId) },
@@ -454,6 +509,32 @@ fun BankingDashboardScreen(
                         )
                     }
                 }
+
+                4 -> {
+                    // RISK MANAGER AI (AUTOMATION & CREDIT SCORING ENGINE)
+                    item {
+                        AiRiskManagerSection(
+                            bankingData = bankingData,
+                            currencyFormat = currencyFormat,
+                            onUpdateAi = { updatedAi ->
+                                viewModel.updateBankAiRiskManager(instanceId, updatedAi)
+                                snackbarMessage = "Pengaturan Risk Manager AI berhasil disimpan!"
+                            },
+                            onUpgradeAi = {
+                                val ok = viewModel.upgradeBankAiRiskManager(instanceId)
+                                if (ok) {
+                                    snackbarMessage = "Model AI berhasil ditingkatkan ke level berikutnya!"
+                                } else {
+                                    snackbarMessage = "Kas modal internal bank tidak mencukupi untuk biaya riset & upgrade AI!"
+                                }
+                            },
+                            onTriggerAiCycle = {
+                                viewModel.triggerBankAiRiskCycle(instanceId)
+                                snackbarMessage = "Siklus AI Credit Scoring berhasil dijalankan!"
+                            }
+                        )
+                    }
+                }
             }
 
             item {
@@ -483,6 +564,21 @@ fun BankingDashboardScreen(
                     }
                 }
                 showCapitalModal = false
+            }
+        )
+    }
+
+    // Liquidation Dialog
+    if (showLiquidationDialog) {
+        BankLiquidationDialog(
+            bankingData = bankingData,
+            valuation = viewModel.calculateBankLiquidationValuation(instanceId),
+            currencyFormat = currencyFormat,
+            onDismiss = { showLiquidationDialog = false },
+            onConfirm = {
+                val payout = viewModel.liquidateBank(instanceId)
+                showLiquidationDialog = false
+                navController.popBackStack()
             }
         )
     }
@@ -1547,6 +1643,630 @@ private fun CapitalManagementDialog(
                     color = Color.Black,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal", color = SlateText)
+            }
+        }
+    )
+}
+
+/**
+ * Risk Manager AI Section (Autonomous Credit Scoring Engine)
+ */
+@Composable
+private fun AiRiskManagerSection(
+    bankingData: BankingCompanyData,
+    currencyFormat: NumberFormat,
+    onUpdateAi: (AiRiskManagerData) -> Unit,
+    onUpgradeAi: () -> Unit,
+    onTriggerAiCycle: () -> Unit
+) {
+    val aiData = bankingData.aiRiskManager
+    val aiLevel = aiData.level
+    val isEnabled = aiData.isEnabled
+
+    val levelName = aiData.modelName
+    val monthlyCost = aiData.monthlyMaintenanceCost
+    val accuracy = "${aiData.accuracyPercent}%"
+    val upgradeCost = aiData.nextLevelUpgradeCost
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // 1. HERO ENGINE STATUS CARD
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = NavyCardBg,
+            border = BorderStroke(1.dp, if (isEnabled) EmeraldAccent.copy(alpha = 0.5f) else NavyCardSecondary),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isEnabled) EmeraldDark.copy(alpha = 0.4f) else SlateText.copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, if (isEnabled) EmeraldAccent else SlateText.copy(alpha = 0.4f)),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = if (isEnabled) EmeraldAccent else SlateText,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Risk Manager AI",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = GoldAccent.copy(alpha = 0.2f),
+                                    border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f))
+                                ) {
+                                    Text(
+                                        text = "LVL $aiLevel",
+                                        color = GoldAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = levelName,
+                                color = if (isEnabled) EmeraldAccent else SlateText,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = isEnabled,
+                        onCheckedChange = { checked ->
+                            onUpdateAi(aiData.copy(isEnabled = checked))
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = EmeraldAccent,
+                            uncheckedThumbColor = SlateText,
+                            uncheckedTrackColor = NavyCardSecondary
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = NavyCardSecondary)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Stats: Akurasi & Biaya Operasional
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Biaya Modul AI:", color = SlateText, fontSize = 11.sp)
+                        Text(
+                            text = "${currencyFormat.format(monthlyCost)}/bln",
+                            color = CrimsonRed,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Tingkat Akurasi Scoring:", color = SlateText, fontSize = 11.sp)
+                        Text(
+                            text = accuracy,
+                            color = EmeraldAccent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                if (aiLevel < 3 && upgradeCost > 0) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onUpgradeAi,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldAccent)
+                    ) {
+                        Icon(Icons.Default.Upgrade, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Upgrade ke Level ${aiLevel + 1} (${currencyFormat.format(upgradeCost)})",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. RULE-BASED SETTINGS PANEL
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = NavyCardBg,
+            border = BorderStroke(1.dp, NavyCardSecondary),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Tune, contentDescription = null, tint = BlueTerminal, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Kebijakan Aturan Underwriting (Rules)",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+                Text(
+                    text = "Konfigurasikan keputusan otomatis saat siklus kredit berjalan.",
+                    color = SlateText,
+                    fontSize = 11.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Rule 1: Auto-Approve Grades
+                Text("Otomatis Setujui Pinjaman Grade:", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = aiData.autoApproveGrades.contains(CreditGrade.GRADE_A),
+                        onClick = {
+                            val newSet = if (aiData.autoApproveGrades.contains(CreditGrade.GRADE_A))
+                                aiData.autoApproveGrades - CreditGrade.GRADE_A
+                            else
+                                aiData.autoApproveGrades + CreditGrade.GRADE_A
+                            onUpdateAi(aiData.copy(autoApproveGrades = newSet))
+                        },
+                        label = { Text("Grade A (Prima)", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = EmeraldAccent,
+                            selectedLabelColor = Color.Black
+                        )
+                    )
+                    FilterChip(
+                        selected = aiData.autoApproveGrades.contains(CreditGrade.GRADE_B),
+                        onClick = {
+                            val newSet = if (aiData.autoApproveGrades.contains(CreditGrade.GRADE_B))
+                                aiData.autoApproveGrades - CreditGrade.GRADE_B
+                            else
+                                aiData.autoApproveGrades + CreditGrade.GRADE_B
+                            onUpdateAi(aiData.copy(autoApproveGrades = newSet))
+                        },
+                        label = { Text("Grade B (Menengah)", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = BlueTerminal,
+                            selectedLabelColor = Color.Black
+                        )
+                    )
+                    FilterChip(
+                        selected = aiData.autoApproveGrades.contains(CreditGrade.GRADE_C),
+                        onClick = {
+                            val newSet = if (aiData.autoApproveGrades.contains(CreditGrade.GRADE_C))
+                                aiData.autoApproveGrades - CreditGrade.GRADE_C
+                            else
+                                aiData.autoApproveGrades + CreditGrade.GRADE_C
+                            onUpdateAi(aiData.copy(autoApproveGrades = newSet))
+                        },
+                        label = { Text("Grade C (Tinggi)", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AmberWarn,
+                            selectedLabelColor = Color.Black
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Rule 2: Auto-Reject Grades
+                Text("Otomatis Tolak Pinjaman Grade:", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = aiData.autoRejectGrades.contains(CreditGrade.GRADE_A),
+                        onClick = {
+                            val newSet = if (aiData.autoRejectGrades.contains(CreditGrade.GRADE_A))
+                                aiData.autoRejectGrades - CreditGrade.GRADE_A
+                            else
+                                aiData.autoRejectGrades + CreditGrade.GRADE_A
+                            onUpdateAi(aiData.copy(autoRejectGrades = newSet))
+                        },
+                        label = { Text("Tolak Grade A", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = CrimsonRed,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                    FilterChip(
+                        selected = aiData.autoRejectGrades.contains(CreditGrade.GRADE_B),
+                        onClick = {
+                            val newSet = if (aiData.autoRejectGrades.contains(CreditGrade.GRADE_B))
+                                aiData.autoRejectGrades - CreditGrade.GRADE_B
+                            else
+                                aiData.autoRejectGrades + CreditGrade.GRADE_B
+                            onUpdateAi(aiData.copy(autoRejectGrades = newSet))
+                        },
+                        label = { Text("Tolak Grade B", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = CrimsonRed,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                    FilterChip(
+                        selected = aiData.autoRejectGrades.contains(CreditGrade.GRADE_C),
+                        onClick = {
+                            val newSet = if (aiData.autoRejectGrades.contains(CreditGrade.GRADE_C))
+                                aiData.autoRejectGrades - CreditGrade.GRADE_C
+                            else
+                                aiData.autoRejectGrades + CreditGrade.GRADE_C
+                            onUpdateAi(aiData.copy(autoRejectGrades = newSet))
+                        },
+                        label = { Text("Tolak Grade C (Rekomendasi)", fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = CrimsonRed,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Rule 3: Max Plafon Auto-Approve
+                Text("Batas Maksimal Plafon Auto-Approve:", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                val plafonOptions = listOf(50_000L, 100_000L, 250_000L, 500_000L, 1_000_000L, 10_000_000L)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    plafonOptions.take(3).forEach { limit ->
+                        FilterChip(
+                            selected = aiData.maxAutoApprovePrincipal == limit,
+                            onClick = { onUpdateAi(aiData.copy(maxAutoApprovePrincipal = limit)) },
+                            label = { Text(currencyFormat.format(limit), fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = GoldAccent,
+                                selectedLabelColor = Color.Black
+                            )
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    plafonOptions.drop(3).forEach { limit ->
+                        FilterChip(
+                            selected = aiData.maxAutoApprovePrincipal == limit,
+                            onClick = { onUpdateAi(aiData.copy(maxAutoApprovePrincipal = limit)) },
+                            label = { Text(if (limit >= 10_000_000L) "Maksimal" else currencyFormat.format(limit), fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = GoldAccent,
+                                selectedLabelColor = Color.Black
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Rule 4: B2B Synergy Priority
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = NavyCardSecondary,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text("Prioritaskan Sindikasi B2B (Holding)", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            Text("Otomatis setujui pinjaman modal anak perusahaan grup sendiri", color = SlateText, fontSize = 10.sp)
+                        }
+                        Switch(
+                            checked = aiData.autoApproveB2BSynergy,
+                            onCheckedChange = { onUpdateAi(aiData.copy(autoApproveB2BSynergy = it)) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.Black,
+                                checkedTrackColor = GoldAccent
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. PERFORMANCE & MANUAL TRIGGER
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = NavyCardBg,
+            border = BorderStroke(1.dp, NavyCardSecondary),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Statistik Kinerja AI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Button(
+                        onClick = onTriggerAiCycle,
+                        colors = ButtonDefaults.buttonColors(containerColor = BlueTerminal),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Bolt, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Eksekusi Pipeline Sekarang", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = NavyCardSecondary,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Total Diproses", color = SlateText, fontSize = 10.sp)
+                            Text("${aiData.totalProcessedCount}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = NavyCardSecondary,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Disetujui", color = EmeraldAccent, fontSize = 10.sp)
+                            Text("${aiData.totalApprovedCount}", color = EmeraldAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = NavyCardSecondary,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Ditolak", color = CrimsonRed, fontSize = 10.sp)
+                            Text("${aiData.totalRejectedCount}", color = CrimsonRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. LIVE AUDIT LOGS TICKER
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = NavyCardBg,
+            border = BorderStroke(1.dp, NavyCardSecondary),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.History, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Audit Log Keputusan AI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Rekam jejak keputusan underwriting dan penolakan otomatis.", color = SlateText, fontSize = 11.sp)
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (aiData.executionLogs.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Belum ada keputusan AI yang tercatat.", color = SlateText, fontSize = 12.sp)
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        aiData.executionLogs.take(8).forEach { log ->
+                            val badgeColor = when (log.action) {
+                                "APPROVED" -> EmeraldAccent
+                                "REJECTED" -> CrimsonRed
+                                else -> AmberWarn
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = NavyCardSecondary,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = badgeColor.copy(alpha = 0.2f),
+                                                border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = log.action,
+                                                    color = badgeColor,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.sp,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = log.applicantName,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 12.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = log.reason, color = SlateText, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Text(
+                                        text = currencyFormat.format(log.amount),
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Bank Liquidation Dialog Modal
+ */
+@Composable
+private fun BankLiquidationDialog(
+    bankingData: BankingCompanyData,
+    valuation: Long,
+    currencyFormat: NumberFormat,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val activeLoans = bankingData.activeLoans
+    val performingLoansValue = activeLoans.filter { it.healthStatus != LoanHealthStatus.NON_PERFORMING && it.healthStatus != LoanHealthStatus.SETTLED }
+        .sumOf { it.remainingPrincipal }
+    val nplLoansValue = activeLoans.filter { it.healthStatus == LoanHealthStatus.NON_PERFORMING }
+        .sumOf { it.remainingPrincipal }
+    val totalDpk = bankingData.totalCustomerDepositsDpk
+    val internalCash = bankingData.internalCash
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NavyCardBg,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = CrimsonRed)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Likuidasi & Jual Unit Bank",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Anda akan melikuidasi seluruh portofolio bank. Seluruh kredit lancar & modal kas internal akan dicairkan setelah melunasi seluruh kewajiban simpanan nasabah (DPK) dan menghapus kredit macet.",
+                    color = SlateText,
+                    fontSize = 12.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = NavyCardSecondary)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text("Rincian Valuasi Likuidasi Bersih:", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("(+) Kas Modal Internal:", color = SlateText, fontSize = 11.sp)
+                    Text(currencyFormat.format(internalCash), color = EmeraldAccent, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("(+) Portofolio Kredit Lancar:", color = SlateText, fontSize = 11.sp)
+                    Text(currencyFormat.format(performingLoansValue), color = EmeraldAccent, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("(-) Kewajiban Simpanan DPK:", color = SlateText, fontSize = 11.sp)
+                    Text(currencyFormat.format(totalDpk), color = CrimsonRed, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("(-) Kredit Macet (NPL Loss):", color = SlateText, fontSize = 11.sp)
+                    Text(currencyFormat.format(nplLoansValue), color = CrimsonRed, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = NavyCardSecondary)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total Hasil Bersih (Payout):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(
+                        currencyFormat.format(valuation),
+                        color = if (valuation >= 0) GoldAccent else CrimsonRed,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = CrimsonRed.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, CrimsonRed.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "PERINGATAN: Tindakan ini permanen. Unit bisnis Bank akan ditutup dan dihapus dari portofolio holding Anda.",
+                        color = CrimsonRed,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = CrimsonRed)
+            ) {
+                Text("Likuidasi Sekarang", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

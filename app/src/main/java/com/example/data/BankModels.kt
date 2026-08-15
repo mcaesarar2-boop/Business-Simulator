@@ -177,6 +177,63 @@ data class ActiveDisbursedLoan(
 }
 
 /**
+ * Log Riwayat Keputusan Risk Manager AI
+ */
+data class AiRiskLogEntry(
+    val id: String = UUID.randomUUID().toString(),
+    val timestampFormatted: String = "",
+    val applicantName: String,
+    val amount: Long,
+    val grade: CreditGrade,
+    val action: String, // "APPROVED", "REJECTED", "SKIPPED"
+    val reason: String
+)
+
+/**
+ * Konfigurasi & Status Otomasi "Risk Manager AI"
+ */
+data class AiRiskManagerData(
+    val isEnabled: Boolean = false,
+    val level: Int = 1, // 1: Heuristic AI ($15k/bln, 85% akurasi), 2: ML Risk Engine ($45k/bln, 95% akurasi), 3: Deep Quant Neural ($120k/bln, 99.5% akurasi)
+    val autoApproveGrades: Set<CreditGrade> = setOf(CreditGrade.GRADE_A, CreditGrade.GRADE_B),
+    val autoRejectGrades: Set<CreditGrade> = setOf(CreditGrade.GRADE_C),
+    val maxAutoApprovePrincipal: Long = 250_000L,
+    val autoApproveB2BSynergy: Boolean = true,
+    val executionLogs: List<AiRiskLogEntry> = emptyList(),
+    val totalProcessedCount: Int = 0,
+    val totalApprovedCount: Int = 0,
+    val totalRejectedCount: Int = 0,
+    val totalDisbursedVolume: Long = 0L
+) {
+    val monthlyMaintenanceCost: Long get() = when (level) {
+        1 -> 15_000L
+        2 -> 45_000L
+        3 -> 120_000L
+        else -> 15_000L
+    }
+
+    val accuracyPercent: Double get() = when (level) {
+        1 -> 85.0
+        2 -> 95.0
+        3 -> 99.5
+        else -> 85.0
+    }
+
+    val modelName: String get() = when (level) {
+        1 -> "Heuristic Rule-Based AI v1.2"
+        2 -> "Machine Learning Risk Engine v2.5"
+        3 -> "Deep Quant Neural Scoring Core v4.0"
+        else -> "Basic AI Manager"
+    }
+
+    val nextLevelUpgradeCost: Long get() = when (level) {
+        1 -> 250_000L
+        2 -> 1_000_000L
+        else -> 0L
+    }
+}
+
+/**
  * Data Utama Perusahaan Bank (BankingCompanyData)
  */
 data class BankingCompanyData(
@@ -187,6 +244,7 @@ data class BankingCompanyData(
     val lendingInterestRate: Double = 0.135, // 13.5% p.a.
     val activeLoans: List<ActiveDisbursedLoan> = emptyList(),
     val incomingApplications: List<LoanApplication> = emptyList(),
+    val aiRiskManager: AiRiskManagerData = AiRiskManagerData(),
     val lifetimeInterestEarned: Long = 0L,
     val lifetimeInterestPaidToDepositors: Long = 0L,
     val lifetimeDefaultLossesWrittenOff: Long = 0L,
