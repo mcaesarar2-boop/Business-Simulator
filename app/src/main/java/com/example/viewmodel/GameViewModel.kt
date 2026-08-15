@@ -3468,24 +3468,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     monthlyIncome += dividendToGlobal
                 }
                 
+                var finalActiveTenders = updatedTenders
+                var finalConstructionData = owned.constructionData
                 var newClientProjects = owned.availableClientProjects
                 if (owned.catalogId == "construction") {
-                    val count = (1..3).random()
-                    val generated = mutableListOf<com.example.data.ConstructionProject>()
-                    val types = listOf("Pabrik", "Gedung", "Hotel", "Mall", "Apartemen")
-                    for (i in 0 until count) {
-                        val baseBudget = (500_000L..5_000_000L).random() * owned.level
-                        val dur = (3..12).random()
-                        val margin = kotlin.random.Random.nextDouble(0.2, 0.4)
-                        val finalProfit = (baseBudget * margin).toLong()
-                        generated.add(com.example.data.ConstructionProject(
-                            name = "Klien: ${types.random()}|$baseBudget|$margin",
-                            totalContractValue = finalProfit.toDouble(),
-                            durationMonths = dur,
-                            remainingMonths = dur
-                        ))
-                    }
-                    newClientProjects = generated
+                    val hasLogistics = currentState.ownedBusinesses.any { it.catalogId == "mid_logistics" } || currentState.holdingCompanies.any { h -> h.subsidiaries.any { it.catalogId == "mid_logistics" } }
+                    val tickResult = ConstructionEngine.processMonthlyTick(owned.copy(companyCash = finalCompanyCash, activeTenders = owned.activeTenders), hasLogistics)
+                    finalCompanyCash = tickResult.updatedBusiness.companyCash
+                    finalActiveTenders = tickResult.updatedBusiness.activeTenders
+                    finalConstructionData = tickResult.updatedBusiness.constructionData
                 }
 
                 var newClientEventRequests = owned.clientEventRequests
@@ -3493,7 +3484,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     newClientEventRequests = generateEventRequestsForBusiness(owned)
                 }
                 
-                owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = updatedTenders, subsidiaries = updatedSubsidiaries, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
+                owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = finalActiveTenders, constructionData = finalConstructionData, subsidiaries = updatedSubsidiaries, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
             } catch (e: Exception) {
                 e.printStackTrace()
                 owned
@@ -3922,24 +3913,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             newHoldingCashInflow += dividendToHoldingParent
                         }
                         
+                        var finalActiveTenders = updatedTenders
+                        var finalConstructionData = owned.constructionData
                         var newClientProjects = owned.availableClientProjects
                         if (owned.catalogId == "construction") {
-                            val count = (1..3).random()
-                            val generated = mutableListOf<com.example.data.ConstructionProject>()
-                            val types = listOf("Pabrik", "Gedung", "Hotel", "Mall", "Apartemen")
-                            for (i in 0 until count) {
-                                val baseBudget = (500_000L..5_000_000L).random() * owned.level
-                                val dur = (3..12).random()
-                                val margin = kotlin.random.Random.nextDouble(0.2, 0.4)
-                                val finalProfit = (baseBudget * margin).toLong()
-                                generated.add(com.example.data.ConstructionProject(
-                                    name = "Klien: ${types.random()}|$baseBudget|$margin",
-                                    totalContractValue = finalProfit.toDouble(),
-                                    durationMonths = dur,
-                                    remainingMonths = dur
-                                ))
-                            }
-                            newClientProjects = generated
+                            val hasLogistics = currentState.ownedBusinesses.any { it.catalogId == "mid_logistics" } || currentState.holdingCompanies.any { h -> h.subsidiaries.any { it.catalogId == "mid_logistics" } }
+                            val tickResult = ConstructionEngine.processMonthlyTick(owned.copy(companyCash = finalCompanyCash, activeTenders = owned.activeTenders), hasLogistics)
+                            finalCompanyCash = tickResult.updatedBusiness.companyCash
+                            finalActiveTenders = tickResult.updatedBusiness.activeTenders
+                            finalConstructionData = tickResult.updatedBusiness.constructionData
                         }
                         
                         var newClientEventRequests = owned.clientEventRequests
@@ -3947,7 +3929,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             newClientEventRequests = generateEventRequestsForBusiness(owned)
                         }
                         
-                        owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = updatedTenders, subsidiaries = updatedDeepSubs, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
+                        owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = finalActiveTenders, constructionData = finalConstructionData, subsidiaries = updatedDeepSubs, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
                     } catch (e: Exception) {
                         e.printStackTrace()
                         owned
@@ -8859,6 +8841,323 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         if (errorMsg != null && !modified) return errorMsg
         if (!modified) return "Instansi Bisnis tidak ditemukan."
+
+        _playerState.value = state.copy(ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
+        saveState(_playerState.value)
+        return null
+    }
+
+    fun allocateConstructionPhase(instanceId: String, projectId: String): String? {
+        val state = _playerState.value
+        var modified = false
+        var errorMsg: String? = null
+
+        fun processBiz(biz: com.example.data.OwnedBusiness): com.example.data.OwnedBusiness {
+            if (biz.instanceId != instanceId) return biz
+            val proj = biz.activeTenders.find { it.id == projectId }
+            if (proj == null) {
+                errorMsg = "Proyek tidak ditemukan."
+                return biz
+            }
+            if (proj.isFinished || proj.currentPhaseIndex >= proj.phases.size) {
+                errorMsg = "Proyek sudah selesai."
+                return biz
+            }
+
+            val availCrews = ConstructionEngine.getAvailableCrews(biz)
+            val availMach = ConstructionEngine.getAvailableMachinery(biz)
+
+            if (availCrews < proj.requiredCrews) {
+                errorMsg = "Kru tidak mencukupi! Butuh ${proj.requiredCrews} kru aktif (Tersedia: $availCrews). Rekrut kru tambahan terlebih dahulu."
+                return biz
+            }
+            if (availMach < proj.requiredMachinery) {
+                errorMsg = "Alat berat tidak mencukupi! Butuh ${proj.requiredMachinery} unit (Tersedia: $availMach). Beli armada alat berat tambahan."
+                return biz
+            }
+
+            val updatedPhases = proj.phases.mapIndexed { idx, ph ->
+                if (idx == proj.currentPhaseIndex) ph.copy(isAllocated = true)
+                else ph
+            }
+            val updatedProjects = biz.activeTenders.map {
+                if (it.id == projectId) it.copy(phases = updatedPhases)
+                else it
+            }
+            modified = true
+            return biz.copy(activeTenders = updatedProjects)
+        }
+
+        val newBusinesses = state.ownedBusinesses.map { processBiz(it) }
+        val newHoldings = state.holdingCompanies.map { h ->
+            h.copy(subsidiaries = h.subsidiaries.map { processBiz(it) })
+        }
+
+        if (errorMsg != null) return errorMsg
+        if (!modified) return "Unit bisnis tidak ditemukan."
+
+        _playerState.value = state.copy(ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
+        saveState(_playerState.value)
+        return null
+    }
+
+    fun submitConstructionTenderBid(
+        instanceId: String,
+        tenderId: String,
+        bidAmount: Long,
+        useCompanyCash: Boolean,
+        useInHouseLogistics: Boolean
+    ): Pair<ConstructionEngine.BiddingResult?, String?> {
+        val state = _playerState.value
+        var targetBiz: com.example.data.OwnedBusiness? = null
+
+        state.ownedBusinesses.find { it.instanceId == instanceId }?.let { targetBiz = it }
+        if (targetBiz == null) {
+            for (h in state.holdingCompanies) {
+                val sub = h.subsidiaries.find { it.instanceId == instanceId }
+                if (sub != null) {
+                    targetBiz = sub
+                    break
+                }
+            }
+        }
+
+        if (targetBiz == null) return Pair(null, "Unit bisnis konstruksi tidak ditemukan.")
+        val biz = targetBiz!!
+
+        val tender = biz.constructionData.availableTenderMarket.find { it.id == tenderId }
+            ?: return Pair(null, "Tender lelang tidak ditemukan atau telah kedaluwarsa.")
+
+        val bond = tender.minBidBond
+        if (useCompanyCash) {
+            if (biz.companyCash < bond) return Pair(null, "Kas Perusahaan tidak mencukupi jaminan penawaran (${com.example.ui.formatCurrencyRingkas(bond.toDouble(), false)}).")
+        } else {
+            if (state.cash < bond) return Pair(null, "Kas Pribadi tidak mencukupi jaminan penawaran (${com.example.ui.formatCurrencyRingkas(bond.toDouble(), false)}).")
+        }
+
+        val hasLogistics = useInHouseLogistics || ConstructionEngine.hasLogisticsSynergy(state)
+        val result = ConstructionEngine.evaluateBid(tender, bidAmount, biz.constructionData.trustScore, hasLogistics)
+
+        var newCash = state.cash
+        var newCompanyCash = biz.companyCash
+        var newActiveTenders = biz.activeTenders
+        val remainingMarket = biz.constructionData.availableTenderMarket.filterNot { it.id == tenderId }
+        var newTrust = biz.constructionData.trustScore
+
+        if (result.isWon) {
+            // Deduct security deposit
+            if (useCompanyCash) {
+                newCompanyCash -= bond
+            } else {
+                newCash -= bond
+            }
+            newTrust = (newTrust + result.trustScoreDelta).coerceIn(0, 100)
+
+            val createdProject = com.example.data.ConstructionProject(
+                name = tender.title,
+                totalContractValue = bidAmount.toDouble(),
+                durationMonths = tender.durationMonths,
+                remainingMonths = tender.durationMonths,
+                isFinished = false,
+                clientName = tender.clientName,
+                clientType = tender.clientType,
+                projectScale = tender.projectScale,
+                ownerEstimateBudget = tender.ownerEstimateBudget,
+                agreedBidPrice = bidAmount,
+                currentPhaseIndex = 0,
+                phases = tender.phases,
+                requiredCrews = tender.requiredCrews,
+                requiredMachinery = tender.requiredMachinery,
+                initialSecurityDeposit = bond,
+                usesInHouseLogistics = hasLogistics
+            )
+            newActiveTenders = newActiveTenders + createdProject
+        }
+
+        val updatedFirmData = biz.constructionData.copy(
+            trustScore = newTrust,
+            availableTenderMarket = remainingMarket
+        )
+        val updatedBiz = biz.copy(
+            companyCash = newCompanyCash,
+            activeTenders = newActiveTenders,
+            constructionData = updatedFirmData
+        )
+
+        val newBusinesses = state.ownedBusinesses.map { if (it.instanceId == instanceId) updatedBiz else it }
+        val newHoldings = state.holdingCompanies.map { h ->
+            h.copy(subsidiaries = h.subsidiaries.map { if (it.instanceId == instanceId) updatedBiz else it })
+        }
+
+        _playerState.value = state.copy(
+            cash = newCash,
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = newHoldings
+        )
+        saveState(_playerState.value)
+
+        return Pair(result, null)
+    }
+
+    fun resolveConstructionEvent(instanceId: String, projectId: String, actionChoice: String): String? {
+        val state = _playerState.value
+        var modified = false
+        var errorMsg: String? = null
+
+        fun processBiz(biz: com.example.data.OwnedBusiness): com.example.data.OwnedBusiness {
+            if (biz.instanceId != instanceId) return biz
+            val proj = biz.activeTenders.find { it.id == projectId }
+            if (proj == null || proj.activeEvent == null) {
+                errorMsg = "Tidak ada insiden aktif pada proyek ini."
+                return biz
+            }
+
+            val event = proj.activeEvent
+            var compCash = biz.companyCash
+            var trust = biz.constructionData.trustScore
+
+            when (actionChoice) {
+                "PAY_COST" -> {
+                    if (compCash < event.costImpact) {
+                        errorMsg = "Kas Perusahaan tidak mencukupi untuk menanggung biaya insiden ini."
+                        return biz
+                    }
+                    compCash -= event.costImpact
+                }
+                "CLAIM_INSURANCE" -> {
+                    val insCost = (event.costImpact * 0.35).toLong()
+                    if (compCash < insCost) {
+                        errorMsg = "Kas Perusahaan tidak mencukupi untuk deductible asuransi (${com.example.ui.formatCurrencyRingkas(insCost.toDouble(), false)})."
+                        return biz
+                    }
+                    compCash -= insCost
+                    trust = (trust + 1).coerceAtMost(100)
+                }
+                "USE_IN_HOUSE" -> {
+                    val matCost = (event.costImpact * 0.5).toLong()
+                    if (compCash < matCost) {
+                        errorMsg = "Kas Perusahaan tidak mencukupi untuk material in-house."
+                        return biz
+                    }
+                    compCash -= matCost
+                }
+                "DISMISS" -> {
+                    // Just dismiss if resolved
+                }
+            }
+
+            val updatedProjects = biz.activeTenders.map {
+                if (it.id == projectId) it.copy(activeEvent = event.copy(isResolved = true))
+                else it
+            }
+            modified = true
+            val updatedData = biz.constructionData.copy(trustScore = trust)
+            return biz.copy(companyCash = compCash, activeTenders = updatedProjects, constructionData = updatedData)
+        }
+
+        val newBusinesses = state.ownedBusinesses.map { processBiz(it) }
+        val newHoldings = state.holdingCompanies.map { h ->
+            h.copy(subsidiaries = h.subsidiaries.map { processBiz(it) })
+        }
+
+        if (errorMsg != null) return errorMsg
+        if (!modified) return "Unit bisnis tidak ditemukan."
+
+        _playerState.value = state.copy(ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
+        saveState(_playerState.value)
+        return null
+    }
+
+    fun upgradeConstructionCapacity(instanceId: String, upgradeType: String, useCompanyCash: Boolean): String? {
+        val state = _playerState.value
+        var targetBiz: com.example.data.OwnedBusiness? = null
+
+        state.ownedBusinesses.find { it.instanceId == instanceId }?.let { targetBiz = it }
+        if (targetBiz == null) {
+            for (h in state.holdingCompanies) {
+                val sub = h.subsidiaries.find { it.instanceId == instanceId }
+                if (sub != null) {
+                    targetBiz = sub
+                    break
+                }
+            }
+        }
+
+        if (targetBiz == null) return "Unit bisnis konstruksi tidak ditemukan."
+        val biz = targetBiz!!
+
+        val (cost, newCrews, newMach, newCert, trustGain) = when (upgradeType) {
+            "RECRUIT_CREW" -> {
+                val cur = biz.constructionData.maxCrews
+                val c = (cur * 350_000L)
+                val nextCrews = cur + 2
+                ConstructionUpgradeSpecs(c, nextCrews, biz.constructionData.maxMachinery, biz.constructionData.safetyCertLevel, 1)
+            }
+            "BUY_MACHINERY" -> {
+                val cur = biz.constructionData.maxMachinery
+                val c = (cur * 150_000L)
+                val nextMach = cur + 4
+                ConstructionUpgradeSpecs(c, biz.constructionData.maxCrews, nextMach, biz.constructionData.safetyCertLevel, 2)
+            }
+            "SAFETY_CERT" -> {
+                val cur = biz.constructionData.safetyCertLevel
+                if (cur >= 5) return "Sertifikasi K3 sudah mencapai level Master Platinum maksimal."
+                val c = cur * 1_200_000L
+                ConstructionUpgradeSpecs(c, biz.constructionData.maxCrews, biz.constructionData.maxMachinery, cur + 1, 10)
+            }
+            else -> return "Tipe ekspansi tidak dikenal."
+        }
+
+        var newCash = state.cash
+        var newCompanyCash = biz.companyCash
+
+        if (useCompanyCash) {
+            if (newCompanyCash < cost) return "Kas Perusahaan tidak mencukupi (${com.example.ui.formatCurrencyRingkas(cost.toDouble(), false)})."
+            newCompanyCash -= cost
+        } else {
+            if (newCash < cost) return "Kas Pribadi tidak mencukupi (${com.example.ui.formatCurrencyRingkas(cost.toDouble(), false)})."
+            newCash -= cost
+        }
+
+        val updatedData = biz.constructionData.copy(
+            maxCrews = newCrews,
+            maxMachinery = newMach,
+            safetyCertLevel = newCert,
+            trustScore = (biz.constructionData.trustScore + trustGain).coerceIn(0, 100)
+        )
+        val updatedBiz = biz.copy(companyCash = newCompanyCash, constructionData = updatedData)
+
+        val newBusinesses = state.ownedBusinesses.map { if (it.instanceId == instanceId) updatedBiz else it }
+        val newHoldings = state.holdingCompanies.map { h ->
+            h.copy(subsidiaries = h.subsidiaries.map { if (it.instanceId == instanceId) updatedBiz else it })
+        }
+
+        _playerState.value = state.copy(
+            cash = newCash,
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = newHoldings
+        )
+        saveState(_playerState.value)
+        return null
+    }
+
+    fun refreshConstructionTenderMarket(instanceId: String): String? {
+        val state = _playerState.value
+        var modified = false
+
+        fun processBiz(biz: com.example.data.OwnedBusiness): com.example.data.OwnedBusiness {
+            if (biz.instanceId != instanceId) return biz
+            val newTenders = ConstructionEngine.generateTenderMarket(biz.level, biz.constructionData.trustScore)
+            modified = true
+            return biz.copy(constructionData = biz.constructionData.copy(availableTenderMarket = newTenders))
+        }
+
+        val newBusinesses = state.ownedBusinesses.map { processBiz(it) }
+        val newHoldings = state.holdingCompanies.map { h ->
+            h.copy(subsidiaries = h.subsidiaries.map { processBiz(it) })
+        }
+
+        if (!modified) return "Unit bisnis tidak ditemukan."
 
         _playerState.value = state.copy(ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
         saveState(_playerState.value)

@@ -249,13 +249,74 @@ data class HealthcareUnit(
     val unitCash: Double = 0.0
 )
 
+data class ConstructionPhase(
+    val phaseNumber: Int = 1,
+    val name: String = "",
+    val durationMonths: Int = 2,
+    var remainingMonths: Int = 2,
+    var isAllocated: Boolean = false,
+    var isCompleted: Boolean = false,
+    val payoutPercent: Double = 0.30
+)
+
+data class ConstructionRngEvent(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val title: String = "",
+    val description: String = "",
+    val type: String = "PRICE_HIKE", // "PRICE_HIKE", "BAD_WEATHER", "ACCIDENT", "QUALITY_BONUS"
+    val costImpact: Long = 0L,
+    val delayMonths: Int = 0,
+    val trustScoreImpact: Int = 0,
+    var isResolved: Boolean = false
+)
+
+data class ConstructionTenderOpportunity(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val title: String = "",
+    val clientName: String = "",
+    val clientType: String = "PEMERINTAH", // "PEMERINTAH", "SWASTA", "LUXURY", "MEGA"
+    val projectScale: String = "MEDIUM", // "MEDIUM", "LARGE", "MEGA"
+    val ownerEstimateBudget: Long = 25_000_000L,
+    val estimatedBaseCost: Long = 18_000_000L,
+    val durationMonths: Int = 6,
+    val requiredCrews: Int = 1,
+    val requiredMachinery: Int = 3,
+    val phases: List<ConstructionPhase> = emptyList(),
+    val rivalAiBids: List<Long> = emptyList(),
+    val minBidBond: Long = 1_500_000L,
+    val description: String = ""
+)
+
+data class ConstructionFirmData(
+    val maxCrews: Int = 3,
+    val maxMachinery: Int = 10,
+    val trustScore: Int = 65,
+    val safetyCertLevel: Int = 1,
+    val completedProjectsCount: Int = 0,
+    val totalRevenueGenerated: Long = 0L,
+    val availableTenderMarket: List<ConstructionTenderOpportunity> = emptyList()
+)
+
 data class ConstructionProject(
     val id: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val totalContractValue: Double,
     val durationMonths: Int,
     var remainingMonths: Int,
-    val isFinished: Boolean = false
+    val isFinished: Boolean = false,
+    val clientName: String = "Kementerian PUPR",
+    val clientType: String = "PEMERINTAH",
+    val projectScale: String = "MEDIUM",
+    val ownerEstimateBudget: Long = 0L,
+    val agreedBidPrice: Long = 0L,
+    val currentPhaseIndex: Int = 0,
+    val phases: List<ConstructionPhase> = emptyList(),
+    val requiredCrews: Int = 1,
+    val requiredMachinery: Int = 3,
+    val totalPaidOut: Long = 0L,
+    val initialSecurityDeposit: Long = 0L,
+    val usesInHouseLogistics: Boolean = false,
+    val activeEvent: ConstructionRngEvent? = null
 )
 
 data class EventProject(
@@ -548,7 +609,12 @@ interface BusinessEntity {
                     }
                 }
                 "construction" -> {
-                    ((owned.level - 1) * 100000L) + (owned.activeTenders.size * 250000L)
+                    val crewVal = (owned.constructionData.maxCrews) * 250000L
+                    val machVal = (owned.constructionData.maxMachinery) * 150000L
+                    val trustBonus = (owned.constructionData.trustScore) * 50000L
+                    val certVal = (owned.constructionData.safetyCertLevel) * 500000L
+                    val projVal = owned.activeTenders.sumOf { it.totalContractValue.toLong() }
+                    ((owned.level - 1) * 100000L) + crewVal + machVal + trustBonus + certVal + projVal
                 }
                 "media_production" -> {
                     val streamingVal = owned.projectHistory.filter { it.status == "FINISHED" }.sumOf { (it.licenseMonthlyFee ?: 0L) * 24L }
@@ -683,6 +749,7 @@ data class OwnedBusiness(
     val contentCreatorContracts: List<ActiveCreatorContract> = emptyList(),
     val logisticsData: LogisticsCompanyData = LogisticsCompanyData(),
     val apartmentData: ApartmentPropertyData = ApartmentPropertyData(),
+    val constructionData: ConstructionFirmData = ConstructionFirmData(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -805,8 +872,9 @@ data class OwnedBusiness(
             "construction" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
                 val baseMaint = cat?.monthlyMaintenanceCost ?: 50000L
-                val staffExpenses = level * 6000L
-                baseMaint + staffExpenses
+                val crewSalaries = constructionData.maxCrews * 8000L
+                val machUpkeep = constructionData.maxMachinery * 1500L
+                baseMaint + crewSalaries + machUpkeep
             }
             "shop_local" -> {
                 val cat = businessCatalog.find { it.id == catalogId }

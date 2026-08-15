@@ -1830,12 +1830,29 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
         }
 
         if (catalogItem.id == "construction") {
+            val hasLogistics = playerState.ownedBusinesses.any { it.catalogId == "mid_logistics" } ||
+                    playerState.holdingCompanies.any { h -> h.subsidiaries.any { it.catalogId == "mid_logistics" } }
+
             com.example.ui.ConstructionDashboard(
-                availableClientProjects = ownedData.availableClientProjects,
-                activeTenders = ownedData.activeTenders,
+                business = ownedData,
                 playerCash = playerState.cash,
-                companyCash = ownedData.companyCash.toLong(),
                 useShortFormat = useShortFormat,
+                hasLogisticsSynergy = hasLogistics,
+                onAllocatePhase = { projectId ->
+                    viewModel.allocateConstructionPhase(instanceId, projectId)
+                },
+                onSubmitBid = { tenderId, bidAmount, useCompanyCash, useInHouseLogistics ->
+                    viewModel.submitConstructionTenderBid(instanceId, tenderId, bidAmount, useCompanyCash, useInHouseLogistics)
+                },
+                onResolveEvent = { projectId, actionChoice ->
+                    viewModel.resolveConstructionEvent(instanceId, projectId, actionChoice)
+                },
+                onUpgradeCapacity = { upgradeType, useCompanyCash ->
+                    viewModel.upgradeConstructionCapacity(instanceId, upgradeType, useCompanyCash)
+                },
+                onRefreshMarket = {
+                    viewModel.refreshConstructionTenderMarket(instanceId)
+                },
                 onStartTender = { name, contractValue, duration, initialCapital, useCompanyCash ->
                     viewModel.startConstructionTender(instanceId, name, contractValue, duration, initialCapital, useCompanyCash)
                 },
