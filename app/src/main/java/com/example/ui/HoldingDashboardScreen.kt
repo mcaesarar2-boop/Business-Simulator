@@ -55,6 +55,8 @@ fun HoldingDashboardScreen(navController: NavHostController, viewModel: GameView
     val onSubsidiaryClick: (OwnedBusiness, BusinessCatalogItem) -> Unit = { b, ct ->
         if (b.catalogId == "content_creator") {
             navController.navigate("content_creator_screen")
+        } else if (b.catalogId == "mid_logistics" || ct.category == com.example.data.BusinessCategory.LOGISTICS) {
+            navController.navigate("logistics_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.AVIATION) {
             navController.navigate("aviation_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.THEME_PARK_HOLDING) {
@@ -700,6 +702,8 @@ fun MegaHoldingDetailScreen(navController: NavHostController, viewModel: GameVie
     val onSubsidiaryClick: (com.example.data.OwnedBusiness, com.example.data.BusinessCatalogItem) -> Unit = { b, ct ->
         if (b.catalogId == "content_creator") {
             navController.navigate("content_creator_screen")
+        } else if (b.catalogId == "mid_logistics" || ct.category == com.example.data.BusinessCategory.LOGISTICS) {
+            navController.navigate("logistics_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.AVIATION) {
             navController.navigate("aviation_dashboard/${b.instanceId}")
         } else if (ct.category == com.example.data.BusinessCategory.THEME_PARK_HOLDING) {

@@ -66,9 +66,9 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
             )
         ),
         BusinessCatalogItem(
-            id = "mid_logistics", name = "Kurir Ekspres Lokal", category = BusinessCategory.LOGISTICS,
-            imageUrl = "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?auto=format&fit=crop&w=400&q=80",
-            costToBuy = 25000, monthlyRevenue = 15000, monthlyMaintenanceCost = 8000,
+            id = "mid_logistics", name = "SRC Express (Logistics)", category = BusinessCategory.LOGISTICS,
+            imageUrl = "https://plus.unsplash.com/premium_photo-1661901122974-e280f0c1efab?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+            costToBuy = 25000, monthlyRevenue = 25000, monthlyMaintenanceCost = 8000,
             upgrades = listOf(
                 BusinessUpgrade("1", "Armada Mobil Box", "Kapasitas kirim ++ (1.5x Rev)", baseCost = 20000, revenueMultiplier = 1.5f),
                 BusinessUpgrade("2", "Optimasi Rute AI", "Hemat bensin (-30% Biaya)", baseCost = 10000, maintenanceMultiplier = 0.7f)

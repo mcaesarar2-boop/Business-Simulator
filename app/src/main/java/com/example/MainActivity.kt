@@ -264,6 +264,10 @@ fun NavigationGraph(navController: NavHostController, viewModel: GameViewModel, 
                 gameViewModel = viewModel
             )
         }
+        composable("logistics_dashboard/{id}") { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id") ?: ""
+            com.example.ui.LogisticsScreen(navController, viewModel, id)
+        }
         composable(BottomNavItem.Earnings.screen_route) { EarningsScreen(viewModel) }
         composable(BottomNavItem.Items.screen_route) { com.example.ui.CollectionScreen(navController, viewModel) }
         composable("garage") { com.example.ui.GarageScreen(navController, viewModel) }

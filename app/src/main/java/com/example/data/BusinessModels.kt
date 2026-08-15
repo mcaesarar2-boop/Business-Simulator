@@ -608,7 +608,7 @@ fun getCatalogNameForId(catalogId: String): String {
         "shop_large_chain" -> "Supermarket"
         "shop_department_store" -> "Mega Dept Store"
         "mid_cafe" -> "Coffee Shop"
-        "mid_logistics" -> "Kurir Express"
+        "mid_logistics" -> "SRC Express (Logistics)"
         "upper_tech" -> "App Dev"
         "upper_realestate" -> "Komplek Apartment"
         "tycoon_bank" -> "Bank Swasta"
@@ -681,6 +681,7 @@ data class OwnedBusiness(
     val contentCreatorOfficeUnlocked: Boolean = false,
     val contentCreatorCash: Long = 5000L,
     val contentCreatorContracts: List<ActiveCreatorContract> = emptyList(),
+    val logisticsData: LogisticsCompanyData = LogisticsCompanyData(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -720,7 +721,16 @@ data class OwnedBusiness(
                 val contractRev = activeTenders.sumOf { (it.totalContractValue / maxOf(1, it.durationMonths)).toLong() }
                 (baseRev * synergyMultiplier).toLong() + contractRev
             }
-            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "mid_logistics", "upper_tech", "upper_realestate", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
+            "mid_logistics" -> {
+                val cat = businessCatalog.find { it.id == catalogId }
+                val base = cat?.monthlyRevenue ?: 25000L
+                val contractsBonus = logisticsData.activeContracts.sumOf { (it.inboundPackagesPerSec * it.payoutPerPackage * 30).toLong() }
+                val fleetCapacityBonus = logisticsData.fleet.sumOf { (it.type.capacity * 12).toLong() }
+                val techMultiplier = 1.0 + (logisticsData.techTree.ecoLevel * 0.1) + (logisticsData.techTree.aiSpeedLevel * 0.15)
+                val totalGross = ((base + contractsBonus + fleetCapacityBonus) * techMultiplier * synergyMultiplier).toLong()
+                totalGross
+            }
+            "shop_local", "shop_small_chain", "shop_large_chain", "shop_department_store", "mid_cafe", "upper_tech", "upper_realestate", "tycoon_bank", "tycoon_corp", "media_print", "media_tv" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
                 var flatRev = 0L
                 var multRev = 1.0f

@@ -2719,6 +2719,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
+            if (business.catalogId == "mid_logistics") {
+                businessesChanged = true
+                val updatedLogistics = LogisticsEngine.processTick(business.logisticsData, dtSeconds = 0.1f)
+                updatedBusiness = updatedBusiness.copy(logisticsData = updatedLogistics)
+            }
+
             val completedUpgrades = updatedBusiness.activeUpgrades.filter { now >= it.finishTimeMs }
             if (completedUpgrades.isNotEmpty()) {
                 businessesChanged = true
@@ -2771,6 +2777,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         contentCreatorSubscribers = newSubsCount,
                         contentCreatorCash = newCash
                     )
+                }
+
+                if (business.catalogId == "mid_logistics") {
+                    holdingsChanged = true
+                    holdingSelfChanged = true
+                    val updatedLogistics = LogisticsEngine.processTick(business.logisticsData, dtSeconds = 0.1f)
+                    updatedBusiness = updatedBusiness.copy(logisticsData = updatedLogistics)
                 }
 
                 val completedUpgrades = updatedBusiness.activeUpgrades.filter { now >= it.finishTimeMs }
@@ -12147,5 +12160,125 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _playerState.value = state.copy(foundations = nextFoundations)
         saveState(_playerState.value)
         return true
+    }
+
+    // ==========================================
+    // LOGISTICS OPERATIONS (SRC Express)
+    // ==========================================
+    fun getLogisticsBusiness(instanceId: String): OwnedBusiness? {
+        val state = _playerState.value
+        return state.ownedBusinesses.find { it.instanceId == instanceId }
+            ?: state.ownedBusinesses.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+            ?: state.holdingCompanies.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+            ?: state.holdingCompanies.flatMap { it.subsidiaries }.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+    }
+
+    fun updateLogisticsBusiness(instanceId: String, transform: (com.example.data.LogisticsCompanyData) -> com.example.data.LogisticsCompanyData) {
+        val currentState = _playerState.value
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) {
+                b.copy(logisticsData = transform(b.logisticsData))
+            } else {
+                val newSubs = b.subsidiaries.map { sub ->
+                    if (sub.instanceId == instanceId) sub.copy(logisticsData = transform(sub.logisticsData)) else sub
+                }
+                b.copy(subsidiaries = newSubs)
+            }
+        }
+        val newHoldings = currentState.holdingCompanies.map { holding ->
+            val newSubs = holding.subsidiaries.map { b ->
+                if (b.instanceId == instanceId) {
+                    b.copy(logisticsData = transform(b.logisticsData))
+                } else {
+                    val newInnerSubs = b.subsidiaries.map { sub ->
+                        if (sub.instanceId == instanceId) sub.copy(logisticsData = transform(sub.logisticsData)) else sub
+                    }
+                    b.copy(subsidiaries = newInnerSubs)
+                }
+            }
+            holding.copy(subsidiaries = newSubs)
+        }
+        _playerState.value = currentState.copy(
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = newHoldings
+        )
+    }
+
+    fun deployFleetVehicle(instanceId: String, vehicleId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.deployVehicle(data, vehicleId)
+        }
+    }
+
+    fun deployAllIdleFleet(instanceId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.deployAllIdle(data)
+        }
+    }
+
+    fun repairFleetVehicle(instanceId: String, vehicleId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.repairVehicle(data, vehicleId)
+        }
+    }
+
+    fun repairAllFleet(instanceId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.repairAllVehicles(data)
+        }
+    }
+
+    fun buyFleetVehicle(instanceId: String, type: com.example.data.LogisticsVehicleType, customName: String? = null) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.buyVehicle(data, type, customName)
+        }
+    }
+
+    fun upgradeWarehouseCapacity(instanceId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.upgradeWarehouseCapacity(data)
+        }
+    }
+
+    fun signLogisticsContract(instanceId: String, contractId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.signContract(data, contractId)
+        }
+    }
+
+    fun cancelLogisticsContract(instanceId: String, contractId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.cancelContract(data, contractId)
+        }
+    }
+
+    fun researchLogisticsTech(instanceId: String, path: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.researchTech(data, path)
+        }
+    }
+
+    fun toggleLogisticsAutoDispatch(instanceId: String) {
+        updateLogisticsBusiness(instanceId) { data ->
+            LogisticsEngine.toggleAutoDispatch(data)
+        }
+    }
+
+    fun injectCapitalToLogistics(instanceId: String, amount: Long) {
+        val currentState = _playerState.value
+        if (currentState.cash < amount || amount <= 0) return
+        _playerState.value = currentState.copy(cash = currentState.cash - amount)
+        updateLogisticsBusiness(instanceId) { data ->
+            data.copy(internalCash = data.internalCash + amount)
+        }
+    }
+
+    fun withdrawCapitalFromLogistics(instanceId: String, amount: Long) {
+        val b = getLogisticsBusiness(instanceId) ?: return
+        if (b.logisticsData.internalCash < amount || amount <= 0) return
+        updateLogisticsBusiness(instanceId) { data ->
+            data.copy(internalCash = data.internalCash - amount)
+        }
+        _playerState.update { it.copy(cash = it.cash + amount) }
     }
 }
