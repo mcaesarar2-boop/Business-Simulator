@@ -180,7 +180,7 @@ data class BuildingRoomCell(
 // =========================================================================
 data class ApartmentPropertyData(
     val internalCash: Long = 80_000L,
-    val buildingName: String = "SRC Grand Residence",
+    val buildingName: String = "Apartment (Property Management)",
     val buildingFloors: Int = 8, // Lantai apartemen (bisa diekspansi)
     val unitCategories: List<ApartmentUnitCategoryData> = defaultUnitCategories(),
     val installedFacilities: List<ApartmentFacilityType> = listOf(ApartmentFacilityType.SECURITY_24H),

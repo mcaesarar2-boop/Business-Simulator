@@ -66,7 +66,7 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
             )
         ),
         BusinessCatalogItem(
-            id = "mid_logistics", name = "SRC Express (Logistics)", category = BusinessCategory.LOGISTICS,
+            id = "mid_logistics", name = "Express (Logistics)", category = BusinessCategory.LOGISTICS,
             imageUrl = "https://plus.unsplash.com/premium_photo-1661901122974-e280f0c1efab?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
             costToBuy = 25000, monthlyRevenue = 25000, monthlyMaintenanceCost = 8000,
             upgrades = listOf(
@@ -86,7 +86,7 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
             )
         ),
         BusinessCatalogItem(
-            id = "upper_realestate", name = "SRC Grand Apartment (Property)", category = BusinessCategory.PROPERTY,
+            id = "upper_realestate", name = "Apartment (Property Management)", category = BusinessCategory.PROPERTY,
             imageUrl = "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80",
             costToBuy = 500000, monthlyRevenue = 120000, monthlyMaintenanceCost = 20000,
             upgrades = listOf(

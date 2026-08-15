@@ -58,7 +58,7 @@ fun ApartmentPropertyScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("SRC Grand Apartment") },
+                    title = { Text("Apartment (Property Management)") },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -85,6 +85,15 @@ fun ApartmentPropertyScreen(
     var showCapitalDialog by remember { mutableStateOf(false) }
     var capitalActionType by remember { mutableStateOf("suntik") } // "suntik" or "tarik"
     var showExpandFloorsDialog by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
+    var showLiquidationDialog by remember { mutableStateOf(false) }
+    var liquidationInputText by remember { mutableStateOf("") }
+    var showSoldSuccessModal by remember { mutableStateOf(false) }
+    var soldValuationAmount by remember { mutableLongStateOf(0L) }
+
+    val valuationBreakdown = remember(apartmentData) {
+        com.example.viewmodel.ApartmentEngine.calculateLiquidationValuation(apartmentData)
+    }
 
     // Pulsing animation for incident warning nodes
     val infiniteTransition = rememberInfiniteTransition(label = "IncidentPulse")
@@ -104,7 +113,7 @@ fun ApartmentPropertyScreen(
                 title = {
                     Column {
                         Text(
-                            text = business.customName ?: "SRC Grand Residence",
+                            text = business.customName ?: "Apartment (Property Management)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             maxLines = 1,
@@ -127,10 +136,17 @@ fun ApartmentPropertyScreen(
                         Badge(
                             containerColor = Color(0xFFFF1744),
                             contentColor = Color.White,
-                            modifier = Modifier.padding(end = 8.dp)
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
                             Text("${apartmentData.activeIncidents.size} Laporan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
+                    IconButton(onClick = { showSettingsSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Pengaturan Bisnis",
+                            tint = Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -1207,6 +1223,391 @@ fun ApartmentPropertyScreen(
             dismissButton = {
                 TextButton(onClick = { showExpandFloorsDialog = false }) {
                     Text("Batal", color = Color.LightGray)
+                }
+            }
+        )
+    }
+
+    // ==============================================================
+    // PENGATURAN BISNIS BOTTOM SHEET
+    // ==============================================================
+    if (showSettingsSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSettingsSheet = false },
+            containerColor = Color(0xFF1E293B),
+            contentColor = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .navigationBarsPadding()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Pengaturan Properti",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = Color.White
+                        )
+                        Text(
+                            text = business.customName ?: "Apartment (Property Management)",
+                            fontSize = 12.sp,
+                            color = Color.LightGray
+                        )
+                    }
+                }
+
+                // Info Ringkas Valuasi
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Estimasi Nilai Likuidasi Properti", fontSize = 12.sp, color = Color.Gray)
+                            Text(
+                                text = formatCurrencyRingkas(valuationBreakdown.totalValuation.toDouble(), useShortFormat),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF00E676)
+                            )
+                        }
+                        Text(
+                            text = "⭐ ${String.format("%.1f", apartmentData.tenantSatisfaction)} / 5.0",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFFFD600)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Danger Zone Section
+                Text(
+                    text = "DANGER ZONE (ZONA BERBAHAYA)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFF5252),
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF3B1219)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(Color(0xFFEF4444), Color(0xFFB91C1C))))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Likuidasi & Jual Unit Properti",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Jual seluruh unit apartemen, bangunan fisik gedung, dan cairkan saldo kas ke Saldo Perusahaan Utama.",
+                            fontSize = 12.sp,
+                            color = Color(0xFFFCA5A5)
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = {
+                                showSettingsSheet = false
+                                liquidationInputText = ""
+                                showLiquidationDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteSweep,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Likuidasi Bisnis (Jual)",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+
+    // ==============================================================
+    // DANGER ZONE LIQUIDATION CONFIRMATION MODAL
+    // ==============================================================
+    if (showLiquidationDialog) {
+        AlertDialog(
+            onDismissRequest = { showLiquidationDialog = false },
+            containerColor = Color(0xFF18181B),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Likuidasi Bisnis Properti",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEF4444),
+                        fontSize = 18.sp
+                    )
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Total Valuasi Properti Anda:",
+                        fontSize = 13.sp,
+                        color = Color.LightGray
+                    )
+                    Text(
+                        text = formatCurrencyRingkas(valuationBreakdown.totalValuation.toDouble(), useShortFormat),
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF00E676),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Breakdown Valuasi
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF27272A)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• Saldo Kas Internal:", fontSize = 11.sp, color = Color.Gray)
+                                Text(
+                                    formatCurrencyRingkas(valuationBreakdown.internalCash.toDouble(), useShortFormat),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• Gedung & Lantai (${apartmentData.buildingFloors} F):", fontSize = 11.sp, color = Color.Gray)
+                                Text(
+                                    formatCurrencyRingkas(valuationBreakdown.buildingValue.toDouble(), useShortFormat),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• Fasilitas Terpasang (${apartmentData.installedFacilities.size}):", fontSize = 11.sp, color = Color.Gray)
+                                Text(
+                                    formatCurrencyRingkas(valuationBreakdown.facilitiesValue.toDouble(), useShortFormat),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• Goodwill Okupansi Sewa:", fontSize = 11.sp, color = Color.Gray)
+                                Text(
+                                    formatCurrencyRingkas(valuationBreakdown.occupancyGoodwill.toDouble(), useShortFormat),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• Kepuasan Penghuni (⭐ ${String.format("%.1f", apartmentData.tenantSatisfaction)}):", fontSize = 11.sp, color = Color.Gray)
+                                Text(
+                                    "${String.format("%.2f", valuationBreakdown.satisfactionMultiplier)}x",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (valuationBreakdown.satisfactionMultiplier >= 1.0) Color(0xFF00E676) else Color(0xFFFF5252)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "⚠️ PERINGATAN: Seluruh kepemilikan gedung, lantai unit apartemen, dan fasilitas akan dihapus secara permanen. Total uang hasil penjualan akan ditransfer ke Saldo Perusahaan Utama.",
+                        fontSize = 11.sp,
+                        color = Color(0xFFFCA5A5),
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Ketik kata \"JUAL\" untuk konfirmasi:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = liquidationInputText,
+                        onValueChange = { liquidationInputText = it },
+                        placeholder = { Text("Ketik JUAL di sini...", color = Color.DarkGray, fontSize = 13.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFEF4444),
+                            unfocusedBorderColor = Color(0xFF52525B),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                val isConfirmationValid = liquidationInputText.trim().equals("JUAL", ignoreCase = true)
+                Button(
+                    onClick = {
+                        val amount = viewModel.liquidateApartmentBusiness(instanceId)
+                        soldValuationAmount = amount
+                        showLiquidationDialog = false
+                        showSoldSuccessModal = true
+                    },
+                    enabled = isConfirmationValid,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFDC2626),
+                        disabledContainerColor = Color(0xFF451A1A),
+                        disabledContentColor = Color(0xFF7F1D1D)
+                    )
+                ) {
+                    Text("Ya, Jual Bisnis", fontWeight = FontWeight.Bold, color = if (isConfirmationValid) Color.White else Color.Gray)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLiquidationDialog = false }) {
+                    Text("Batal", color = Color.LightGray)
+                }
+            }
+        )
+    }
+
+    // ==============================================================
+    // LIQUIDATION SUCCESS TRANSITION MODAL
+    // ==============================================================
+    if (showSoldSuccessModal) {
+        AlertDialog(
+            onDismissRequest = {
+                showSoldSuccessModal = false
+                navController.popBackStack()
+            },
+            containerColor = Color(0xFF0F172A),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF00E676),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Properti Berhasil Terjual!",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 18.sp
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🎉 DANA LIKUIDASI PROPERTI DICAIRKAN",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color(0xFF38BDF8)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "+${formatCurrencyRingkas(soldValuationAmount.toDouble(), useShortFormat)}",
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF00E676)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Uang hasil penjualan aset properti apartemen telah berhasil ditransfer ke Saldo Perusahaan Utama Anda.",
+                        fontSize = 12.sp,
+                        color = Color.LightGray,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSoldSuccessModal = false
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Kembali ke Portfolio Utama", fontWeight = FontWeight.Bold, color = Color.Black)
                 }
             }
         )

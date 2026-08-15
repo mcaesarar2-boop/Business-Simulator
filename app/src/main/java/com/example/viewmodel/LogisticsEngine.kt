@@ -483,4 +483,48 @@ object LogisticsEngine {
     private fun ClosedRange<Double>.randomDouble(): Double {
         return start + (endInclusive - start) * Random.nextDouble()
     }
+
+    data class LogisticsValuationBreakdown(
+        val internalCash: Long,
+        val fleetValue: Long,
+        val warehouseTechValue: Long,
+        val performanceMultiplier: Double,
+        val totalValuation: Long
+    )
+
+    fun calculateLiquidationValuation(data: LogisticsCompanyData): LogisticsValuationBreakdown {
+        val cash = data.internalCash
+
+        // Armada: Harga beli * 80% * rasio kondisi HP
+        val fleetVal = data.fleet.sumOf { v ->
+            val conditionRatio = (v.conditionHp / 100.0).coerceIn(0.2, 1.0)
+            (v.type.buyCost * 0.80 * conditionRatio).toLong()
+        }
+
+        // Level Gudang & Teknologi Riset
+        val whVal = data.warehouseLevel * 45_000L
+        val techVal = (data.techTree.ecoLevel * 30_000L) + (data.techTree.aiSpeedLevel * 40_000L)
+        val warehouseTechVal = whVal + techVal
+
+        // Performance / Goodwill Multiplier berdasarkan Success Rate (0% - 100%)
+        val perfMult = when {
+            data.successRate >= 98.0 -> 1.30
+            data.successRate >= 95.0 -> 1.15
+            data.successRate >= 85.0 -> 1.00
+            data.successRate >= 70.0 -> 0.85
+            else -> 0.70
+        }
+
+        val assetBase = fleetVal + warehouseTechVal
+        val adjustedAssets = (assetBase * perfMult).toLong()
+        val total = max(15_000L, cash + adjustedAssets)
+
+        return LogisticsValuationBreakdown(
+            internalCash = cash,
+            fleetValue = fleetVal,
+            warehouseTechValue = warehouseTechVal,
+            performanceMultiplier = perfMult,
+            totalValuation = total
+        )
+    }
 }

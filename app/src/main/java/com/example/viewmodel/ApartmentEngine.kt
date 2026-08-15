@@ -243,4 +243,50 @@ object ApartmentEngine {
             else -> 2_500_000L
         }
     }
+
+    data class ApartmentValuationBreakdown(
+        val internalCash: Long,
+        val buildingValue: Long,
+        val facilitiesValue: Long,
+        val occupancyGoodwill: Long,
+        val satisfactionMultiplier: Double,
+        val totalValuation: Long
+    )
+
+    fun calculateLiquidationValuation(data: ApartmentPropertyData): ApartmentValuationBreakdown {
+        val cash = data.internalCash
+
+        // Nilai Gedung & Konstruksi Fisik Lantai (Lantai Dasar + Floor Expansions)
+        val buildingVal = data.buildingFloors * 65_000L
+
+        // Fasilitas Terpasang (Depresiasi 85% dari install cost)
+        val facVal = data.installedFacilities.sumOf { (it.installCost * 0.85).toLong() }
+
+        // Unit Terbuka & Tenant Occupancy Goodwill (Kapitalisasi 4 bulan sewa dari unit terisi)
+        val occGoodwill = data.unitCategories.filter { it.isUnlocked }.sumOf { cat ->
+            cat.occupiedUnits * cat.monthlyRentPrice * 4L
+        }
+
+        // Kepuasan Penghuni Multiplier (1.0 - 5.0 ⭐)
+        val satMult = when {
+            data.tenantSatisfaction >= 4.7 -> 1.30
+            data.tenantSatisfaction >= 4.3 -> 1.15
+            data.tenantSatisfaction >= 3.8 -> 1.00
+            data.tenantSatisfaction >= 3.0 -> 0.85
+            else -> 0.70
+        }
+
+        val coreAssets = buildingVal + facVal + occGoodwill
+        val adjustedCore = (coreAssets * satMult).toLong()
+        val total = max(50_000L, cash + adjustedCore)
+
+        return ApartmentValuationBreakdown(
+            internalCash = cash,
+            buildingValue = buildingVal,
+            facilitiesValue = facVal,
+            occupancyGoodwill = occGoodwill,
+            satisfactionMultiplier = satMult,
+            totalValuation = total
+        )
+    }
 }

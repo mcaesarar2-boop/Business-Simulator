@@ -12390,4 +12390,63 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         _playerState.update { it.copy(cash = it.cash + amount) }
     }
+
+    // ==========================================
+    // LIQUIDATION & EXIT STRATEGY OPERATIONS
+    // ==========================================
+    fun liquidateLogisticsBusiness(instanceId: String): Long {
+        val currentState = _playerState.value
+        val business = getLogisticsBusiness(instanceId) ?: return 0L
+        val valuation = LogisticsEngine.calculateLiquidationValuation(business.logisticsData).totalValuation
+
+        val newBusinesses = currentState.ownedBusinesses
+            .filter { it.instanceId != instanceId }
+            .map { b ->
+                b.copy(subsidiaries = b.subsidiaries.filter { it.instanceId != instanceId })
+            }
+
+        val newHoldings = currentState.holdingCompanies.map { holding ->
+            val newSubs = holding.subsidiaries
+                .filter { it.instanceId != instanceId }
+                .map { sub ->
+                    sub.copy(subsidiaries = sub.subsidiaries.filter { it.instanceId != instanceId })
+                }
+            holding.copy(subsidiaries = newSubs)
+        }
+
+        _playerState.value = currentState.copy(
+            cash = currentState.cash + valuation,
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = newHoldings
+        )
+        return valuation
+    }
+
+    fun liquidateApartmentBusiness(instanceId: String): Long {
+        val currentState = _playerState.value
+        val business = getApartmentBusiness(instanceId) ?: return 0L
+        val valuation = ApartmentEngine.calculateLiquidationValuation(business.apartmentData).totalValuation
+
+        val newBusinesses = currentState.ownedBusinesses
+            .filter { it.instanceId != instanceId }
+            .map { b ->
+                b.copy(subsidiaries = b.subsidiaries.filter { it.instanceId != instanceId })
+            }
+
+        val newHoldings = currentState.holdingCompanies.map { holding ->
+            val newSubs = holding.subsidiaries
+                .filter { it.instanceId != instanceId }
+                .map { sub ->
+                    sub.copy(subsidiaries = sub.subsidiaries.filter { it.instanceId != instanceId })
+                }
+            holding.copy(subsidiaries = newSubs)
+        }
+
+        _playerState.value = currentState.copy(
+            cash = currentState.cash + valuation,
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = newHoldings
+        )
+        return valuation
+    }
 }
