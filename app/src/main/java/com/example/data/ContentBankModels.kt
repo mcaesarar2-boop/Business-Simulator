@@ -15,6 +15,13 @@ enum class ContentStatus(val displayName: String) {
     LICENSED("Lisensi Berjalan")
 }
 
+enum class ContentSortOption(val displayName: String) {
+    ENGAGEMENT_HIGHEST("Engagement Teratas"),
+    ROYALTY_HIGHEST("Royalti Tertinggi"),
+    EXPIRING_SOON("Kontrak Segera Habis"),
+    BUDGET_HIGHEST("Budget Produksi Terbesar")
+}
+
 data class ContentWork(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "",
@@ -25,6 +32,8 @@ data class ContentWork(
     val monthlyRoyalty: Long = 0L,
     val acquiredLumpSum: Long = 0L,
     val acquiredByPH: String? = null,
+    val contractDurationMonths: Int? = null,
+    val remainingContractMonths: Int? = null,
     val createdTimestamp: Long = System.currentTimeMillis()
 )
 
@@ -39,6 +48,7 @@ data class ProductionHouseOffer(
     val lumpSumOffer: Long = 0L,
     val royaltyUpfront: Long = 0L,
     val monthlyRoyalty: Long = 0L,
+    val contractDurationMonths: Int = 24, // 12, 24, or 36 months
     val pitchMessage: String = "",
     val durationSeconds: Int = 20,
     val createdTimestamp: Long = System.currentTimeMillis()
@@ -131,6 +141,7 @@ object ContentProductionEngine {
         // Royalty option: 25-35% upfront cash + monthly recurring royalty (MRR)
         val royaltyUpfront = roundToNiceNumber((lumpSumOffer * Random.nextDouble(0.22, 0.35)).toLong().coerceAtLeast(5_000L))
         val monthlyRoyalty = roundToNiceNumber((lumpSumOffer * Random.nextDouble(0.045, 0.085) * (score / 65.0)).toLong().coerceAtLeast(1_500L))
+        val contractDurationMonths = listOf(12, 24, 36).random()
 
         val pitchPitch = when (targetWork.type) {
             ContentType.SHORT_FILM -> "Studio $phName sangat tertarik dengan karya \"${targetWork.title}\" milik Anda! Mereka ingin mengadaptasinya menjadi proyek layar lebar."
@@ -148,6 +159,7 @@ object ContentProductionEngine {
             lumpSumOffer = lumpSumOffer,
             royaltyUpfront = royaltyUpfront,
             monthlyRoyalty = monthlyRoyalty,
+            contractDurationMonths = contractDurationMonths,
             pitchMessage = pitchPitch,
             durationSeconds = 20
         )

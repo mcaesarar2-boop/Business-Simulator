@@ -145,12 +145,14 @@ fun ContentCreatorScreen(
     var recentlyCompletedWork by remember { mutableStateOf<ContentWork?>(null) }
 
     // ==========================================
-    // TUGAS 3: TARGETED PH OFFERS (PRODUCTION HOUSE) STATE
+    // TUGAS 3: TARGETED PH OFFERS & BANK KONTEN STATE
     // ==========================================
     var activePHOffer by remember { mutableStateOf<ProductionHouseOffer?>(null) }
     var phOfferTimeLeft by remember { mutableStateOf(20) }
     var phPitchCooldown by remember { mutableStateOf(0) }
     var portfolioFilter by remember { mutableStateOf<ContentStatus?>(null) }
+    var selectedSortOption by remember { mutableStateOf(ContentSortOption.ENGAGEMENT_HIGHEST) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
 
     // ==========================================
     // BRAND DEALS (SPONSORSHIP) ENGINE
@@ -1555,9 +1557,9 @@ fun ContentCreatorScreen(
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = gold),
                                     shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(42.dp)
                                         .testTag("ph_accept_lump_sum_button")
                                 ) {
                                     Row(
@@ -1565,17 +1567,22 @@ fun ContentCreatorScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        ) {
                                             Icon(Icons.Default.MonetizationOn, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Terima Jual Putus (Lump Sum)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Text("Terima Jual Putus", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                         }
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "+${currFormat.format(offer.lumpSumOffer)}",
                                             color = Color.Black,
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 12.sp,
-                                            fontFamily = FontFamily.Monospace
+                                            fontFamily = FontFamily.Monospace,
+                                            maxLines = 1
                                         )
                                     }
                                 }
@@ -1585,16 +1592,16 @@ fun ContentCreatorScreen(
                                     onClick = {
                                         val accepted = gameViewModel.acceptPHRoyaltyOffer(offer)
                                         if (accepted) {
-                                            dealFeedbackMsg = "💎 Lisensi \"${offer.contentTitle}\" resmi berjalan dengan ${offer.phName}! Pembayaran awal +${currFormat.format(offer.royaltyUpfront)} dan royalti pasif +${currFormat.format(offer.monthlyRoyalty)}/bln."
+                                            dealFeedbackMsg = "💎 Lisensi \"${offer.contentTitle}\" resmi berjalan dengan ${offer.phName}! Pembayaran awal +${currFormat.format(offer.royaltyUpfront)} dan royalti pasif +${currFormat.format(offer.monthlyRoyalty)}/bln (${offer.contractDurationMonths} Bulan)."
                                             dealFeedbackIsPositive = true
                                             activePHOffer = null
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = neonPurple),
                                     shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(42.dp)
                                         .testTag("ph_accept_royalty_button")
                                 ) {
                                     Row(
@@ -1602,25 +1609,34 @@ fun ContentCreatorScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        ) {
                                             Icon(Icons.Default.AllInclusive, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Terima Lisensi & Royalti Pasif", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Column {
+                                                Text("Terima Lisensi & Royalti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                Text("Durasi: ${offer.contractDurationMonths} Bln", color = Color.White.copy(alpha = 0.8f), fontSize = 9.sp)
+                                            }
                                         }
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
                                                 text = "+${currFormat.format(offer.royaltyUpfront)} Upfront",
                                                 color = Color.White,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 fontSize = 11.sp,
-                                                fontFamily = FontFamily.Monospace
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1
                                             )
                                             Text(
                                                 text = "+${currFormat.format(offer.monthlyRoyalty)}/bln",
                                                 color = neonGreen,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 9.sp,
-                                                fontFamily = FontFamily.Monospace
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1
                                             )
                                         }
                                     }
@@ -1649,100 +1665,215 @@ fun ContentCreatorScreen(
                 }
             }
 
-            // FILTER CHIPS & STATISTIK BANK KONTEN
+            // FILTER CHIPS & SORTING BANK KONTEN
             item {
                 val availableCount = contentPortfolio.count { it.status == ContentStatus.AVAILABLE }
-                val lumpSumCount = contentPortfolio.count { it.status == ContentStatus.ACQUIRED_LUMP_SUM }
                 val licensedCount = contentPortfolio.count { it.status == ContentStatus.LICENSED }
+                val lumpSumCount = contentPortfolio.count { it.status == ContentStatus.ACQUIRED_LUMP_SUM }
+                val activeCount = availableCount + licensedCount
 
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = portfolioFilter == null,
-                            onClick = { portfolioFilter = null },
-                            label = { Text("Semua (${contentPortfolio.size})", fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = neonPurple,
-                                selectedLabelColor = Color.White,
-                                containerColor = cardDark,
-                                labelColor = textGray
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                    // Row Filter Chips
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item {
+                            FilterChip(
                                 selected = portfolioFilter == null,
-                                borderColor = Color(0xFF262C42),
-                                selectedBorderColor = neonPurple
+                                onClick = { portfolioFilter = null },
+                                label = { Text("Semua ($activeCount)", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = neonPurple,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = cardDark,
+                                    labelColor = textGray
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = portfolioFilter == null,
+                                    borderColor = Color(0xFF262C42),
+                                    selectedBorderColor = neonPurple
+                                )
                             )
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = portfolioFilter == ContentStatus.AVAILABLE,
-                            onClick = { portfolioFilter = ContentStatus.AVAILABLE },
-                            label = { Text("Tersedia ($availableCount)", fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = neonGreen.copy(alpha = 0.25f),
-                                selectedLabelColor = neonGreen,
-                                containerColor = cardDark,
-                                labelColor = textGray
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+                        }
+                        item {
+                            FilterChip(
                                 selected = portfolioFilter == ContentStatus.AVAILABLE,
-                                borderColor = Color(0xFF262C42),
-                                selectedBorderColor = neonGreen
+                                onClick = { portfolioFilter = ContentStatus.AVAILABLE },
+                                label = { Text("Tersedia ($availableCount)", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = neonGreen.copy(alpha = 0.25f),
+                                    selectedLabelColor = neonGreen,
+                                    containerColor = cardDark,
+                                    labelColor = textGray
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = portfolioFilter == ContentStatus.AVAILABLE,
+                                    borderColor = Color(0xFF262C42),
+                                    selectedBorderColor = neonGreen
+                                )
                             )
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = portfolioFilter == ContentStatus.LICENSED,
-                            onClick = { portfolioFilter = ContentStatus.LICENSED },
-                            label = { Text("Lisensi ($licensedCount)", fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = neonBlue.copy(alpha = 0.25f),
-                                selectedLabelColor = neonBlue,
-                                containerColor = cardDark,
-                                labelColor = textGray
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+                        }
+                        item {
+                            FilterChip(
                                 selected = portfolioFilter == ContentStatus.LICENSED,
-                                borderColor = Color(0xFF262C42),
-                                selectedBorderColor = neonBlue
+                                onClick = { portfolioFilter = ContentStatus.LICENSED },
+                                label = { Text("Lisensi ($licensedCount)", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = neonBlue.copy(alpha = 0.25f),
+                                    selectedLabelColor = neonBlue,
+                                    containerColor = cardDark,
+                                    labelColor = textGray
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = portfolioFilter == ContentStatus.LICENSED,
+                                    borderColor = Color(0xFF262C42),
+                                    selectedBorderColor = neonBlue
+                                )
                             )
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = portfolioFilter == ContentStatus.ACQUIRED_LUMP_SUM,
-                            onClick = { portfolioFilter = ContentStatus.ACQUIRED_LUMP_SUM },
-                            label = { Text("Jual Putus ($lumpSumCount)", fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = gold.copy(alpha = 0.25f),
-                                selectedLabelColor = gold,
-                                containerColor = cardDark,
-                                labelColor = textGray
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+                        }
+                        item {
+                            FilterChip(
                                 selected = portfolioFilter == ContentStatus.ACQUIRED_LUMP_SUM,
-                                borderColor = Color(0xFF262C42),
-                                selectedBorderColor = gold
+                                onClick = { portfolioFilter = ContentStatus.ACQUIRED_LUMP_SUM },
+                                label = { Text("Jual Putus ($lumpSumCount)", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = gold.copy(alpha = 0.25f),
+                                    selectedLabelColor = gold,
+                                    containerColor = cardDark,
+                                    labelColor = textGray
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = portfolioFilter == ContentStatus.ACQUIRED_LUMP_SUM,
+                                    borderColor = Color(0xFF262C42),
+                                    selectedBorderColor = gold
+                                )
                             )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Row Urutkan (Sorting Dropdown)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when (portfolioFilter) {
+                                ContentStatus.ACQUIRED_LUMP_SUM -> "Arsip Jual Putus (Hak Cipta PH)"
+                                ContentStatus.LICENSED -> "Aset Lisensi Aktif (Menghasilkan Royalti)"
+                                ContentStatus.AVAILABLE -> "Karya Siap Dipitch ke PH"
+                                else -> "Karya Aktif di Portofolio"
+                            },
+                            color = textMuted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
+
+                        Box {
+                            Surface(
+                                onClick = { sortMenuExpanded = true },
+                                shape = RoundedCornerShape(6.dp),
+                                color = cardDarkElevated,
+                                border = BorderStroke(1.dp, Color(0xFF262C42)),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Sort,
+                                        contentDescription = "Urutkan",
+                                        tint = neonPurple,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = selectedSortOption.displayName,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Icon(
+                                        Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = textGray,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = sortMenuExpanded,
+                                onDismissRequest = { sortMenuExpanded = false },
+                                modifier = Modifier
+                                    .background(cardDarkElevated)
+                                    .border(1.dp, Color(0xFF2E354B), RoundedCornerShape(8.dp))
+                            ) {
+                                ContentSortOption.values().forEach { option ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (selectedSortOption == option) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = neonPurple,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                } else {
+                                                    Spacer(modifier = Modifier.width(20.dp))
+                                                }
+                                                Text(
+                                                    text = option.displayName,
+                                                    color = if (selectedSortOption == option) neonPurple else Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (selectedSortOption == option) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedSortOption = option
+                                            sortMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // LIST KARYA DI BANK KONTEN
-            val displayedPortfolio = contentPortfolio.filter {
-                portfolioFilter == null || it.status == portfolioFilter
+            // LIST KARYA DI BANK KONTEN (TUGAS 2: HIDE JUAL PUTUS FROM SEMUA TAB + TUGAS 3: SORTING)
+            val baseFilteredPortfolio = when (portfolioFilter) {
+                null -> contentPortfolio.filter { it.status != ContentStatus.ACQUIRED_LUMP_SUM }
+                ContentStatus.AVAILABLE -> contentPortfolio.filter { it.status == ContentStatus.AVAILABLE }
+                ContentStatus.LICENSED -> contentPortfolio.filter { it.status == ContentStatus.LICENSED }
+                ContentStatus.ACQUIRED_LUMP_SUM -> contentPortfolio.filter { it.status == ContentStatus.ACQUIRED_LUMP_SUM }
+            }
+
+            val displayedPortfolio = when (selectedSortOption) {
+                ContentSortOption.ENGAGEMENT_HIGHEST -> baseFilteredPortfolio.sortedByDescending { it.engagementScore }
+                ContentSortOption.ROYALTY_HIGHEST -> baseFilteredPortfolio.sortedByDescending { it.monthlyRoyalty }
+                ContentSortOption.EXPIRING_SOON -> baseFilteredPortfolio.sortedWith(
+                    compareBy(
+                        { if (it.status == ContentStatus.LICENSED) 0 else 1 },
+                        { it.remainingContractMonths ?: Int.MAX_VALUE },
+                        { -it.engagementScore }
+                    )
+                )
+                ContentSortOption.BUDGET_HIGHEST -> baseFilteredPortfolio.sortedByDescending { it.budget }
             }
 
             if (displayedPortfolio.isEmpty()) {
@@ -1963,7 +2094,7 @@ fun ContentCreatorScreen(
                                 }
                             }
 
-                            // Detail Lisensi / Penjualan jika ada
+                            // Detail Lisensi / Penjualan jika ada (TUGAS 1: SISA KONTRAK & PROGRESS BAR)
                             if (work.status == ContentStatus.ACQUIRED_LUMP_SUM && work.acquiredByPH != null) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
@@ -1979,6 +2110,41 @@ fun ContentCreatorScreen(
                                     color = neonBlue,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
+                                )
+
+                                val totalMonths = work.contractDurationMonths ?: 24
+                                val remainingMonths = (work.remainingContractMonths ?: totalMonths).coerceAtLeast(0)
+                                val passedMonths = (totalMonths - remainingMonths).coerceAtLeast(0)
+                                val contractProgress = (remainingMonths.toFloat() / totalMonths.toFloat()).coerceIn(0f, 1f)
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "⏳ Sisa Kontrak: $remainingMonths dari $totalMonths Bulan",
+                                        color = if (remainingMonths <= 3) crimson else neonBlue,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${(contractProgress * 100).toInt()}%",
+                                        color = textMuted,
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                LinearProgressIndicator(
+                                    progress = { contractProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = if (remainingMonths <= 3) crimson else neonBlue,
+                                    trackColor = Color(0xFF1E2638)
                                 )
                             }
 
