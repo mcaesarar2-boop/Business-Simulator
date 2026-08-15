@@ -607,7 +607,14 @@ interface BusinessEntity {
                         ccSum += ccCost.toLong()
                         ccCost *= 1.18
                     }
-                    ccSum + (owned.contentCreatorEmployees * 5000L) + (if (owned.contentCreatorOfficeUnlocked) 50000L else 0L)
+                    val portfolioVal = owned.contentPortfolio.sumOf { item ->
+                        when (item.status) {
+                            ContentStatus.AVAILABLE -> item.budget + (item.engagementScore * 2_000L)
+                            ContentStatus.ACQUIRED_LUMP_SUM -> item.acquiredLumpSum
+                            ContentStatus.LICENSED -> (item.monthlyRoyalty * 24L) + item.budget
+                        }
+                    }
+                    ccSum + (owned.contentCreatorEmployees * 5000L) + (if (owned.contentCreatorOfficeUnlocked) 50000L else 0L) + portfolioVal
                 }
                 "aviation_group" -> {
                     val fleetVal = owned.airlineFleetComplex.sumOf { plane ->
@@ -806,6 +813,7 @@ data class OwnedBusiness(
     val contentCreatorOfficeUnlocked: Boolean = false,
     val contentCreatorCash: Long = 5000L,
     val contentCreatorContracts: List<ActiveCreatorContract> = emptyList(),
+    val contentPortfolio: List<ContentWork> = emptyList(),
     val logisticsData: LogisticsCompanyData = LogisticsCompanyData(),
     val apartmentData: ApartmentPropertyData = ApartmentPropertyData(),
     val constructionData: ConstructionFirmData = ConstructionFirmData(),
@@ -832,7 +840,8 @@ data class OwnedBusiness(
                 val multiplier = 1.0 + (contentCreatorEmployees * 0.05)
                 val baseRev = (contentCreatorSubscribers * 0.05).toLong()
                 val contractsRev = contentCreatorContracts.sumOf { it.monthlyPayout }
-                (baseRev * multiplier).toLong() + contractsRev
+                val royaltiesRev = contentPortfolio.filter { it.status == ContentStatus.LICENSED }.sumOf { it.monthlyRoyalty }
+                (baseRev * multiplier).toLong() + contractsRev + royaltiesRev
             }
             "fine_dining" -> {
                 val lvl = level

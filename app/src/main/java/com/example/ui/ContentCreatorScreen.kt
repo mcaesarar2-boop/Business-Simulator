@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,19 +24,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
-import com.example.data.ActiveCreatorContract
-import com.example.data.BrandDealGenerator
-import com.example.data.BrandDealOffer
-import com.example.data.BrandDealType
+import com.example.data.*
 import com.example.viewmodel.GameViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.pow
@@ -110,10 +113,13 @@ fun ContentCreatorScreen(
     val contentCreatorCash = business.contentCreatorCash
     val cycleProgress = business.contentCreatorProgress
     val activeContracts = business.contentCreatorContracts
+    val contentPortfolio = business.contentPortfolio
 
     // Format mata uang & subscribers
     val currFormat = remember { NumberFormat.getCurrencyInstance(Locale.US).apply { maximumFractionDigits = 0 } }
     val subsFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
+
+    val coroutineScope = rememberCoroutineScope()
 
     // Dialog state
     var showSuntikDialog by remember { mutableStateOf(false) }
@@ -122,6 +128,29 @@ fun ContentCreatorScreen(
     var contractToTerminate by remember { mutableStateOf<ActiveCreatorContract?>(null) }
     var amountInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // ==========================================
+    // TUGAS 1: PRODUKSI KARYA ORIGINAL STATE
+    // ==========================================
+    var showCreateWorkDialog by remember { mutableStateOf(false) }
+    var workTitleInput by remember { mutableStateOf("") }
+    var selectedContentType by remember { mutableStateOf(ContentType.SHORT_FILM) }
+    var workBudgetInput by remember { mutableStateOf("10000") }
+    var workBudgetError by remember { mutableStateOf<String?>(null) }
+
+    // Production In-Progress animation states
+    var isProducing by remember { mutableStateOf(false) }
+    var productionProgress by remember { mutableStateOf(0f) }
+    var productionStatusText by remember { mutableStateOf("") }
+    var recentlyCompletedWork by remember { mutableStateOf<ContentWork?>(null) }
+
+    // ==========================================
+    // TUGAS 3: TARGETED PH OFFERS (PRODUCTION HOUSE) STATE
+    // ==========================================
+    var activePHOffer by remember { mutableStateOf<ProductionHouseOffer?>(null) }
+    var phOfferTimeLeft by remember { mutableStateOf(20) }
+    var phPitchCooldown by remember { mutableStateOf(0) }
+    var portfolioFilter by remember { mutableStateOf<ContentStatus?>(null) }
 
     // ==========================================
     // BRAND DEALS (SPONSORSHIP) ENGINE
@@ -150,11 +179,60 @@ fun ContentCreatorScreen(
         }
     }
 
-    // Cooldown countdown for manual pitch
+    // Cooldown countdown for manual pitch sponsor
     LaunchedEffect(pitchCooldown) {
         if (pitchCooldown > 0) {
             delay(1000L)
             pitchCooldown -= 1
+        }
+    }
+
+    // Cooldown countdown for manual pitch PH
+    LaunchedEffect(phPitchCooldown) {
+        if (phPitchCooldown > 0) {
+            delay(1000L)
+            phPitchCooldown -= 1
+        }
+    }
+
+    // ==========================================
+    // TUGAS 3: PERIODIC AUTO-SCOUT FOR TARGETED PH OFFERS
+    // ==========================================
+    LaunchedEffect(contentPortfolio) {
+        while (true) {
+            delay(25_000L) // Cek scanning setiap 25 detik
+            val availableWorks = contentPortfolio.filter { it.status == ContentStatus.AVAILABLE }
+            if (activePHOffer == null && availableWorks.isNotEmpty()) {
+                // 45% chance per scan interval if there is available IP
+                if (Random.nextInt(100) < 45) {
+                    val generated = ContentProductionEngine.generateTargetedOffer(
+                        portfolio = contentPortfolio,
+                        channelLevel = level
+                    )
+                    if (generated != null) {
+                        activePHOffer = generated
+                        phOfferTimeLeft = generated.durationSeconds
+                    }
+                }
+            }
+        }
+    }
+
+    // 20s Countdown timer for active PH offer
+    LaunchedEffect(activePHOffer) {
+        if (activePHOffer != null) {
+            phOfferTimeLeft = 20
+            while (phOfferTimeLeft > 0 && activePHOffer != null) {
+                delay(1000L)
+                phOfferTimeLeft -= 1
+            }
+            if (phOfferTimeLeft <= 0 && activePHOffer != null) {
+                val phName = activePHOffer?.phName ?: "Production House"
+                val workTitle = activePHOffer?.contentTitle ?: "Karya"
+                activePHOffer = null
+                dealFeedbackMsg = "⏳ Penawaran adaptasi \"$workTitle\" dari $phName telah kedaluwarsa."
+                dealFeedbackIsPositive = false
+            }
         }
     }
 
@@ -199,10 +277,18 @@ fun ContentCreatorScreen(
     val multiplier = 1.0 + (employees * 0.05)
     val estimatedIncome = (baseIncome * multiplier).toLong()
     val monthlyContractTotal = activeContracts.sumOf { it.monthlyPayout }
-    val totalEstimatedMonthly = estimatedIncome + monthlyContractTotal
+    val monthlyRoyaltiesTotal = contentPortfolio.filter { it.status == ContentStatus.LICENSED }.sumOf { it.monthlyRoyalty }
+    val totalEstimatedMonthly = estimatedIncome + monthlyContractTotal + monthlyRoyaltiesTotal
 
     val totalUpgradeCost = (1 until level).fold(0.0) { acc, i -> acc + (500.0 * 1.18.pow(i - 1)) }.toLong()
-    val valuation = 500L + totalUpgradeCost + (totalEstimatedMonthly * 12)
+    val portfolioValuation = contentPortfolio.sumOf { item ->
+        when (item.status) {
+            ContentStatus.AVAILABLE -> item.budget + (item.engagementScore * 2_000L)
+            ContentStatus.ACQUIRED_LUMP_SUM -> item.acquiredLumpSum
+            ContentStatus.LICENSED -> (item.monthlyRoyalty * 24L) + item.budget
+        }
+    }
+    val valuation = 500L + totalUpgradeCost + (totalEstimatedMonthly * 12) + portfolioValuation
 
     val maxEmp = when {
         level >= 81 -> 100
@@ -606,6 +692,17 @@ fun ContentCreatorScreen(
                                 ) {
                                     Text("Kontrak Sponsorship (${activeContracts.size}):", color = gold, fontSize = 11.sp)
                                     Text("+${currFormat.format(monthlyContractTotal)} / bln", color = gold, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            if (monthlyRoyaltiesTotal > 0L) {
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    val countLicensed = contentPortfolio.count { it.status == ContentStatus.LICENSED }
+                                    Text("Royalti Lisensi Bank Konten ($countLicensed Karya):", color = neonPurple, fontSize = 11.sp)
+                                    Text("+${currFormat.format(monthlyRoyaltiesTotal)} / bln", color = neonPurple, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                                 }
                             }
                             HorizontalDivider(color = Color(0xFF2B3248), thickness = 0.8.dp, modifier = Modifier.padding(vertical = 4.dp))
@@ -1245,6 +1342,692 @@ fun ContentCreatorScreen(
             }
 
             // ==========================================
+            // BANK KONTEN (KATALOG KARYA & PRODUCTION HOUSE ENGINE)
+            // ==========================================
+            item {
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(neonPurple.copy(alpha = 0.2f))
+                                .border(1.dp, neonPurple, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = neonPurple, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Bank Konten (Katalog Karya)",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Portofolio IP Original & Lisensi PH",
+                                color = textGray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    // Button Buat Karya Original
+                    Button(
+                        onClick = {
+                            workTitleInput = ""
+                            workBudgetInput = (contentCreatorCash.coerceAtMost(50_000L).coerceAtLeast(5_000L)).toString()
+                            workBudgetError = null
+                            showCreateWorkDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = neonPurple),
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .height(34.dp)
+                            .testTag("create_content_work_button")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Produksi Karya",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            // BANNER / CARD PENAWARAN PRODUCTION HOUSE (TARGETED OFFER)
+            if (activePHOffer != null) {
+                val offer = activePHOffer!!
+                item {
+                    val offerGlowAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.5f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(800, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "offerGlow"
+                    )
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1429)),
+                        border = BorderStroke(1.5.dp, neonPurple.copy(alpha = offerGlowAlpha)),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .testTag("ph_offer_card")
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            // Header Studio & Countdown
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(CircleShape)
+                                            .background(gold.copy(alpha = 0.2f))
+                                            .border(1.dp, gold, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Videocam, contentDescription = null, tint = gold, modifier = Modifier.size(16.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = offer.phName,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = offer.phTier,
+                                            color = gold,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                // Timer Badge
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(crimson.copy(alpha = 0.25f))
+                                        .border(1.dp, crimson.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Timer, contentDescription = null, tint = crimson, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "${phOfferTimeLeft}s",
+                                            color = crimson,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Target Work Highlight Box
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF251A3A))
+                                    .border(1.dp, Color(0xFF382956), RoundedCornerShape(8.dp))
+                                    .padding(10.dp)
+                            ) {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Target Karya: \"${offer.contentTitle}\"",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(neonGreen.copy(alpha = 0.2f))
+                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = "Score: ${offer.engagementScore}/100",
+                                                color = neonGreen,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = offer.pitchMessage,
+                                        color = textGray,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Pilihan Opsi Kesepakatan (Lump Sum vs Royalty)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Opsi 1: Jual Putus (Lump Sum)
+                                Button(
+                                    onClick = {
+                                        val accepted = gameViewModel.acceptPHLumpSumOffer(offer)
+                                        if (accepted) {
+                                            dealFeedbackMsg = "🎉 Hak Cipta \"${offer.contentTitle}\" berhasil diakuisisi oleh ${offer.phName} secara JUAL PUTUS sebesar +${currFormat.format(offer.lumpSumOffer)}!"
+                                            dealFeedbackIsPositive = true
+                                            activePHOffer = null
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = gold),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp)
+                                        .testTag("ph_accept_lump_sum_button")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.MonetizationOn, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Terima Jual Putus (Lump Sum)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                        Text(
+                                            text = "+${currFormat.format(offer.lumpSumOffer)}",
+                                            color = Color.Black,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 12.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+
+                                // Opsi 2: Lisensi & Royalti Bulanan
+                                Button(
+                                    onClick = {
+                                        val accepted = gameViewModel.acceptPHRoyaltyOffer(offer)
+                                        if (accepted) {
+                                            dealFeedbackMsg = "💎 Lisensi \"${offer.contentTitle}\" resmi berjalan dengan ${offer.phName}! Pembayaran awal +${currFormat.format(offer.royaltyUpfront)} dan royalti pasif +${currFormat.format(offer.monthlyRoyalty)}/bln."
+                                            dealFeedbackIsPositive = true
+                                            activePHOffer = null
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = neonPurple),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp)
+                                        .testTag("ph_accept_royalty_button")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AllInclusive, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Terima Lisensi & Royalti Pasif", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "+${currFormat.format(offer.royaltyUpfront)} Upfront",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 11.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                            Text(
+                                                text = "+${currFormat.format(offer.monthlyRoyalty)}/bln",
+                                                color = neonGreen,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Opsi 3: Tolak
+                                OutlinedButton(
+                                    onClick = {
+                                        gameViewModel.rejectPHOffer(offer)
+                                        dealFeedbackMsg = "🛡️ Anda menolak tawaran ${offer.phName}. Karya \"${offer.contentTitle}\" tetap berada di Bank Konten dengan integritas creator!"
+                                        dealFeedbackIsPositive = false
+                                        activePHOffer = null
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = textGray),
+                                    border = BorderStroke(1.dp, Color(0xFF382956)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(34.dp)
+                                ) {
+                                    Text("Tolak Tawaran (Simpan Karya di Bank)", color = textGray, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FILTER CHIPS & STATISTIK BANK KONTEN
+            item {
+                val availableCount = contentPortfolio.count { it.status == ContentStatus.AVAILABLE }
+                val lumpSumCount = contentPortfolio.count { it.status == ContentStatus.ACQUIRED_LUMP_SUM }
+                val licensedCount = contentPortfolio.count { it.status == ContentStatus.LICENSED }
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = portfolioFilter == null,
+                            onClick = { portfolioFilter = null },
+                            label = { Text("Semua (${contentPortfolio.size})", fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = neonPurple,
+                                selectedLabelColor = Color.White,
+                                containerColor = cardDark,
+                                labelColor = textGray
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = portfolioFilter == null,
+                                borderColor = Color(0xFF262C42),
+                                selectedBorderColor = neonPurple
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = portfolioFilter == ContentStatus.AVAILABLE,
+                            onClick = { portfolioFilter = ContentStatus.AVAILABLE },
+                            label = { Text("Tersedia ($availableCount)", fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = neonGreen.copy(alpha = 0.25f),
+                                selectedLabelColor = neonGreen,
+                                containerColor = cardDark,
+                                labelColor = textGray
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = portfolioFilter == ContentStatus.AVAILABLE,
+                                borderColor = Color(0xFF262C42),
+                                selectedBorderColor = neonGreen
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = portfolioFilter == ContentStatus.LICENSED,
+                            onClick = { portfolioFilter = ContentStatus.LICENSED },
+                            label = { Text("Lisensi ($licensedCount)", fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = neonBlue.copy(alpha = 0.25f),
+                                selectedLabelColor = neonBlue,
+                                containerColor = cardDark,
+                                labelColor = textGray
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = portfolioFilter == ContentStatus.LICENSED,
+                                borderColor = Color(0xFF262C42),
+                                selectedBorderColor = neonBlue
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = portfolioFilter == ContentStatus.ACQUIRED_LUMP_SUM,
+                            onClick = { portfolioFilter = ContentStatus.ACQUIRED_LUMP_SUM },
+                            label = { Text("Jual Putus ($lumpSumCount)", fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = gold.copy(alpha = 0.25f),
+                                selectedLabelColor = gold,
+                                containerColor = cardDark,
+                                labelColor = textGray
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = portfolioFilter == ContentStatus.ACQUIRED_LUMP_SUM,
+                                borderColor = Color(0xFF262C42),
+                                selectedBorderColor = gold
+                            )
+                        )
+                    }
+                }
+            }
+
+            // LIST KARYA DI BANK KONTEN
+            val displayedPortfolio = contentPortfolio.filter {
+                portfolioFilter == null || it.status == portfolioFilter
+            }
+
+            if (displayedPortfolio.isEmpty()) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardDark),
+                        border = BorderStroke(1.dp, Color(0xFF202638)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1B2030)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = neonPurple, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (contentPortfolio.isEmpty()) "Bank Konten Masih Kosong" else "Tidak Ada Karya pada Kategori Ini",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (contentPortfolio.isEmpty())
+                                        "Klik tombol 'Produksi Karya' di atas untuk memproduksi Short Film, Video Essay, atau Dokumenter original. Semakin tinggi Engagement Score, semakin mahal tawaran akuisisi dari Production House!"
+                                    else "Pilih filter kategori lain atau buat karya baru.",
+                                    color = textGray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                items(displayedPortfolio, key = { it.id }) { work ->
+                    val typeColor = when (work.type) {
+                        ContentType.SHORT_FILM -> neonPurple
+                        ContentType.DEEP_DIVE_ESSAY -> neonBlue
+                        ContentType.DOCUMENTARY -> gold
+                    }
+
+                    val scoreColor = when {
+                        work.engagementScore >= 90 -> gold
+                        work.engagementScore >= 75 -> neonPurple
+                        work.engagementScore >= 50 -> neonBlue
+                        else -> textGray
+                    }
+
+                    val scoreTierLabel = when {
+                        work.engagementScore >= 90 -> "🌟 Masterpiece"
+                        work.engagementScore >= 75 -> "💎 Hit Viral"
+                        work.engagementScore >= 50 -> "📈 Solid"
+                        else -> "🎬 Indie"
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardDark),
+                        border = BorderStroke(
+                            1.dp,
+                            if (work.engagementScore >= 90) gold.copy(alpha = 0.6f) else Color(0xFF262C42)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            // Row 1: Type Tag & Status Chip
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(typeColor.copy(alpha = 0.15f))
+                                            .border(1.dp, typeColor.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = work.type.displayName,
+                                            color = typeColor,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                // Status Badge
+                                when (work.status) {
+                                    ContentStatus.AVAILABLE -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(neonGreen.copy(alpha = 0.15f))
+                                                .border(1.dp, neonGreen.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(neonGreen)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "Tersedia",
+                                                    color = neonGreen,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                    ContentStatus.ACQUIRED_LUMP_SUM -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(gold.copy(alpha = 0.15f))
+                                                .border(1.dp, gold.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Jual Putus",
+                                                color = gold,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    ContentStatus.LICENSED -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(neonBlue.copy(alpha = 0.15f))
+                                                .border(1.dp, neonBlue.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Lisensi Berjalan",
+                                                color = neonBlue,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Judul Karya
+                            Text(
+                                text = work.title,
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Engagement Score Meter Box
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(cardDarkElevated)
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("ENGAGEMENT SCORE", color = textGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "${work.engagementScore}",
+                                            color = scoreColor,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Text(" / 100", color = textMuted, fontSize = 11.sp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = scoreTierLabel,
+                                            color = scoreColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("BUDGET PRODUKSI", color = textGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = currFormat.format(work.budget),
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+
+                            // Detail Lisensi / Penjualan jika ada
+                            if (work.status == ContentStatus.ACQUIRED_LUMP_SUM && work.acquiredByPH != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "🎬 Diakuisisi oleh ${work.acquiredByPH} senilai ${currFormat.format(work.acquiredLumpSum)}",
+                                    color = gold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            } else if (work.status == ContentStatus.LICENSED && work.acquiredByPH != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "💎 Lisensi aktif bersama ${work.acquiredByPH} (+${currFormat.format(work.monthlyRoyalty)}/bln)",
+                                    color = neonBlue,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            // Action Pitch Studio untuk Karya Tersedia
+                            if (work.status == ContentStatus.AVAILABLE) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (phPitchCooldown == 0 && activePHOffer == null) {
+                                                phPitchCooldown = 20
+                                                val targetedOffer = ContentProductionEngine.generateTargetedOffer(
+                                                    portfolio = contentPortfolio,
+                                                    channelLevel = level,
+                                                    forceTarget = work
+                                                )
+                                                if (targetedOffer != null) {
+                                                    activePHOffer = targetedOffer
+                                                    phOfferTimeLeft = targetedOffer.durationSeconds
+                                                }
+                                            }
+                                        },
+                                        enabled = phPitchCooldown == 0 && activePHOffer == null,
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = neonPurple),
+                                        border = BorderStroke(1.dp, if (phPitchCooldown == 0 && activePHOffer == null) neonPurple.copy(alpha = 0.6f) else Color.DarkGray),
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (phPitchCooldown > 0) "Pitch Cooldown (${phPitchCooldown}s)" else "Pitch ke Studio PH",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
             // UPGRADE & EKSPANSI (IMMERSIVE CREATOR GEAR & TEAM)
             // ==========================================
             item {
@@ -1613,7 +2396,7 @@ fun ContentCreatorScreen(
             title = { Text("Konfirmasi Penutupan Channel", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    text = "Apakah Anda yakin ingin menutup channel ini secara permanen? Seluruh subscribers (${subsFormat.format(subscribers)} subs), ${activeContracts.size} kontrak sponsorship, aset produksi, dan sisa saldo Kas Usaha (${currFormat.format(contentCreatorCash)}) akan dihapus.",
+                    text = "Apakah Anda yakin ingin menutup channel ini secara permanen? Seluruh subscribers (${subsFormat.format(subscribers)} subs), ${activeContracts.size} kontrak sponsorship, portofolio Bank Konten (${contentPortfolio.size} karya), aset produksi, dan sisa saldo Kas Usaha (${currFormat.format(contentCreatorCash)}) akan dihapus.",
                     color = textGray,
                     fontSize = 13.sp
                 )
@@ -1638,4 +2421,569 @@ fun ContentCreatorScreen(
             }
         )
     }
+
+    // ==========================================
+    // 5. TUGAS 1: DIALOG FORM PRODUKSI KARYA ORIGINAL
+    // ==========================================
+    if (showCreateWorkDialog) {
+        val randomTitles = remember(selectedContentType) {
+            when (selectedContentType) {
+                ContentType.SHORT_FILM -> listOf(
+                    "Sinema Noir: Jakarta 2045",
+                    "Bayangan di Ujung Senja",
+                    "The Last Train Home",
+                    "Distopia: Garis Batas",
+                    "Gema di Ruang Hampa",
+                    "Paradoks Sang Waktu"
+                )
+                ContentType.DEEP_DIVE_ESSAY -> listOf(
+                    "Anatomi Kejatuhan Raksasa Teknologi",
+                    "Psikologi di Balik Fenomena Viral",
+                    "Rahasia Ekonomi Kreatif Modern",
+                    "Evolusi Algoritma dan Otak Manusia",
+                    "Mengapa Startup Ini Runtuh dalam Semalam?",
+                    "Filosofi di Balik Desain Masa Depan"
+                )
+                ContentType.DOCUMENTARY -> listOf(
+                    "Ekspedisi Laut Hitam & Misteri Palung",
+                    "Menyusuri Jejak Peradaban Hilang",
+                    "Di Balik Layar Industri Hiburan Global",
+                    "Kehidupan Para Penjaga Hutan Tropis",
+                    "Gaya Hidup Para Triliuner Silicon Valley",
+                    "Revolusi Energi Bersih Abad ke-21"
+                )
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showCreateWorkDialog = false },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(neonPurple.copy(alpha = 0.2f))
+                        .border(1.dp, neonPurple, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.MovieCreation, contentDescription = null, tint = neonPurple, modifier = Modifier.size(24.dp))
+                }
+            },
+            title = {
+                Text(
+                    text = "Produksi Karya Original Baru",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Rilis IP original berkualitas tinggi untuk memikat Production House global dan mendapatkan kesepakatan royalti atau akuisisi berharga fantastis.",
+                        color = textGray,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 1. Tipe Karya (3 Segmented Buttons)
+                    Text("TIPE KARYA", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        ContentType.values().forEach { type ->
+                            val isSelected = selectedContentType == type
+                            val typeColor = when (type) {
+                                ContentType.SHORT_FILM -> neonPurple
+                                ContentType.DEEP_DIVE_ESSAY -> neonBlue
+                                ContentType.DOCUMENTARY -> gold
+                            }
+
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) typeColor.copy(alpha = 0.25f) else cardDarkElevated
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) typeColor else Color(0xFF2B3248)
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { selectedContentType = type }
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = when (type) {
+                                            ContentType.SHORT_FILM -> Icons.Default.Movie
+                                            ContentType.DEEP_DIVE_ESSAY -> Icons.Default.Psychology
+                                            ContentType.DOCUMENTARY -> Icons.Default.Public
+                                        },
+                                        contentDescription = null,
+                                        tint = if (isSelected) typeColor else textMuted,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Text(
+                                        text = type.displayName,
+                                        color = if (isSelected) Color.White else textGray,
+                                        fontSize = 9.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 2. Input Judul Karya + Tombol Acak
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("JUDUL KARYA", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "💡 Acak Ide",
+                            color = neonBlue,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable {
+                                workTitleInput = randomTitles.random()
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = workTitleInput,
+                        onValueChange = { workTitleInput = it },
+                        placeholder = { Text("Misal: ${randomTitles.first()}", color = textMuted, fontSize = 12.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = neonPurple,
+                            focusedLabelColor = neonPurple,
+                            cursorColor = neonPurple,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("work_title_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 3. Input Budget Produksi
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("BUDGET PRODUKSI (KAS USAHA)", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Saldo: ${currFormat.format(contentCreatorCash)}",
+                            color = neonGreen,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = workBudgetInput,
+                        onValueChange = {
+                            workBudgetInput = it
+                            workBudgetError = null
+                        },
+                        label = { Text("Nominal Budget ($)") },
+                        singleLine = true,
+                        isError = workBudgetError != null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = neonPurple,
+                            focusedLabelColor = neonPurple,
+                            cursorColor = neonPurple,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("work_budget_input")
+                    )
+                    if (workBudgetError != null) {
+                        Text(workBudgetError!!, color = crimson, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+                    }
+
+                    // Quick Budget Chips
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(5_000L, 20_000L, 50_000L, 100_000L).forEach { preset ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(cardDarkElevated)
+                                    .border(0.8.dp, Color(0xFF2B3248), RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        workBudgetInput = preset.toString()
+                                        workBudgetError = null
+                                    }
+                                    .padding(vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (preset >= 1000) "${preset / 1000}k" else "$preset",
+                                    color = textGray,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        // Max button
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(cardDarkElevated)
+                                .border(0.8.dp, neonGreen.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .clickable {
+                                    workBudgetInput = contentCreatorCash.coerceAtLeast(1000L).toString()
+                                    workBudgetError = null
+                                }
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "MAX",
+                                color = neonGreen,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Live Quality Estimation Preview Box
+                    val currentBudget = workBudgetInput.toLongOrNull() ?: 10_000L
+                    val estimatedBaseScore = (30 + (currentBudget / 1000).coerceAtMost(35) + (level * 0.25) + (employees * 1.5)).toInt().coerceIn(30, 98)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF161B29))
+                            .border(1.dp, Color(0xFF262E44), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("ESTIMASI KUALITAS & ENGAGEMENT", color = textGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = when {
+                                        estimatedBaseScore >= 88 -> "🌟 Potensi Masterpiece Global"
+                                        estimatedBaseScore >= 72 -> "💎 Potensi Hit Viral Tinggi"
+                                        estimatedBaseScore >= 50 -> "📈 Karya Berkualitas Standar"
+                                        else -> "🎬 Produksi Indie Minimalis"
+                                    },
+                                    color = when {
+                                        estimatedBaseScore >= 88 -> gold
+                                        estimatedBaseScore >= 72 -> neonPurple
+                                        estimatedBaseScore >= 50 -> neonBlue
+                                        else -> textGray
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = "~$estimatedBaseScore Poin",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            },
+            containerColor = cardDark,
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val budget = workBudgetInput.toLongOrNull()
+                        val title = if (workTitleInput.isBlank()) randomTitles.random() else workTitleInput.trim()
+
+                        if (budget == null || budget <= 0) {
+                            workBudgetError = "Masukkan nominal budget yang valid!"
+                            return@Button
+                        }
+                        if (budget > contentCreatorCash) {
+                            workBudgetError = "Saldo Kas Usaha tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
+                            return@Button
+                        }
+
+                        // Close form, launch animated production sequence
+                        showCreateWorkDialog = false
+                        isProducing = true
+                        productionProgress = 0f
+
+                        coroutineScope.launch {
+                            // Phase 1: Script & Storyboard
+                            productionStatusText = "📝 Menyusun Script & Storyboard..."
+                            for (p in 1..25) {
+                                productionProgress = p / 100f
+                                delay(30L)
+                            }
+                            // Phase 2: Shooting & Audio Recording
+                            productionStatusText = "🎥 Proses Syuting Utama & Audio..."
+                            for (p in 26..60) {
+                                productionProgress = p / 100f
+                                delay(35L)
+                            }
+                            // Phase 3: Color Grading & VFX
+                            productionStatusText = "💻 Color Grading, VFX & Sound Design..."
+                            for (p in 61..88) {
+                                productionProgress = p / 100f
+                                delay(35L)
+                            }
+                            // Phase 4: Master 4K & Listing
+                            productionStatusText = "🚀 Export Master 4K & Listing Bank Konten..."
+                            for (p in 89..100) {
+                                productionProgress = p / 100f
+                                delay(25L)
+                            }
+
+                            // Finalize in ViewModel
+                            val createdWork = gameViewModel.produceContentWork(
+                                title = title,
+                                type = selectedContentType,
+                                budget = budget
+                            )
+
+                            isProducing = false
+                            if (createdWork != null) {
+                                recentlyCompletedWork = createdWork
+                                dealFeedbackMsg = "🎬 Karya \"${createdWork.title}\" berhasil dirilis dengan Score ${createdWork.engagementScore}/100 dan masuk ke Bank Konten!"
+                                dealFeedbackIsPositive = true
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = neonPurple),
+                    modifier = Modifier.testTag("submit_produce_work_button")
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Mulai Produksi", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateWorkDialog = false }) {
+                    Text("Batal", color = Color.LightGray)
+                }
+            }
+        )
+    }
+
+    // ==========================================
+    // 6. TUGAS 1: DIALOG ANIMASI PROGRESS PRODUKSI (0% -> 100%)
+    // ==========================================
+    if (isProducing) {
+        Dialog(onDismissRequest = { /* Cannot dismiss while producing */ }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF141824)),
+                border = BorderStroke(1.5.dp, neonPurple),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(neonPurple.copy(alpha = 0.2f))
+                            .border(1.5.dp, neonPurple, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MovieCreation,
+                            contentDescription = null,
+                            tint = neonPurple,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "PRODUKSI KARYA ORIGINAL",
+                        color = neonPurple,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = productionStatusText,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Progress Bar
+                    LinearProgressIndicator(
+                        progress = { productionProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = neonPurple,
+                        trackColor = Color(0xFF262C42)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "${(productionProgress * 100).toInt()}%",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // 7. DIALOG CELEBRATION KARYA SELESAI
+    // ==========================================
+    if (recentlyCompletedWork != null) {
+        val completed = recentlyCompletedWork!!
+        AlertDialog(
+            onDismissRequest = { recentlyCompletedWork = null },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(gold.copy(alpha = 0.2f))
+                        .border(1.5.dp, gold, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Stars, contentDescription = null, tint = gold, modifier = Modifier.size(26.dp))
+                }
+            },
+            title = {
+                Text(
+                    text = "Karya Original Dirilis!",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "\"${completed.title}\"",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = completed.type.displayName,
+                        color = neonPurple,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Card Score
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardDarkElevated),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("ENGAGEMENT SCORE", color = textGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "${completed.engagementScore} / 100",
+                                    color = if (completed.engagementScore >= 80) gold else neonGreen,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("STATUS BANK", color = textGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "Tersedia untuk PH",
+                                    color = neonGreen,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "💡 Karya ini kini terdaftar di Bank Konten dan siap menerima penawaran adaptasi dari studio Production House ternama!",
+                        color = textGray,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+            },
+            containerColor = cardDark,
+            confirmButton = {
+                Button(
+                    onClick = { recentlyCompletedWork = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = neonGreen)
+                ) {
+                    Text("Buka Bank Konten", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
 }
+
