@@ -50,7 +50,7 @@ enum class ProjectStatus {
 }
 
 data class AppProject(
-    val id: String,
+    val id: String = java.util.UUID.randomUUID().toString(),
     val title: String,
     val type: ProjectType,
     val budgetCost: Double,
@@ -58,7 +58,26 @@ data class AppProject(
     val devTimeMonths: Int,
     val currentMonth: Int = 0,
     val status: ProjectStatus = ProjectStatus.DEVELOPMENT,
-    val targetBusinessId: String? = null
+    val targetBusinessId: String? = null,
+    // Enhanced fields for Realistic DevOps Kanban & SaaS
+    val kanbanColumn: String = "IN_PROGRESS", // "BACKLOG", "IN_PROGRESS", "DEPLOYED"
+    val requiredUiUx: Int = 1,
+    val requiredFrontend: Int = 1,
+    val requiredBackend: Int = 1,
+    val assignedUiUx: Int = 0,
+    val assignedFrontend: Int = 0,
+    val assignedBackend: Int = 0,
+    val isAssigned: Boolean = false,
+    val activeUsers: Long = 1000L,
+    val churnRate: Double = 0.04,
+    val currentMrr: Double = targetRevenue,
+    val serverResourceUnits: Int = 10,
+    val isBugFixTask: Boolean = false,
+    val parentSaaSId: String? = null,
+    val bugSeverity: String = "NORMAL",
+    val description: String = "",
+    val clientName: String = "Klien Korporat",
+    val categoryTag: String = "Web & Mobile"
 )
 
 data class MegaHoldingState(

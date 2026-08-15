@@ -77,12 +77,12 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
 
         // ATAS LEVEL
         BusinessCatalogItem(
-            id = "upper_tech", name = "App Dev Agency", category = BusinessCategory.TECHNOLOGY,
-            imageUrl = "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=400&q=80",
+            id = "upper_tech", name = "Software House & SaaS Studio", category = BusinessCategory.TECHNOLOGY,
+            imageUrl = "https://plus.unsplash.com/premium_photo-1664297989345-f4ff2063b212?q=80&w=1098&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
             costToBuy = 150000, monthlyRevenue = 85000, monthlyMaintenanceCost = 40000, isFluctuating = true,
             upgrades = listOf(
-                BusinessUpgrade("1", "Sewa Hacker Silicon Valley", "Produk A-Class (+50,000 Rev)", baseCost = 100000, revenueFlatBoost = 50000),
-                BusinessUpgrade("2", "Marketing Global", "Klien mancanegara (2x Rev)", baseCost = 150000, revenueMultiplier = 2.0f)
+                BusinessUpgrade("1", "Automated CI/CD Pipeline", "Percepat deployment pengerjaan kode (+20%)", baseCost = 50000, revenueFlatBoost = 25000),
+                BusinessUpgrade("2", "AI Code Assistant (Copilot)", "Efisiensi tim developer (+1.5x speed)", baseCost = 75000, revenueMultiplier = 1.5f)
             )
         ),
         BusinessCatalogItem(

@@ -287,6 +287,53 @@ data class ConstructionTenderOpportunity(
     val description: String = ""
 )
 
+data class SoftwareHouseCompanyData(
+    val uiUxDesigners: Int = 2,
+    val frontendDevelopers: Int = 2,
+    val backendEngineers: Int = 2,
+    val serverTier: Int = 1, // 1: Starter (25k), 2: Pro (100k), 3: Enterprise (500k), 4: Multi-Region (2.5M), 5: Hyperscale (10M)
+    val hasCiCdPipeline: Boolean = false,
+    val hasAiCopilot: Boolean = false,
+    val hasMicroservices: Boolean = false,
+    val hasAutomatedQa: Boolean = false,
+    val completedB2BCount: Int = 0,
+    val totalB2BRevenue: Long = 0L,
+    val totalSaaSMade: Int = 0,
+    val totalAcquisitionValue: Long = 0L,
+    val serverIncidentCount: Int = 0,
+    val isOutageActive: Boolean = false
+) {
+    val maxServerCapacity: Long get() = when (serverTier) {
+        1 -> 25_000L
+        2 -> 100_000L
+        3 -> 500_000L
+        4 -> 2_500_000L
+        5 -> 10_000_000L
+        else -> 25_000L
+    }
+    
+    val serverTierName: String get() = when (serverTier) {
+        1 -> "Starter Cloud (Vercel / DigitalOcean)"
+        2 -> "Pro Scaled (AWS Lightsail / RDS Cluster)"
+        3 -> "Enterprise Cloud (AWS Multi-AZ / EKS)"
+        4 -> "Multi-Region Cluster (GCP Spanner / Cloudflare)"
+        5 -> "Hyperscale AI Supercluster (NVidia H100 GPU Pool)"
+        else -> "Starter Cloud"
+    }
+
+    val serverMonthlyCost: Long get() = when (serverTier) {
+        1 -> 2_000L
+        2 -> 6_000L
+        3 -> 18_000L
+        4 -> 45_000L
+        5 -> 120_000L
+        else -> 2_000L
+    }
+
+    val totalTeamSalaries: Long get() = (uiUxDesigners * 4_000L) + (frontendDevelopers * 6_000L) + (backendEngineers * 8_000L)
+    val totalMonthlyExpenses: Long get() = totalTeamSalaries + serverMonthlyCost + (if (hasAiCopilot) 2000L else 0L) + (if (hasCiCdPipeline) 1500L else 0L)
+}
+
 data class ConstructionFirmData(
     val maxCrews: Int = 3,
     val maxMachinery: Int = 10,
@@ -616,6 +663,18 @@ interface BusinessEntity {
                     val projVal = owned.activeTenders.sumOf { it.totalContractValue.toLong() }
                     ((owned.level - 1) * 100000L) + crewVal + machVal + trustBonus + certVal + projVal
                 }
+                "upper_tech" -> {
+                    val teamVal = (owned.softwareHouseData.uiUxDesigners * 200000L) +
+                            (owned.softwareHouseData.frontendDevelopers * 300000L) +
+                            (owned.softwareHouseData.backendEngineers * 400000L)
+                    val infraVal = (owned.softwareHouseData.serverTier * 250000L) +
+                            (if (owned.softwareHouseData.hasCiCdPipeline) 500000L else 0L) +
+                            (if (owned.softwareHouseData.hasAiCopilot) 750000L else 0L) +
+                            (if (owned.softwareHouseData.hasMicroservices) 1500000L else 0L) +
+                            (if (owned.softwareHouseData.hasAutomatedQa) 900000L else 0L)
+                    val trackVal = (owned.softwareHouseData.totalB2BRevenue / 2) + owned.softwareHouseData.totalAcquisitionValue
+                    teamVal + infraVal + trackVal
+                }
                 "media_production" -> {
                     val streamingVal = owned.projectHistory.filter { it.status == "FINISHED" }.sumOf { (it.licenseMonthlyFee ?: 0L) * 24L }
                     val activeTheaters = owned.projectHistory.filter { it.status == "IN_THEATERS" }.sumOf { it.currentRevenue }
@@ -750,6 +809,7 @@ data class OwnedBusiness(
     val logisticsData: LogisticsCompanyData = LogisticsCompanyData(),
     val apartmentData: ApartmentPropertyData = ApartmentPropertyData(),
     val constructionData: ConstructionFirmData = ConstructionFirmData(),
+    val softwareHouseData: SoftwareHouseCompanyData = SoftwareHouseCompanyData(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -913,10 +973,10 @@ data class OwnedBusiness(
                 baseMaint + staffExpenses
             }
             "upper_tech" -> {
+                val dynamicExpenses = softwareHouseData.totalMonthlyExpenses
                 val cat = businessCatalog.find { it.id == catalogId }
-                val baseMaint = cat?.monthlyMaintenanceCost ?: 90000L
-                val staffExpenses = level * 15000L
-                baseMaint + staffExpenses
+                val baseMaint = if (dynamicExpenses > 0) dynamicExpenses else (cat?.monthlyMaintenanceCost ?: 40000L)
+                baseMaint
             }
             "upper_realestate" -> {
                 val cat = businessCatalog.find { it.id == catalogId }

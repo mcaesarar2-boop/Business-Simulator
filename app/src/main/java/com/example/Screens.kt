@@ -842,6 +842,8 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
                                     navController.navigate("hospitality_dashboard/${owned.instanceId}")
                                 } else if (catalogItem.category == com.example.data.BusinessCategory.CRUISE_LINE) {
                                     navController.navigate("cruise_dashboard/${owned.instanceId}")
+                                } else if (owned.catalogId == "upper_tech") {
+                                    navController.navigate("software_house_dashboard/${owned.instanceId}")
                                 } else {
                                     navController.navigate("business_detail/${owned.instanceId}")
                                 }
@@ -1541,6 +1543,11 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
 
     if (ownedData.catalogId == "media_radio") {
         com.example.ui.EventOrganizerScreen(navController, viewModel, instanceId)
+        return
+    }
+
+    if (ownedData.catalogId == "upper_tech") {
+        com.example.ui.SoftwareHouseDashboardScreen(navController, viewModel, instanceId)
         return
     }
 

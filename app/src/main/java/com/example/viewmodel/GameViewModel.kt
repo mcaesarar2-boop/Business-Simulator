@@ -4048,42 +4048,159 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var appProjHasChanges = false
         var extraIncomeFromApps = 0L
         val synergizedBusinessIds = mutableSetOf<String>()
+        
+        // Find Software House data from owned businesses
+        val techBiz = currentState.ownedBusinesses.find { it.catalogId == "upper_tech" }
+            ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.find { it.catalogId == "upper_tech" }
+        val softData = techBiz?.softwareHouseData ?: com.example.data.SoftwareHouseCompanyData()
+        
+        // Total active users across all deployed SaaS
+        val totalActiveUsers = currentState.appProjects
+            .filter { (it.status == com.example.data.ProjectStatus.MAINTENANCE || it.kanbanColumn == "DEPLOYED") && it.type == com.example.data.ProjectType.INDEPENDENT_SAAS }
+            .sumOf { it.activeUsers }
+        val effectiveUserLoad = if (softData.hasMicroservices) (totalActiveUsers * 0.7).toLong() else totalActiveUsers
+        val isServerOverloaded = effectiveUserLoad > softData.maxServerCapacity
+        
+        val newSpawnedBugTasks = mutableListOf<com.example.data.AppProject>()
+
         val updatedAppProjects = currentState.appProjects.map { proj ->
-            if (proj.status == com.example.data.ProjectStatus.DEVELOPMENT) {
+            val isDevOrProgress = (proj.status == com.example.data.ProjectStatus.DEVELOPMENT && (proj.kanbanColumn == "IN_PROGRESS" || proj.isAssigned))
+            if (isDevOrProgress) {
                 appProjHasChanges = true
-                val newMonth = proj.currentMonth + 1
+                // CI/CD (+25%) and AI Copilot (+50%) speed boost
+                var step = 1
+                if (softData.hasAiCopilot && Math.random() < 0.5) step += 1
+                if (softData.hasCiCdPipeline && Math.random() < 0.25) step += 1
+                
+                val newMonth = proj.currentMonth + step
                 if (newMonth >= proj.devTimeMonths) {
                     when (proj.type) {
                         com.example.data.ProjectType.CLIENT_B2B -> {
                             extraIncomeFromApps += proj.targetRevenue.toLong()
-                            proj.copy(currentMonth = newMonth, status = com.example.data.ProjectStatus.COMPLETED)
+                            proj.copy(
+                                currentMonth = newMonth,
+                                status = com.example.data.ProjectStatus.COMPLETED,
+                                kanbanColumn = "DEPLOYED",
+                                assignedUiUx = 0,
+                                assignedFrontend = 0,
+                                assignedBackend = 0,
+                                isAssigned = false
+                            )
                         }
                         com.example.data.ProjectType.INDEPENDENT_SAAS -> {
-                            proj.copy(currentMonth = newMonth, status = com.example.data.ProjectStatus.MAINTENANCE)
+                            if (proj.isBugFixTask) {
+                                proj.copy(
+                                    currentMonth = newMonth,
+                                    status = com.example.data.ProjectStatus.COMPLETED,
+                                    kanbanColumn = "DEPLOYED",
+                                    assignedUiUx = 0,
+                                    assignedFrontend = 0,
+                                    assignedBackend = 0,
+                                    isAssigned = false
+                                )
+                            } else {
+                                val initialUsers = (5_000L..20_000L).random()
+                                proj.copy(
+                                    currentMonth = newMonth,
+                                    status = com.example.data.ProjectStatus.MAINTENANCE,
+                                    kanbanColumn = "DEPLOYED",
+                                    activeUsers = initialUsers,
+                                    currentMrr = proj.targetRevenue,
+                                    churnRate = 0.03,
+                                    assignedUiUx = 0,
+                                    assignedFrontend = 0,
+                                    assignedBackend = 0,
+                                    isAssigned = false
+                                )
+                            }
                         }
                         com.example.data.ProjectType.ECOSYSTEM_SYNERGY -> {
                             if (proj.targetBusinessId != null) {
                                 synergizedBusinessIds.add(proj.targetBusinessId)
                             }
-                            proj.copy(currentMonth = newMonth, status = com.example.data.ProjectStatus.COMPLETED)
+                            proj.copy(
+                                currentMonth = newMonth,
+                                status = com.example.data.ProjectStatus.COMPLETED,
+                                kanbanColumn = "DEPLOYED",
+                                assignedUiUx = 0,
+                                assignedFrontend = 0,
+                                assignedBackend = 0,
+                                isAssigned = false
+                            )
                         }
                     }
                 } else {
                     proj.copy(currentMonth = newMonth)
                 }
-            } else if (proj.status == com.example.data.ProjectStatus.MAINTENANCE && proj.type == com.example.data.ProjectType.INDEPENDENT_SAAS) {
+            } else if ((proj.status == com.example.data.ProjectStatus.MAINTENANCE || proj.kanbanColumn == "DEPLOYED") && proj.type == com.example.data.ProjectType.INDEPENDENT_SAAS && !proj.isBugFixTask) {
                 appProjHasChanges = true
-                val fluctuation = 0.8 + Math.random() * 0.4
-                val mrr = (proj.targetRevenue * fluctuation).toLong()
-                extraIncomeFromApps += mrr
-                proj
+                var currentUsers = proj.activeUsers
+                var currentMrrVal = proj.currentMrr
+                var churn = proj.churnRate
+
+                if (isServerOverloaded) {
+                    // Outage penalty: high churn and user loss
+                    currentUsers = (currentUsers * 0.78).toLong().coerceAtLeast(100L)
+                    churn = 0.15
+                    currentMrrVal = (currentMrrVal * 0.8).coerceAtLeast(1000.0)
+                } else {
+                    // Normal organic growth
+                    val growthRate = 0.05 + (Math.random() * 0.10)
+                    currentUsers = (currentUsers * (1.0 + growthRate - churn)).toLong().coerceAtLeast(500L)
+                    currentMrrVal = (proj.targetRevenue * (currentUsers / 10000.0).coerceIn(0.5, 10.0))
+                }
+                extraIncomeFromApps += currentMrrVal.toLong()
+
+                // RNG Chance for Bug Fix / Push Update task
+                val bugChance = if (softData.hasAutomatedQa) 0.08 else 0.20
+                if (Math.random() < bugChance) {
+                    val bugTitles = listOf(
+                        "Critical Hotfix: Memory Leak & Latency",
+                        "Security Patch: Zero-Day Auth Vulnerability",
+                        "Database Migration & Query Optimization",
+                        "Push Update: Modern UI Refresh",
+                        "API Gateway Rate Limiting Hotfix"
+                    )
+                    val chosenTitle = "${bugTitles.random()} (${proj.title})"
+                    val existingTask = currentState.appProjects.find { it.title == chosenTitle && it.status == com.example.data.ProjectStatus.DEVELOPMENT }
+                    if (existingTask == null) {
+                        newSpawnedBugTasks.add(
+                            com.example.data.AppProject(
+                                id = java.util.UUID.randomUUID().toString(),
+                                title = chosenTitle,
+                                type = com.example.data.ProjectType.INDEPENDENT_SAAS,
+                                budgetCost = 3000.0,
+                                targetRevenue = 0.0,
+                                devTimeMonths = 1,
+                                kanbanColumn = "BACKLOG",
+                                status = com.example.data.ProjectStatus.DEVELOPMENT,
+                                requiredUiUx = 1,
+                                requiredFrontend = 1,
+                                requiredBackend = 1,
+                                isBugFixTask = true,
+                                parentSaaSId = proj.id,
+                                description = "Perbaiki bug untuk menstabilkan server dan mencegah churn pengguna.",
+                                categoryTag = "Hotfix & Patch"
+                            )
+                        )
+                    }
+                }
+
+                proj.copy(
+                    activeUsers = currentUsers,
+                    currentMrr = currentMrrVal,
+                    churnRate = churn
+                )
             } else {
                 proj
             }
         }
         
-        currentState.appProjects.forEach { proj ->
-             if (proj.status == com.example.data.ProjectStatus.DEVELOPMENT) {
+        val finalAppProjects = updatedAppProjects + newSpawnedBugTasks
+        if (newSpawnedBugTasks.isNotEmpty()) appProjHasChanges = true
+        
+        finalAppProjects.forEach { proj ->
+             if (proj.status == com.example.data.ProjectStatus.DEVELOPMENT && (proj.kanbanColumn == "IN_PROGRESS" || proj.isAssigned)) {
                   monthlyExpenses += (proj.budgetCost / proj.devTimeMonths.coerceAtLeast(1)).toLong()
              }
         }
@@ -8364,7 +8481,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startAppProject(title: String, type: com.example.data.ProjectType, budgetCost: Double, targetRevenue: Double, devTimeMonths: Int, targetBusinessId: String? = null) {
+    fun startAppProject(
+        title: String,
+        type: com.example.data.ProjectType,
+        budgetCost: Double,
+        targetRevenue: Double,
+        devTimeMonths: Int,
+        targetBusinessId: String? = null
+    ) {
         val currentState = _playerState.value
         val newProject = com.example.data.AppProject(
             id = java.util.UUID.randomUUID().toString(),
@@ -8373,27 +8497,399 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             budgetCost = budgetCost,
             targetRevenue = targetRevenue,
             devTimeMonths = devTimeMonths,
-            targetBusinessId = targetBusinessId
+            targetBusinessId = targetBusinessId,
+            kanbanColumn = "IN_PROGRESS",
+            status = com.example.data.ProjectStatus.DEVELOPMENT,
+            isAssigned = true
         )
-        // We do not deduct cash up front, it's deducted monthly as "budgetCost / devTimeMonths" 
-        // which matches OP's "potong biaya per bulan" description.
         _playerState.value = currentState.copy(
             appProjects = currentState.appProjects + newProject
         )
         saveState(_playerState.value)
     }
 
-    fun sellSaaSProject(projectId: String) {
+    fun addProjectToBacklog(
+        title: String,
+        type: com.example.data.ProjectType,
+        budgetCost: Double,
+        targetRevenue: Double,
+        devTimeMonths: Int,
+        targetBusinessId: String? = null,
+        reqUiUx: Int = 1,
+        reqFrontend: Int = 1,
+        reqBackend: Int = 1,
+        description: String = "",
+        clientName: String = "Klien Korporat",
+        categoryTag: String = "Web & Mobile"
+    ): String? {
+        val currentState = _playerState.value
+        val newProject = com.example.data.AppProject(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title,
+            type = type,
+            budgetCost = budgetCost,
+            targetRevenue = targetRevenue,
+            devTimeMonths = devTimeMonths,
+            targetBusinessId = targetBusinessId,
+            kanbanColumn = "BACKLOG",
+            status = com.example.data.ProjectStatus.DEVELOPMENT,
+            requiredUiUx = reqUiUx,
+            requiredFrontend = reqFrontend,
+            requiredBackend = reqBackend,
+            assignedUiUx = 0,
+            assignedFrontend = 0,
+            assignedBackend = 0,
+            isAssigned = false,
+            description = description,
+            clientName = clientName,
+            categoryTag = categoryTag
+        )
+        _playerState.value = currentState.copy(
+            appProjects = currentState.appProjects + newProject
+        )
+        saveState(_playerState.value)
+        return "Proyek '$title' berhasil ditambahkan ke Backlog!"
+    }
+
+    fun startProjectDirectly(
+        instanceId: String,
+        title: String,
+        type: com.example.data.ProjectType,
+        budgetCost: Double,
+        targetRevenue: Double,
+        devTimeMonths: Int,
+        targetBusinessId: String? = null,
+        reqUiUx: Int = 1,
+        reqFrontend: Int = 1,
+        reqBackend: Int = 1,
+        description: String = "",
+        clientName: String = "Klien Korporat",
+        categoryTag: String = "Web & Mobile"
+    ): String? {
+        val currentState = _playerState.value
+        val biz = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+            ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+        val softData = biz?.softwareHouseData ?: com.example.data.SoftwareHouseCompanyData()
+
+        val currentlyAssignedUiUx = currentState.appProjects.filter { it.kanbanColumn == "IN_PROGRESS" || it.isAssigned }.sumOf { it.assignedUiUx }
+        val currentlyAssignedFe = currentState.appProjects.filter { it.kanbanColumn == "IN_PROGRESS" || it.isAssigned }.sumOf { it.assignedFrontend }
+        val currentlyAssignedBe = currentState.appProjects.filter { it.kanbanColumn == "IN_PROGRESS" || it.isAssigned }.sumOf { it.assignedBackend }
+
+        val idleUiUx = (softData.uiUxDesigners - currentlyAssignedUiUx).coerceAtLeast(0)
+        val idleFe = (softData.frontendDevelopers - currentlyAssignedFe).coerceAtLeast(0)
+        val idleBe = (softData.backendEngineers - currentlyAssignedBe).coerceAtLeast(0)
+
+        if (idleUiUx < reqUiUx || idleFe < reqFrontend || idleBe < reqBackend) {
+            // Add to backlog instead
+            addProjectToBacklog(title, type, budgetCost, targetRevenue, devTimeMonths, targetBusinessId, reqUiUx, reqFrontend, reqBackend, description, clientName, categoryTag)
+            return "Dev team tidak mencukupi saat ini. Proyek disimpan ke Backlog!"
+        }
+
+        val newProject = com.example.data.AppProject(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title,
+            type = type,
+            budgetCost = budgetCost,
+            targetRevenue = targetRevenue,
+            devTimeMonths = devTimeMonths,
+            targetBusinessId = targetBusinessId,
+            kanbanColumn = "IN_PROGRESS",
+            status = com.example.data.ProjectStatus.DEVELOPMENT,
+            requiredUiUx = reqUiUx,
+            requiredFrontend = reqFrontend,
+            requiredBackend = reqBackend,
+            assignedUiUx = reqUiUx,
+            assignedFrontend = reqFrontend,
+            assignedBackend = reqBackend,
+            isAssigned = true,
+            description = description,
+            clientName = clientName,
+            categoryTag = categoryTag
+        )
+        _playerState.value = currentState.copy(
+            appProjects = currentState.appProjects + newProject
+        )
+        saveState(_playerState.value)
+        return "Tim berhasil di-assign! Proyek '$title' sekarang In Progress!"
+    }
+
+    fun assignTeamToProject(instanceId: String, projectId: String, uiUx: Int, frontend: Int, backend: Int): String? {
+        val currentState = _playerState.value
+        val biz = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+            ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.find { it.instanceId == instanceId }
+        val softData = biz?.softwareHouseData ?: com.example.data.SoftwareHouseCompanyData()
+
+        val otherAssignedUiUx = currentState.appProjects.filter { it.id != projectId && (it.kanbanColumn == "IN_PROGRESS" || it.isAssigned) }.sumOf { it.assignedUiUx }
+        val otherAssignedFe = currentState.appProjects.filter { it.id != projectId && (it.kanbanColumn == "IN_PROGRESS" || it.isAssigned) }.sumOf { it.assignedFrontend }
+        val otherAssignedBe = currentState.appProjects.filter { it.id != projectId && (it.kanbanColumn == "IN_PROGRESS" || it.isAssigned) }.sumOf { it.assignedBackend }
+
+        val idleUiUx = (softData.uiUxDesigners - otherAssignedUiUx).coerceAtLeast(0)
+        val idleFe = (softData.frontendDevelopers - otherAssignedFe).coerceAtLeast(0)
+        val idleBe = (softData.backendEngineers - otherAssignedBe).coerceAtLeast(0)
+
+        if (idleUiUx < uiUx || idleFe < frontend || idleBe < backend) {
+            return "Developer idle tidak cukup! Butuh ($uiUx UX, $frontend FE, $backend BE), tersedia ($idleUiUx UX, $idleFe FE, $idleBe BE)."
+        }
+
+        val updatedProjects = currentState.appProjects.map { proj ->
+            if (proj.id == projectId) {
+                proj.copy(
+                    kanbanColumn = "IN_PROGRESS",
+                    status = com.example.data.ProjectStatus.DEVELOPMENT,
+                    assignedUiUx = uiUx,
+                    assignedFrontend = frontend,
+                    assignedBackend = backend,
+                    isAssigned = true
+                )
+            } else proj
+        }
+
+        _playerState.value = currentState.copy(appProjects = updatedProjects)
+        saveState(_playerState.value)
+        return "Kru berhasil ditugaskan! Proyek dipindahkan ke kolom In Progress."
+    }
+
+    fun unassignTeamFromProject(instanceId: String, projectId: String): String? {
+        val currentState = _playerState.value
+        val updatedProjects = currentState.appProjects.map { proj ->
+            if (proj.id == projectId) {
+                proj.copy(
+                    kanbanColumn = "BACKLOG",
+                    assignedUiUx = 0,
+                    assignedFrontend = 0,
+                    assignedBackend = 0,
+                    isAssigned = false
+                )
+            } else proj
+        }
+        _playerState.value = currentState.copy(appProjects = updatedProjects)
+        saveState(_playerState.value)
+        return "Tim berhasil ditarik. Proyek dikembalikan ke Backlog."
+    }
+
+    fun cancelBacklogProject(projectId: String): String? {
+        val currentState = _playerState.value
+        _playerState.value = currentState.copy(
+            appProjects = currentState.appProjects.filter { it.id != projectId }
+        )
+        saveState(_playerState.value)
+        return "Proyek berhasil dihapus dari Backlog."
+    }
+
+    fun hireDevSpecialist(instanceId: String, role: String, useCompanyCash: Boolean): String? {
+        val currentState = _playerState.value
+        val hireCost = when (role) {
+            "UI_UX" -> 8_000L
+            "FRONTEND" -> 12_000L
+            "BACKEND" -> 16_000L
+            else -> 10_000L
+        }
+
+        var isNested = false
+        var holdingId: String? = null
+        var owned = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+        if (owned == null) {
+            for (h in currentState.holdingCompanies) {
+                owned = h.subsidiaries.find { it.instanceId == instanceId }
+                if (owned != null) {
+                    isNested = true
+                    holdingId = h.instanceId
+                    break
+                }
+            }
+        }
+        if (owned == null) return "Unit bisnis tidak ditemukan"
+
+        val softData = owned.softwareHouseData
+        val newSoftData = when (role) {
+            "UI_UX" -> softData.copy(uiUxDesigners = softData.uiUxDesigners + 1)
+            "FRONTEND" -> softData.copy(frontendDevelopers = softData.frontendDevelopers + 1)
+            "BACKEND" -> softData.copy(backendEngineers = softData.backendEngineers + 1)
+            else -> softData
+        }
+
+        if (useCompanyCash) {
+            if (owned.companyCash < hireCost) return "Kas Perusahaan tidak cukup (${hireCost})"
+            val newOwned = owned.copy(
+                companyCash = owned.companyCash - hireCost,
+                softwareHouseData = newSoftData
+            )
+            updateOwnedBusinessInState(instanceId, newOwned, isNested, holdingId)
+        } else {
+            if (currentState.cash < hireCost) return "Saldo Pribadi tidak cukup (${hireCost})"
+            val newOwned = owned.copy(softwareHouseData = newSoftData)
+            val updatedState = currentState.copy(cash = currentState.cash - hireCost)
+            _playerState.value = updatedState
+            updateOwnedBusinessInState(instanceId, newOwned, isNested, holdingId)
+        }
+        return "Berhasil merekrut spesialis $role!"
+    }
+
+    fun fireDevSpecialist(instanceId: String, role: String): String? {
+        val currentState = _playerState.value
+        var isNested = false
+        var holdingId: String? = null
+        var owned = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+        if (owned == null) {
+            for (h in currentState.holdingCompanies) {
+                owned = h.subsidiaries.find { it.instanceId == instanceId }
+                if (owned != null) {
+                    isNested = true
+                    holdingId = h.instanceId
+                    break
+                }
+            }
+        }
+        if (owned == null) return "Unit bisnis tidak ditemukan"
+
+        val softData = owned.softwareHouseData
+        val newSoftData = when (role) {
+            "UI_UX" -> {
+                if (softData.uiUxDesigners <= 0) return "Tidak ada UI/UX designer untuk diberhentikan."
+                softData.copy(uiUxDesigners = softData.uiUxDesigners - 1)
+            }
+            "FRONTEND" -> {
+                if (softData.frontendDevelopers <= 0) return "Tidak ada Frontend developer untuk diberhentikan."
+                softData.copy(frontendDevelopers = softData.frontendDevelopers - 1)
+            }
+            "BACKEND" -> {
+                if (softData.backendEngineers <= 0) return "Tidak ada Backend engineer untuk diberhentikan."
+                softData.copy(backendEngineers = softData.backendEngineers - 1)
+            }
+            else -> softData
+        }
+
+        val newOwned = owned.copy(softwareHouseData = newSoftData)
+        updateOwnedBusinessInState(instanceId, newOwned, isNested, holdingId)
+        return "Spesialis $role berhasil diberhentikan."
+    }
+
+    fun upgradeTechInfrastructure(instanceId: String, techType: String, useCompanyCash: Boolean): String? {
+        val currentState = _playerState.value
+        var isNested = false
+        var holdingId: String? = null
+        var owned = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+        if (owned == null) {
+            for (h in currentState.holdingCompanies) {
+                owned = h.subsidiaries.find { it.instanceId == instanceId }
+                if (owned != null) {
+                    isNested = true
+                    holdingId = h.instanceId
+                    break
+                }
+            }
+        }
+        if (owned == null) return "Unit bisnis tidak ditemukan"
+
+        val softData = owned.softwareHouseData
+        val (cost, newSoftData, successMsg) = when (techType) {
+            "CICD" -> {
+                if (softData.hasCiCdPipeline) return "CI/CD Pipeline sudah aktif!"
+                Triple(50_000L, softData.copy(hasCiCdPipeline = true), "Automated CI/CD Pipeline berhasil diintegrasikan (+25% Speed)!")
+            }
+            "AI_COPILOT" -> {
+                if (softData.hasAiCopilot) return "AI Code Assistant sudah aktif!"
+                Triple(75_000L, softData.copy(hasAiCopilot = true), "AI Code Assistant berhasil dipasang (+50% Dev Productivity)!")
+            }
+            "SERVER_TIER" -> {
+                if (softData.serverTier >= 5) return "Server sudah mencapai kapasitas maksimum (Tier 5 Hyperscale)!"
+                val nextTier = softData.serverTier + 1
+                val tierCost = when (nextTier) {
+                    2 -> 25_000L
+                    3 -> 100_000L
+                    4 -> 350_000L
+                    5 -> 1_200_000L
+                    else -> 25_000L
+                }
+                Triple(tierCost, softData.copy(serverTier = nextTier), "Cloud Server berhasil di-upgrade ke Tier $nextTier!")
+            }
+            "MICROSERVICES" -> {
+                if (softData.hasMicroservices) return "Arsitektur Microservices sudah aktif!"
+                Triple(150_000L, softData.copy(hasMicroservices = true), "Microservices Architecture aktif (-30% resource load per user)!")
+            }
+            "AUTOMATED_QA" -> {
+                if (softData.hasAutomatedQa) return "Automated QA Suite sudah aktif!"
+                Triple(90_000L, softData.copy(hasAutomatedQa = true), "Automated QA & Testing Suite aktif (Bug incidents -50%, Churn -2%)!")
+            }
+            else -> return "Tipe upgrade tidak dikenal."
+        }
+
+        if (useCompanyCash) {
+            if (owned.companyCash < cost) return "Kas Perusahaan tidak cukup (${cost})"
+            val newOwned = owned.copy(
+                companyCash = owned.companyCash - cost,
+                softwareHouseData = newSoftData
+            )
+            updateOwnedBusinessInState(instanceId, newOwned, isNested, holdingId)
+        } else {
+            if (currentState.cash < cost) return "Saldo Pribadi tidak cukup (${cost})"
+            val newOwned = owned.copy(softwareHouseData = newSoftData)
+            val updatedState = currentState.copy(cash = currentState.cash - cost)
+            _playerState.value = updatedState
+            updateOwnedBusinessInState(instanceId, newOwned, isNested, holdingId)
+        }
+        return successMsg
+    }
+
+    fun sellSaaSProject(projectId: String, instanceId: String? = null): String? {
         val currentState = _playerState.value
         val project = currentState.appProjects.find { it.id == projectId }
-        if (project != null && project.type == com.example.data.ProjectType.INDEPENDENT_SAAS && project.status == com.example.data.ProjectStatus.MAINTENANCE) {
-            val acquisitionValue = (project.targetRevenue * 50).toLong()
+        if (project != null && project.type == com.example.data.ProjectType.INDEPENDENT_SAAS && 
+            (project.status == com.example.data.ProjectStatus.MAINTENANCE || project.kanbanColumn == "DEPLOYED")) {
+            val acquisitionValue = (project.currentMrr * 50).toLong().coerceAtLeast(100_000L)
+            
+            // Record valuation in softwareHouseData if instanceId provided
+            if (instanceId != null) {
+                var isNested = false
+                var holdingId: String? = null
+                var owned = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+                if (owned == null) {
+                    for (h in currentState.holdingCompanies) {
+                        owned = h.subsidiaries.find { it.instanceId == instanceId }
+                        if (owned != null) {
+                            isNested = true
+                            holdingId = h.instanceId
+                            break
+                        }
+                    }
+                }
+                if (owned != null) {
+                    val softData = owned.softwareHouseData
+                    val newOwned = owned.copy(
+                        companyCash = owned.companyCash + acquisitionValue,
+                        softwareHouseData = softData.copy(
+                            totalAcquisitionValue = softData.totalAcquisitionValue + acquisitionValue
+                        )
+                    )
+                    updateOwnedBusinessInState(instanceId, newOwned, isNested, holdingId)
+                }
+            }
+
             _playerState.value = currentState.copy(
-                cash = currentState.cash + acquisitionValue,
+                cash = if (instanceId == null) currentState.cash + acquisitionValue else currentState.cash,
                 appProjects = currentState.appProjects.filter { it.id != projectId }
             )
             saveState(_playerState.value)
+            return "Selamat! Produk SaaS '${project.title}' berhasil diakuisisi seharga ${acquisitionValue} (50x MRR)!"
         }
+        return "SaaS belum memenuhi syarat untuk dijual."
+    }
+
+    private fun updateOwnedBusinessInState(instanceId: String, newOwned: com.example.data.OwnedBusiness, isNested: Boolean, holdingId: String?) {
+        val currentState = _playerState.value
+        if (isNested && holdingId != null) {
+            val newHoldings = currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == holdingId) {
+                    val newSubs = holding.subsidiaries.map { if (it.instanceId == instanceId) newOwned else it }
+                    holding.copy(subsidiaries = newSubs)
+                } else holding
+            }
+            _playerState.value = currentState.copy(holdingCompanies = newHoldings)
+        } else {
+            val newBusinesses = currentState.ownedBusinesses.map { if (it.instanceId == instanceId) newOwned else it }
+            _playerState.value = currentState.copy(ownedBusinesses = newBusinesses)
+        }
+        saveState(_playerState.value)
     }
 
     private fun syncTvValuation(currentState: PlayerState): PlayerState {
