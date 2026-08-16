@@ -6,6 +6,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -137,6 +139,10 @@ fun ContentCreatorScreen(
     var selectedContentType by remember { mutableStateOf(ContentType.SHORT_FILM) }
     var workBudgetInput by remember { mutableStateOf("10000") }
     var workBudgetError by remember { mutableStateOf<String?>(null) }
+    var isCoProductionMode by remember { mutableStateOf(false) }
+    var selectedStudioInstanceId by remember { mutableStateOf<String?>(null) }
+    var selectedFundingScheme by remember { mutableStateOf(CoProductionFundingScheme.FULL_CREATOR) }
+    var ipRoutingDestination by remember { mutableStateOf("CONTENT_BANK") } // "CONTENT_BANK" (Opsi A) or "FILM_STUDIO" (Opsi B)
 
     // Production In-Progress animation states
     var isProducing by remember { mutableStateOf(false) }
@@ -2049,6 +2055,32 @@ fun ContentCreatorScreen(
                                 fontWeight = FontWeight.Bold
                             )
 
+                            if (work.partnerStudioName != null) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(gold.copy(alpha = 0.12f))
+                                        .border(0.8.dp, gold.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Handshake,
+                                        contentDescription = null,
+                                        tint = gold,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Co-Prod: ${work.partnerStudioName}${if (work.fundingScheme != null) " (${work.fundingScheme.displayName})" else ""}",
+                                        color = gold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(8.dp))
 
                             // Engagement Score Meter Box
@@ -2621,6 +2653,13 @@ fun ContentCreatorScreen(
             }
         }
 
+        val filmStudioBusiness = playerState.ownedBusinesses.firstOrNull { it?.catalogId == "media_production" }
+            ?: playerState.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.catalogId == "media_production" }
+        val hasFilmStudio = filmStudioBusiness != null
+        val isSynergyUnlocked = subscribers >= 1_000_000L && hasFilmStudio
+
+        val effectiveMaxBudget = if (!isSynergyUnlocked || !isCoProductionMode) 50_000L else contentCreatorCash
+
         AlertDialog(
             onDismissRequest = { showCreateWorkDialog = false },
             icon = {
@@ -2628,31 +2667,46 @@ fun ContentCreatorScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(neonPurple.copy(alpha = 0.2f))
-                        .border(1.dp, neonPurple, CircleShape),
+                        .background(if (isCoProductionMode && isSynergyUnlocked) gold.copy(alpha = 0.2f) else neonPurple.copy(alpha = 0.2f))
+                        .border(1.dp, if (isCoProductionMode && isSynergyUnlocked) gold else neonPurple, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.MovieCreation, contentDescription = null, tint = neonPurple, modifier = Modifier.size(24.dp))
+                    Icon(
+                        imageVector = if (isCoProductionMode && isSynergyUnlocked) Icons.Default.Hub else Icons.Default.MovieCreation,
+                        contentDescription = null,
+                        tint = if (isCoProductionMode && isSynergyUnlocked) gold else neonPurple,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             },
             title = {
-                Text(
-                    text = "Produksi Karya Original Baru",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Produksi Karya Original Baru",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    if (isCoProductionMode && isSynergyUnlocked) {
+                        Text(
+                            text = "✨ Co-Production Mode Active",
+                            color = gold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Rilis IP original berkualitas tinggi untuk memikat Production House global dan mendapatkan kesepakatan royalti atau akuisisi berharga fantastis.",
+                        text = "Rilis IP original berkualitas tinggi untuk memikat Production House global, atau kolaborasi dengan Studio Film internal milikmu.",
                         color = textGray,
                         fontSize = 11.sp,
                         lineHeight = 15.sp
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // 1. Tipe Karya (3 Segmented Buttons)
                     Text("TIPE KARYA", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -2711,7 +2765,7 @@ fun ContentCreatorScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // 2. Input Judul Karya + Tombol Acak
                     Row(
@@ -2748,7 +2802,138 @@ fun ContentCreatorScreen(
                             .testTag("work_title_input")
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // ==========================================
+                    // TUGAS 1 & 2: SYNERGY TOGGLE / INDIE LIMIT NOTICE
+                    // ==========================================
+                    if (isSynergyUnlocked) {
+                        Text("PARTNER PRODUKSI (B2B SYNERGY)", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            // Option 1: Mandiri / Indie
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (!isCoProductionMode) cardDarkElevated else Color(0xFF131622)
+                                ),
+                                border = BorderStroke(
+                                    1.2.dp,
+                                    if (!isCoProductionMode) neonPurple else Color(0xFF2B3248)
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        isCoProductionMode = false
+                                        val cur = workBudgetInput.toLongOrNull() ?: 0L
+                                        if (cur > 50_000L) {
+                                            workBudgetInput = "50000"
+                                        }
+                                        workBudgetError = null
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = !isCoProductionMode,
+                                            onClick = {
+                                                isCoProductionMode = false
+                                                val cur = workBudgetInput.toLongOrNull() ?: 0L
+                                                if (cur > 50_000L) {
+                                                    workBudgetInput = "50000"
+                                                }
+                                                workBudgetError = null
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = neonPurple)
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Mandiri / Indie", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text("Maks. budget $50,000", color = textMuted, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+                                }
+                            }
+
+                            // Option 2: Co-Production (Studio Internal)
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isCoProductionMode) gold.copy(alpha = 0.15f) else Color(0xFF131622)
+                                ),
+                                border = BorderStroke(
+                                    1.2.dp,
+                                    if (isCoProductionMode) gold else Color(0xFF2B3248)
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        isCoProductionMode = true
+                                        workBudgetError = null
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = isCoProductionMode,
+                                            onClick = {
+                                                isCoProductionMode = true
+                                                workBudgetError = null
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = gold)
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Co-Production", color = if (isCoProductionMode) gold else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text("Studio Film (Kas Penuh)", color = if (isCoProductionMode) gold.copy(alpha = 0.8f) else textMuted, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+                                }
+                            }
+                        }
+                    } else {
+                        // Indie Status Notice Box with Tooltip/Warning
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF1F1810))
+                                .border(1.dp, Color(0xFF5A3E1B), RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = gold, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("STATUS PRODUKSI: INDIE (MAX $50,000)", color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = "⚠️ Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k",
+                                    color = Color(0xFFFFD580),
+                                    fontSize = 9.5.sp,
+                                    lineHeight = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Subs: ${subsFormat.format(subscribers)} / 1M ${if (subscribers >= 1_000_000L) "✅" else "❌"}",
+                                        color = if (subscribers >= 1_000_000L) neonGreen else textGray,
+                                        fontSize = 8.5.sp
+                                    )
+                                    Text(
+                                        text = "Studio Film: ${if (hasFilmStudio) "✅ Dimiliki" else "❌ Belum Ada"}",
+                                        color = if (hasFilmStudio) neonGreen else textGray,
+                                        fontSize = 8.5.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // 3. Input Budget Produksi
                     Row(
@@ -2756,7 +2941,12 @@ fun ContentCreatorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("BUDGET PRODUKSI (KAS USAHA)", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (!isSynergyUnlocked || !isCoProductionMode) "BUDGET PRODUKSI (INDIE MAX $50K)" else "BUDGET PRODUKSI (CO-PRODUCTION)",
+                            color = textGray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                         Text(
                             text = "Saldo: ${currFormat.format(contentCreatorCash)}",
                             color = neonGreen,
@@ -2768,18 +2958,23 @@ fun ContentCreatorScreen(
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
                         value = workBudgetInput,
-                        onValueChange = {
-                            workBudgetInput = it
-                            workBudgetError = null
+                        onValueChange = { input ->
+                            workBudgetInput = input
+                            val num = input.toLongOrNull()
+                            if (num != null && num > 50_000L && (!isSynergyUnlocked || !isCoProductionMode)) {
+                                workBudgetError = "Status Indie: Budget maksimal dibatasi $50,000! (Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k)"
+                            } else {
+                                workBudgetError = null
+                            }
                         },
                         label = { Text("Nominal Budget ($)") },
                         singleLine = true,
                         isError = workBudgetError != null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = neonPurple,
-                            focusedLabelColor = neonPurple,
-                            cursorColor = neonPurple,
+                            focusedBorderColor = if (isCoProductionMode && isSynergyUnlocked) gold else neonPurple,
+                            focusedLabelColor = if (isCoProductionMode && isSynergyUnlocked) gold else neonPurple,
+                            cursorColor = if (isCoProductionMode && isSynergyUnlocked) gold else neonPurple,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White
                         ),
@@ -2788,7 +2983,7 @@ fun ContentCreatorScreen(
                             .testTag("work_budget_input")
                     )
                     if (workBudgetError != null) {
-                        Text(workBudgetError!!, color = crimson, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+                        Text(workBudgetError!!, color = crimson, fontSize = 9.5.sp, modifier = Modifier.padding(top = 2.dp), lineHeight = 13.sp)
                     }
 
                     // Quick Budget Chips
@@ -2797,7 +2992,7 @@ fun ContentCreatorScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf(5_000L, 20_000L, 50_000L, 100_000L).forEach { preset ->
+                        listOf(5_000L, 20_000L, 50_000L).forEach { preset ->
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -2819,6 +3014,34 @@ fun ContentCreatorScreen(
                                 )
                             }
                         }
+
+                        // 100k Chip (Disabled / Cap in Indie mode)
+                        val is100kDisabled = (!isSynergyUnlocked || !isCoProductionMode)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (is100kDisabled) Color(0xFF13151F) else cardDarkElevated)
+                                .border(0.8.dp, if (is100kDisabled) Color(0xFF202434) else Color(0xFF2B3248), RoundedCornerShape(6.dp))
+                                .clickable {
+                                    if (is100kDisabled) {
+                                        workBudgetError = "Status Indie: Tombol 100k terkunci. Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k"
+                                    } else {
+                                        workBudgetInput = "100000"
+                                        workBudgetError = null
+                                    }
+                                }
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "100k",
+                                color = if (is100kDisabled) textMuted.copy(alpha = 0.4f) else textGray,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
                         // Max button
                         Box(
                             modifier = Modifier
@@ -2827,8 +3050,18 @@ fun ContentCreatorScreen(
                                 .background(cardDarkElevated)
                                 .border(0.8.dp, neonGreen.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                 .clickable {
-                                    workBudgetInput = contentCreatorCash.coerceAtLeast(1000L).toString()
-                                    workBudgetError = null
+                                    if (!isSynergyUnlocked || !isCoProductionMode) {
+                                        val cappedMax = minOf(50_000L, contentCreatorCash.coerceAtLeast(1000L))
+                                        workBudgetInput = cappedMax.toString()
+                                        if (contentCreatorCash > 50_000L) {
+                                            workBudgetError = "Status Indie: Budget dikunci maksimal $50,000. Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k"
+                                        } else {
+                                            workBudgetError = null
+                                        }
+                                    } else {
+                                        workBudgetInput = contentCreatorCash.coerceAtLeast(1000L).toString()
+                                        workBudgetError = null
+                                    }
                                 }
                                 .padding(vertical = 4.dp),
                             contentAlignment = Alignment.Center
@@ -2842,11 +3075,120 @@ fun ContentCreatorScreen(
                         }
                     }
 
+                    // ==========================================
+                    // TUGAS 3: DROPDOWN / SELECTOR IP ROUTING
+                    // ==========================================
+                    if (isSynergyUnlocked && isCoProductionMode) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "TUJUAN DISTRIBUSI AKHIR (IP ROUTING)",
+                            color = gold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Routing Option A: Bank Konten
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (ipRoutingDestination == "CONTENT_BANK") neonPurple.copy(alpha = 0.18f) else cardDarkElevated
+                            ),
+                            border = BorderStroke(
+                                1.2.dp,
+                                if (ipRoutingDestination == "CONTENT_BANK") neonPurple else Color(0xFF2B3248)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { ipRoutingDestination = "CONTENT_BANK" }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = ipRoutingDestination == "CONTENT_BANK",
+                                    onClick = { ipRoutingDestination = "CONTENT_BANK" },
+                                    colors = RadioButtonDefaults.colors(selectedColor = neonPurple)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Column {
+                                    Text(
+                                        text = "Opsi A: Bank Konten (Creator Dashboard)",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Karya tetap di ekosistem Creator. Menghasilkan Engagement Score masif & penawaran royalti/akuisisi bernilai puluhan juta dolar dari Platform Streaming.",
+                                        color = textGray,
+                                        fontSize = 9.sp,
+                                        lineHeight = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Routing Option B: Studio Film (Box Office Pipeline)
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (ipRoutingDestination == "FILM_STUDIO") gold.copy(alpha = 0.18f) else cardDarkElevated
+                            ),
+                            border = BorderStroke(
+                                1.2.dp,
+                                if (ipRoutingDestination == "FILM_STUDIO") gold else Color(0xFF2B3248)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { ipRoutingDestination = "FILM_STUDIO" }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = ipRoutingDestination == "FILM_STUDIO",
+                                    onClick = { ipRoutingDestination = "FILM_STUDIO" },
+                                    colors = RadioButtonDefaults.colors(selectedColor = gold)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Opsi B: Kirim ke Studio Film (Box Office)",
+                                            color = if (ipRoutingDestination == "FILM_STUDIO") gold else Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(gold.copy(alpha = 0.2f))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Text("LAYAR LEBAR", color = gold, fontSize = 7.5.sp, fontWeight = FontWeight.ExtraBold)
+                                        }
+                                    }
+                                    Text(
+                                        text = "Karya DIHAPUS dari Creator dan otomatis di-push ke unit bisnis Studio Film (${filmStudioBusiness?.name ?: "Film Studio"}) untuk pipeline Pra-Produksi Bioskop Global.",
+                                        color = textGray,
+                                        fontSize = 9.sp,
+                                        lineHeight = 12.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // Live Quality Estimation Preview Box
                     val currentBudget = workBudgetInput.toLongOrNull() ?: 10_000L
-                    val estimatedBaseScore = (30 + (currentBudget / 1000).coerceAtMost(35) + (level * 0.25) + (employees * 1.5)).toInt().coerceIn(30, 98)
+                    val estimatedBaseScore = (30 + (currentBudget / 1000).coerceAtMost(45) + (level * 0.25) + (employees * 1.5)).toInt().coerceIn(30, 99)
 
                     Box(
                         modifier = Modifier
@@ -2865,12 +3207,14 @@ fun ContentCreatorScreen(
                                 Text("ESTIMASI KUALITAS & ENGAGEMENT", color = textGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     text = when {
+                                        isCoProductionMode && isSynergyUnlocked && ipRoutingDestination == "FILM_STUDIO" -> "🎬 Pipeline Box Office Bioskop Global"
                                         estimatedBaseScore >= 88 -> "🌟 Potensi Masterpiece Global"
                                         estimatedBaseScore >= 72 -> "💎 Potensi Hit Viral Tinggi"
                                         estimatedBaseScore >= 50 -> "📈 Karya Berkualitas Standar"
                                         else -> "🎬 Produksi Indie Minimalis"
                                     },
                                     color = when {
+                                        isCoProductionMode && isSynergyUnlocked && ipRoutingDestination == "FILM_STUDIO" -> gold
                                         estimatedBaseScore >= 88 -> gold
                                         estimatedBaseScore >= 72 -> neonPurple
                                         estimatedBaseScore >= 50 -> neonBlue
@@ -2881,9 +3225,9 @@ fun ContentCreatorScreen(
                                 )
                             }
                             Text(
-                                text = "~$estimatedBaseScore Poin",
+                                text = if (isCoProductionMode && isSynergyUnlocked && ipRoutingDestination == "FILM_STUDIO") "BOX OFFICE" else "~$estimatedBaseScore Poin",
                                 color = Color.White,
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -2902,6 +3246,10 @@ fun ContentCreatorScreen(
                             workBudgetError = "Masukkan nominal budget yang valid!"
                             return@Button
                         }
+                        if ((!isSynergyUnlocked || !isCoProductionMode) && budget > 50_000L) {
+                            workBudgetError = "Status Indie: Budget maksimal dibatasi $50,000! (Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k)"
+                            return@Button
+                        }
                         if (budget > contentCreatorCash) {
                             workBudgetError = "Saldo Kas Usaha tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
                             return@Button
@@ -2913,52 +3261,94 @@ fun ContentCreatorScreen(
                         productionProgress = 0f
 
                         coroutineScope.launch {
-                            // Phase 1: Script & Storyboard
-                            productionStatusText = "📝 Menyusun Script & Storyboard..."
-                            for (p in 1..25) {
-                                productionProgress = p / 100f
-                                delay(30L)
-                            }
-                            // Phase 2: Shooting & Audio Recording
-                            productionStatusText = "🎥 Proses Syuting Utama & Audio..."
-                            for (p in 26..60) {
-                                productionProgress = p / 100f
-                                delay(35L)
-                            }
-                            // Phase 3: Color Grading & VFX
-                            productionStatusText = "💻 Color Grading, VFX & Sound Design..."
-                            for (p in 61..88) {
-                                productionProgress = p / 100f
-                                delay(35L)
-                            }
-                            // Phase 4: Master 4K & Listing
-                            productionStatusText = "🚀 Export Master 4K & Listing Bank Konten..."
-                            for (p in 89..100) {
-                                productionProgress = p / 100f
-                                delay(25L)
-                            }
+                            if (isSynergyUnlocked && isCoProductionMode && ipRoutingDestination == "FILM_STUDIO") {
+                                // Box Office Production Animation
+                                productionStatusText = "📝 Menulis Naskah Layar Lebar & Pre-Production..."
+                                for (p in 1..25) {
+                                    productionProgress = p / 100f
+                                    delay(30L)
+                                }
+                                productionStatusText = "🎬 Syuting Kolaborasi Skala Studio Film..."
+                                for (p in 26..60) {
+                                    productionProgress = p / 100f
+                                    delay(35L)
+                                }
+                                productionStatusText = "🎞️ Post-Production, Scoring & Distribusi Bioskop..."
+                                for (p in 61..88) {
+                                    productionProgress = p / 100f
+                                    delay(35L)
+                                }
+                                productionStatusText = "🚀 Routing IP ke Global Pipeline Studio Film..."
+                                for (p in 89..100) {
+                                    productionProgress = p / 100f
+                                    delay(25L)
+                                }
 
-                            // Finalize in ViewModel
-                            val createdWork = gameViewModel.produceContentWork(
-                                title = title,
-                                type = selectedContentType,
-                                budget = budget
-                            )
+                                val success = gameViewModel.routeContentWorkToFilmStudio(
+                                    title = title,
+                                    type = selectedContentType,
+                                    budget = budget
+                                )
+                                isProducing = false
+                                if (success) {
+                                    dealFeedbackMsg = "🎬 IP Karya \"$title\" berhasil ditransfer ke Pipeline Pra-Produksi Studio Film (${filmStudioBusiness?.name ?: "Film Studio"})!"
+                                    dealFeedbackIsPositive = true
+                                }
+                            } else {
+                                // Standard / Creator Bank Animation
+                                productionStatusText = "📝 Menyusun Script & Storyboard..."
+                                for (p in 1..25) {
+                                    productionProgress = p / 100f
+                                    delay(30L)
+                                }
+                                productionStatusText = "🎥 Proses Syuting Utama & Audio..."
+                                for (p in 26..60) {
+                                    productionProgress = p / 100f
+                                    delay(35L)
+                                }
+                                productionStatusText = "💻 Color Grading, VFX & Sound Design..."
+                                for (p in 61..88) {
+                                    productionProgress = p / 100f
+                                    delay(35L)
+                                }
+                                productionStatusText = "🚀 Export Master 4K & Listing Bank Konten..."
+                                for (p in 89..100) {
+                                    productionProgress = p / 100f
+                                    delay(25L)
+                                }
 
-                            isProducing = false
-                            if (createdWork != null) {
-                                recentlyCompletedWork = createdWork
-                                dealFeedbackMsg = "🎬 Karya \"${createdWork.title}\" berhasil dirilis dengan Score ${createdWork.engagementScore}/100 dan masuk ke Bank Konten!"
-                                dealFeedbackIsPositive = true
+                                val createdWork = gameViewModel.produceContentWork(
+                                    title = title,
+                                    type = selectedContentType,
+                                    budget = budget
+                                )
+
+                                isProducing = false
+                                if (createdWork != null) {
+                                    recentlyCompletedWork = createdWork
+                                    dealFeedbackMsg = "🎬 Karya \"${createdWork.title}\" berhasil dirilis dengan Score ${createdWork.engagementScore}/100 dan masuk ke Bank Konten!"
+                                    dealFeedbackIsPositive = true
+                                }
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = neonPurple),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isCoProductionMode && isSynergyUnlocked) gold else neonPurple
+                    ),
                     modifier = Modifier.testTag("submit_produce_work_button")
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Icon(
+                        imageVector = if (isCoProductionMode && isSynergyUnlocked && ipRoutingDestination == "FILM_STUDIO") Icons.Default.Theaters else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = if (isCoProductionMode && isSynergyUnlocked) Color.Black else Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Mulai Produksi", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (isCoProductionMode && isSynergyUnlocked && ipRoutingDestination == "FILM_STUDIO") "Rilis ke Studio Film" else "Mulai Produksi",
+                        color = if (isCoProductionMode && isSynergyUnlocked) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {

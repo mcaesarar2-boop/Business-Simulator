@@ -6291,6 +6291,535 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
+    // ==========================================
+    // CONTENT CREATOR: PRODUKSI KARYA ORIGINAL & IP ROUTING
+    // ==========================================
+
+    fun produceContentWork(
+        title: String,
+        type: ContentType,
+        budget: Long,
+        targetStudioInstanceId: String? = null,
+        fundingScheme: CoProductionFundingScheme = CoProductionFundingScheme.FULL_CREATOR
+    ): ContentWork? {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it?.catalogId == "content_creator" } ?: return null
+
+        val targetStudio = if (targetStudioInstanceId != null) {
+            currentState.ownedBusinesses.firstOrNull { it?.instanceId == targetStudioInstanceId }
+                ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.instanceId == targetStudioInstanceId }
+        } else null
+
+        // Determine funding allocation
+        val creatorCut: Long
+        val studioCut: Double
+        when (fundingScheme) {
+            CoProductionFundingScheme.FULL_CREATOR -> {
+                creatorCut = budget
+                studioCut = 0.0
+                if (cc.contentCreatorCash < creatorCut) return null
+            }
+            CoProductionFundingScheme.FULL_STUDIO -> {
+                creatorCut = 0L
+                studioCut = budget.toDouble()
+                if (targetStudio == null || targetStudio.companyCash < studioCut) return null
+            }
+            CoProductionFundingScheme.JOINT_VENTURE_50_50 -> {
+                creatorCut = budget / 2
+                studioCut = (budget / 2).toDouble()
+                if (cc.contentCreatorCash < creatorCut) return null
+                if (targetStudio == null || targetStudio.companyCash < studioCut) return null
+            }
+        }
+
+        val score = ContentProductionEngine.calculateEngagementScore(
+            budget = budget,
+            channelLevel = cc.level,
+            employees = cc.contentCreatorEmployees
+        )
+
+        val newWork = ContentWork(
+            title = title,
+            type = type,
+            budget = budget,
+            engagementScore = score,
+            status = ContentStatus.AVAILABLE,
+            partnerStudioName = targetStudio?.name,
+            fundingScheme = if (targetStudio != null) fundingScheme else null
+        )
+
+        var isStudioNested = false
+        var studioHoldingId: String? = null
+        if (targetStudio != null) {
+            for (holding in currentState.holdingCompanies) {
+                if (holding.subsidiaries.any { it?.instanceId == targetStudio.instanceId }) {
+                    isStudioNested = true
+                    studioHoldingId = holding.instanceId
+                    break
+                }
+            }
+        }
+
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            when {
+                owned?.catalogId == "content_creator" -> {
+                    owned.copy(
+                        contentCreatorCash = owned.contentCreatorCash - creatorCut,
+                        contentPortfolio = listOf(newWork) + owned.contentPortfolio
+                    )
+                }
+                !isStudioNested && targetStudio != null && owned?.instanceId == targetStudio.instanceId -> {
+                    owned.copy(companyCash = owned.companyCash - studioCut)
+                }
+                else -> owned
+            }
+        }
+
+        val updatedHoldings = if (isStudioNested && studioHoldingId != null && targetStudio != null) {
+            currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == studioHoldingId) {
+                    val newSubs = holding.subsidiaries.map { sub ->
+                        if (sub?.instanceId == targetStudio.instanceId) {
+                            sub.copy(companyCash = sub.companyCash - studioCut)
+                        } else {
+                            sub
+                        }
+                    }
+                    holding.copy(subsidiaries = newSubs)
+                } else {
+                    holding
+                }
+            }
+        } else {
+            currentState.holdingCompanies
+        }
+
+        val nextState = currentState.copy(
+            ownedBusinesses = newBusinesses,
+            holdingCompanies = updatedHoldings
+        )
+        _playerState.value = nextState
+        saveState(nextState)
+        return newWork
+    }
+
+    fun routeContentWorkToFilmStudio(
+        title: String,
+        type: ContentType,
+        budget: Long,
+        targetStudioInstanceId: String? = null,
+        fundingScheme: CoProductionFundingScheme = CoProductionFundingScheme.FULL_CREATOR
+    ): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.firstOrNull { it?.catalogId == "content_creator" } ?: return false
+
+        val filmStudio = if (targetStudioInstanceId != null) {
+            currentState.ownedBusinesses.firstOrNull { it?.instanceId == targetStudioInstanceId }
+                ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.instanceId == targetStudioInstanceId }
+        } else {
+            currentState.ownedBusinesses.firstOrNull { it?.catalogId == "media_production" }
+                ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.catalogId == "media_production" }
+        } ?: return false
+
+        // Determine funding allocation
+        val creatorCut: Long
+        val studioCut: Double
+        when (fundingScheme) {
+            CoProductionFundingScheme.FULL_CREATOR -> {
+                creatorCut = budget
+                studioCut = 0.0
+                if (cc.contentCreatorCash < creatorCut) return false
+            }
+            CoProductionFundingScheme.FULL_STUDIO -> {
+                creatorCut = 0L
+                studioCut = budget.toDouble()
+                if (filmStudio.companyCash < studioCut) return false
+            }
+            CoProductionFundingScheme.JOINT_VENTURE_50_50 -> {
+                creatorCut = budget / 2
+                studioCut = (budget / 2).toDouble()
+                if (cc.contentCreatorCash < creatorCut || filmStudio.companyCash < studioCut) return false
+            }
+        }
+
+        val cleanTitle = title.trim()
+        val genre = when (type) {
+            ContentType.SHORT_FILM -> "Short Film"
+            ContentType.DOCUMENTARY -> "Documentary"
+            ContentType.DEEP_DIVE_ESSAY -> "Drama"
+        }
+
+        val calculatedScore = ContentProductionEngine.calculateEngagementScore(
+            budget = budget,
+            channelLevel = cc.level,
+            employees = cc.contentCreatorEmployees
+        )
+        val reviewScore = calculatedScore.coerceIn(65, 99)
+        val boxOffice = (budget * (3.5 + (reviewScore / 25.0))).toLong()
+        val netProfit = maxOf(0L, boxOffice - budget)
+
+        val newProject = com.example.data.MovieProject(
+            title = cleanTitle,
+            budget = budget,
+            genres = listOf(genre),
+            distributionScale = "Global",
+            reviewScore = reviewScore,
+            boxOffice = boxOffice,
+            netProfit = netProfit,
+            status = "IN_PRODUCTION",
+            remainingMonths = 6,
+            currentRevenue = 0L,
+            targetMaxRevenue = boxOffice,
+            productionPhase = "Pra-Produksi",
+            productionDelayMonths = 6,
+            promoBudget = (budget * 0.25).toLong(),
+            filmFormat = when (type) {
+                ContentType.SHORT_FILM -> "Short Film"
+                ContentType.DOCUMENTARY -> "Documentary"
+                ContentType.DEEP_DIVE_ESSAY -> "Feature Film"
+            },
+            productionFocus = "KUALITAS"
+        )
+
+        val targetInstanceId = filmStudio.instanceId
+        var isNested = false
+        var targetHoldingId: String? = null
+
+        for (holding in currentState.holdingCompanies) {
+            if (holding.subsidiaries.any { it?.instanceId == targetInstanceId }) {
+                isNested = true
+                targetHoldingId = holding.instanceId
+                break
+            }
+        }
+
+        val updatedBusinesses = currentState.ownedBusinesses.map { biz ->
+            when {
+                biz?.catalogId == "content_creator" -> {
+                    biz.copy(contentCreatorCash = biz.contentCreatorCash - creatorCut)
+                }
+                !isNested && biz?.instanceId == targetInstanceId -> {
+                    biz.copy(
+                        companyCash = biz.companyCash - studioCut,
+                        projectHistory = (biz.projectHistory ?: emptyList()) + newProject
+                    )
+                }
+                else -> biz
+            }
+        }
+
+        val updatedHoldings = if (isNested && targetHoldingId != null) {
+            currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == targetHoldingId) {
+                    val newSubs = holding.subsidiaries.map { sub ->
+                        if (sub?.instanceId == targetInstanceId) {
+                            sub.copy(
+                                companyCash = sub.companyCash - studioCut,
+                                projectHistory = (sub.projectHistory ?: emptyList()) + newProject
+                            )
+                        } else {
+                            sub
+                        }
+                    }
+                    holding.copy(subsidiaries = newSubs)
+                } else {
+                    holding
+                }
+            }
+        } else {
+            currentState.holdingCompanies
+        }
+
+        val nextState = currentState.copy(
+            ownedBusinesses = updatedBusinesses,
+            holdingCompanies = updatedHoldings
+        )
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun acceptPHLumpSumOffer(offer: ProductionHouseOffer): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it?.catalogId == "content_creator" } ?: return false
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            if (owned?.catalogId == "content_creator") {
+                val updatedPortfolio = owned.contentPortfolio.map { work ->
+                    if (work.id == offer.contentId) {
+                        work.copy(
+                            status = ContentStatus.ACQUIRED_LUMP_SUM,
+                            acquiredLumpSum = offer.lumpSumOffer,
+                            acquiredByPH = offer.phName
+                        )
+                    } else {
+                        work
+                    }
+                }
+                owned.copy(
+                    contentCreatorCash = owned.contentCreatorCash + offer.lumpSumOffer,
+                    contentPortfolio = updatedPortfolio
+                )
+            } else {
+                owned
+            }
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun acceptPHRoyaltyOffer(offer: ProductionHouseOffer): Boolean {
+        val currentState = _playerState.value
+        val cc = currentState.ownedBusinesses.find { it?.catalogId == "content_creator" } ?: return false
+        val newBusinesses = currentState.ownedBusinesses.map { owned ->
+            if (owned?.catalogId == "content_creator") {
+                val updatedPortfolio = owned.contentPortfolio.map { work ->
+                    if (work.id == offer.contentId) {
+                        work.copy(
+                            status = ContentStatus.LICENSED,
+                            monthlyRoyalty = offer.monthlyRoyalty,
+                            acquiredByPH = offer.phName,
+                            contractDurationMonths = offer.contractDurationMonths,
+                            remainingContractMonths = offer.contractDurationMonths
+                        )
+                    } else {
+                        work
+                    }
+                }
+                owned.copy(
+                    contentCreatorCash = owned.contentCreatorCash + offer.royaltyUpfront,
+                    contentPortfolio = updatedPortfolio
+                )
+            } else {
+                owned
+            }
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun rejectPHOffer(offer: ProductionHouseOffer) {
+        // Offer dismissed in UI
+    }
+
+    fun rejectPHOffer(offerId: String) {
+        // Offer dismissed in UI
+    }
+
+    // ==========================================
+    // BANKING UNIT STATE & OPERATIONS
+    // ==========================================
+
+    fun getBankingBusiness(instanceId: String): OwnedBusiness? {
+        val state = _playerState.value
+        return state.ownedBusinesses.firstOrNull { it?.instanceId == instanceId }
+            ?: state.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.instanceId == instanceId }
+    }
+
+    fun processBankMonthlyTick(instanceId: String) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val (updatedBankData, updatedOwned) = BankingEngine.processMonthlyTick(biz.bankingData, currentState.ownedBusinesses)
+        val newBusinesses = updatedOwned.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun refreshBankLoanApplications(instanceId: String) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val newPipeline = BankingEngine.generateApplicationPipeline(
+            currentTier = biz.bankingData.currentTier,
+            baseLendingRate = biz.bankingData.lendingInterestRate,
+            ownedBusinesses = currentState.ownedBusinesses,
+            count = 6
+        )
+        val updatedBankData = biz.bankingData.copy(incomingApplications = newPipeline)
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun approveBankLoan(instanceId: String, application: LoanApplication): Boolean {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return false
+        val result = BankingEngine.approveLoan(biz.bankingData, application, currentState.ownedBusinesses) ?: return false
+        val (updatedBankData, updatedOwned) = result
+        val newBusinesses = updatedOwned.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun rejectBankLoan(instanceId: String, applicationId: String) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val updatedBankData = BankingEngine.rejectLoan(biz.bankingData, applicationId)
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun writeOffBankNplLoan(instanceId: String, loanId: String) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val updatedBankData = BankingEngine.writeOffNplLoan(biz.bankingData, loanId)
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun setBankInterestRates(instanceId: String, depositRate: Double, lendingRate: Double) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val updatedBankData = biz.bankingData.copy(
+            depositInterestRate = depositRate,
+            lendingInterestRate = lendingRate
+        )
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun unlockBankTier(instanceId: String, tier: BankTier): Boolean {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return false
+        val bankData = biz.bankingData
+        if (bankData.totalCustomerDepositsDpk < tier.minDpkRequired || bankData.internalCash < tier.upgradeCost) {
+            return false
+        }
+        val updatedBankData = bankData.copy(
+            currentTier = tier,
+            internalCash = bankData.internalCash - tier.upgradeCost
+        )
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun updateBankAiRiskManager(instanceId: String, config: AiRiskManagerData) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val updatedBankData = biz.bankingData.copy(aiRiskManager = config)
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun upgradeBankAiRiskManager(instanceId: String): Boolean {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return false
+        val ai = biz.bankingData.aiRiskManager
+        val upgradeCost = ai.nextLevelUpgradeCost
+        if (upgradeCost <= 0L || biz.bankingData.internalCash < upgradeCost) return false
+        val updatedAi = ai.copy(level = ai.level + 1)
+        val updatedBankData = biz.bankingData.copy(
+            internalCash = biz.bankingData.internalCash - upgradeCost,
+            aiRiskManager = updatedAi
+        )
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun triggerBankAiRiskCycle(instanceId: String) {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return
+        val (updatedBankData, updatedOwned) = BankingEngine.runAiRiskCycle(biz.bankingData, currentState.ownedBusinesses)
+        val newBusinesses = updatedOwned.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(ownedBusinesses = newBusinesses)
+        _playerState.value = nextState
+        saveState(nextState)
+    }
+
+    fun injectCapitalToBank(instanceId: String, amount: Long): Boolean {
+        val currentState = _playerState.value
+        if (currentState.cash < amount) return false
+        val biz = getBankingBusiness(instanceId) ?: return false
+        val updatedBankData = biz.bankingData.copy(internalCash = biz.bankingData.internalCash + amount)
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(
+            cash = currentState.cash - amount,
+            ownedBusinesses = newBusinesses
+        )
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun withdrawCapitalFromBank(instanceId: String, amount: Long): Boolean {
+        val currentState = _playerState.value
+        val biz = getBankingBusiness(instanceId) ?: return false
+        if (biz.bankingData.internalCash < amount) return false
+        val updatedBankData = biz.bankingData.copy(internalCash = biz.bankingData.internalCash - amount)
+        val newBusinesses = currentState.ownedBusinesses.map { b ->
+            if (b.instanceId == instanceId) b.copy(bankingData = updatedBankData) else b
+        }
+        val nextState = currentState.copy(
+            cash = currentState.cash + amount,
+            ownedBusinesses = newBusinesses
+        )
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
+    fun calculateBankLiquidationValuation(instanceId: String): Long {
+        val biz = getBankingBusiness(instanceId) ?: return 0L
+        val data = biz.bankingData
+        val performingLoans = data.activeLoans.filter { it.healthStatus != LoanHealthStatus.SETTLED && it.healthStatus != LoanHealthStatus.NON_PERFORMING }.sumOf { it.remainingPrincipal }
+        return data.internalCash + (performingLoans * 0.7).toLong()
+    }
+
+    fun liquidateBank(instanceId: String): Boolean {
+        val currentState = _playerState.value
+        val valuation = calculateBankLiquidationValuation(instanceId)
+        val newBusinesses = currentState.ownedBusinesses.filterNot { it.instanceId == instanceId }
+        val nextState = currentState.copy(
+            cash = currentState.cash + valuation,
+            ownedBusinesses = newBusinesses
+        )
+        _playerState.value = nextState
+        saveState(nextState)
+        return true
+    }
+
     fun deductCash(amount: Long): Boolean {
         val currentState = _playerState.value
         if (currentState.cash >= amount) {

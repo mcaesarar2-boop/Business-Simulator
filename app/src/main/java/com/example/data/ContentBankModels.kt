@@ -22,6 +22,12 @@ enum class ContentSortOption(val displayName: String) {
     BUDGET_HIGHEST("Budget Produksi Terbesar")
 }
 
+enum class CoProductionFundingScheme(val displayName: String, val shortDesc: String) {
+    FULL_CREATOR("100% Dana Kreator", "100% dari Kas Kreator. Profit penuh masuk ke Kreator."),
+    FULL_STUDIO("100% Dana Studio Film", "100% dari Kas Studio Film yang dipilih. Kreator sebagai konseptor."),
+    JOINT_VENTURE_50_50("Joint Venture (50/50)", "50% dari Kas Kreator & 50% dari Kas Studio Film.")
+}
+
 data class ContentWork(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "",
@@ -34,6 +40,8 @@ data class ContentWork(
     val acquiredByPH: String? = null,
     val contractDurationMonths: Int? = null,
     val remainingContractMonths: Int? = null,
+    val partnerStudioName: String? = null,
+    val fundingScheme: CoProductionFundingScheme? = null,
     val createdTimestamp: Long = System.currentTimeMillis()
 )
 

@@ -114,6 +114,7 @@ fun BankingDashboardScreen(
                                     BankTier.TIER_1_MICRO -> BlueTerminal.copy(alpha = 0.2f)
                                     BankTier.TIER_2_RETAIL -> EmeraldAccent.copy(alpha = 0.2f)
                                     BankTier.TIER_3_CORPORATE -> GoldAccent.copy(alpha = 0.2f)
+                                    else -> BlueTerminal.copy(alpha = 0.2f)
                                 },
                                 border = BorderStroke(
                                     1.dp,
@@ -121,6 +122,7 @@ fun BankingDashboardScreen(
                                         BankTier.TIER_1_MICRO -> BlueTerminal
                                         BankTier.TIER_2_RETAIL -> EmeraldAccent
                                         BankTier.TIER_3_CORPORATE -> GoldAccent
+                                        else -> BlueTerminal
                                     }
                                 )
                             ) {
@@ -130,6 +132,7 @@ fun BankingDashboardScreen(
                                         BankTier.TIER_1_MICRO -> BlueTerminal
                                         BankTier.TIER_2_RETAIL -> EmeraldAccent
                                         BankTier.TIER_3_CORPORATE -> GoldAccent
+                                        else -> BlueTerminal
                                     },
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -285,7 +288,7 @@ fun BankingDashboardScreen(
                         selected = activeTab == 1,
                         onClick = { activeTab = 1 },
                         text = {
-                            val activeCount = bankingData.activeLoans.count { it.healthStatus != LoanHealthStatus.SETTLED }
+                            val activeCount = bankingData.activeLoans.count { loan -> loan.healthStatus != LoanHealthStatus.SETTLED }
                             Text("Portofolio ($activeCount)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     )
@@ -396,7 +399,7 @@ fun BankingDashboardScreen(
                             }
                         }
                     } else {
-                        items(bankingData.incomingApplications) { app ->
+                        items(items = bankingData.incomingApplications, key = { appItem -> appItem.id }) { app ->
                             LoanApplicationReviewCard(
                                 application = app,
                                 vaultCash = bankingData.vaultCash,
@@ -446,7 +449,7 @@ fun BankingDashboardScreen(
                         }
                     }
 
-                    val activeList = bankingData.activeLoans.filter { it.healthStatus != LoanHealthStatus.SETTLED }
+                    val activeList = bankingData.activeLoans.filter { loanItem -> loanItem.healthStatus != LoanHealthStatus.SETTLED }
                     if (activeList.isEmpty()) {
                         item {
                             Surface(
@@ -467,7 +470,7 @@ fun BankingDashboardScreen(
                             }
                         }
                     } else {
-                        items(activeList) { loan ->
+                        items(items = activeList, key = { loanItem -> loanItem.id }) { loan ->
                             ActiveLoanBookItemCard(
                                 loan = loan,
                                 currencyFormat = currencyFormat,
