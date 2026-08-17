@@ -208,7 +208,8 @@ data class ActiveUpgrade(
 data class CoProductionMeta(
     val isCoProd: Boolean = false,
     val partnerName: String = "",
-    val fundingType: String = ""
+    val fundingType: String = "",
+    val revenueSplit: Double = 0.0
 )
 
 data class MovieProject(
@@ -618,7 +619,7 @@ interface BusinessEntity {
                     }
                     val portfolioVal = owned.contentPortfolio.sumOf { item ->
                         when (item.status) {
-                            ContentStatus.AVAILABLE -> item.budget + (item.engagementScore * 2_000L)
+                            ContentStatus.AVAILABLE -> item.budget + ((item.engagementScore ?: 50) * 2_000L)
                             ContentStatus.ACQUIRED_LUMP_SUM -> item.acquiredLumpSum
                             ContentStatus.LICENSED -> (item.monthlyRoyalty * 24L) + item.budget
                         }

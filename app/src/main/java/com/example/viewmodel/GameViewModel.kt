@@ -3046,6 +3046,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var monthlyIncome = 0L
         var monthlyExpenses = 0L
 
+        val coProdFinishedSplits = mutableListOf<Pair<String, Long>>()
+        val coProdFinishedScores = mutableMapOf<String, Int>()
+
         // Business Income & Movie Progression
         val mappedBusinesses = currentState.ownedBusinesses.map { owned ->
             try {
@@ -3309,6 +3312,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         businessInternalRevenue += thisPayout
                         if (newStatus == "FINISHED") {
                             extraV += maxOf(0L, proj.netProfit)
+                            if (proj.coProductionMeta?.isCoProd == true) {
+                                val split = proj.coProductionMeta.revenueSplit
+                                if (split > 0.0 && proj.netProfit > 0) {
+                                    val creatorShare = (proj.netProfit * split).toLong()
+                                    coProdFinishedSplits.add(Pair(proj.title, creatorShare))
+                                }
+                                coProdFinishedScores[proj.title] = proj.reviewScore
+                            }
                         }
                         
                         proj.copy(
@@ -3754,6 +3765,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                                 businessInternalRevenue += thisPayout
                                 if (newStatus == "FINISHED") {
                                     extraV += maxOf(0L, proj.netProfit)
+                                    if (proj.coProductionMeta?.isCoProd == true) {
+                                        val split = proj.coProductionMeta.revenueSplit
+                                        if (split > 0.0 && proj.netProfit > 0) {
+                                            val creatorShare = (proj.netProfit * split).toLong()
+                                            coProdFinishedSplits.add(Pair(proj.title, creatorShare))
+                                        }
+                                        coProdFinishedScores[proj.title] = proj.reviewScore
+                                    }
                                 }
                                 
                                 proj.copy(
@@ -4214,6 +4233,48 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        val totalCreatorCoProdProfit = coProdFinishedSplits.sumOf { it.second }
+        val mappedBusinessesWithCoProd = mappedBusinessesWithAppVal.map { b ->
+            if (b.catalogId == "content_creator") {
+                val updatedPortfolio = b.contentPortfolio.map { work ->
+                    val matchedScore = coProdFinishedScores[work.movieProjectId] ?: coProdFinishedScores[work.title]
+                    if (matchedScore != null) {
+                        work.copy(engagementScore = matchedScore)
+                    } else {
+                        work
+                    }
+                }
+                b.copy(
+                    contentCreatorCash = b.contentCreatorCash + totalCreatorCoProdProfit,
+                    contentPortfolio = updatedPortfolio
+                )
+            } else {
+                b
+            }
+        }
+
+        val mappedHoldingsWithCoProd = mappedHoldings.map { h ->
+            val newSubs = h.subsidiaries.map { sub ->
+                if (sub?.catalogId == "content_creator") {
+                    val updatedPortfolio = sub.contentPortfolio.map { work ->
+                        val matchedScore = coProdFinishedScores[work.movieProjectId] ?: coProdFinishedScores[work.title]
+                        if (matchedScore != null) {
+                            work.copy(engagementScore = matchedScore)
+                        } else {
+                            work
+                        }
+                    }
+                    sub.copy(
+                        contentCreatorCash = sub.contentCreatorCash + totalCreatorCoProdProfit,
+                        contentPortfolio = updatedPortfolio
+                    )
+                } else {
+                    sub
+                }
+            }
+            h.copy(subsidiaries = newSubs)
+        }
+
         // Real Estate Rental Income goes to Private Cash / Family Office
         var personalRentalIncome = 0L
         currentState.ownedProperties.forEach { owned ->
@@ -4469,8 +4530,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val tempState = currentState.copy(
                 cash = finalCashAfterDeposits,
                 timeDeposits = remainingDeposits,
-                ownedBusinesses = mappedBusinessesWithAppVal,
-                holdingCompanies = mappedHoldings
+                ownedBusinesses = mappedBusinessesWithCoProd,
+                holdingCompanies = mappedHoldingsWithCoProd
             )
             tempState.netAssetValue(
                 stockList = _stockList.value,
@@ -4485,8 +4546,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         var familyOfficeCash = finalCashAfterDeposits
-        var familyOfficeHoldings = mappedHoldings
-        var familyOfficeBusinesses = mappedBusinessesWithAppVal
+        var familyOfficeHoldings = mappedHoldingsWithCoProd
+        var familyOfficeBusinesses = mappedBusinessesWithCoProd
         var familyOfficeProperties = currentState.ownedProperties
         var familyOfficeHouses = currentState.ownedHouses
         var familyOfficeCollections = currentState.ownedCollections
@@ -6407,6 +6468,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         title: String,
         type: ContentType,
         budget: Long,
+        promoBudget: Long = 0L,
+        genres: List<String> = emptyList(),
+        isGlobal: Boolean = true,
+        schedMonth: Int? = null,
+        schedYear: Int? = null,
+        filmFormat: String = "Feature Film",
+        productionFocus: String = "REGULER",
         targetStudioInstanceId: String? = null,
         fundingScheme: CoProductionFundingScheme = CoProductionFundingScheme.FULL_CREATOR
     ): Boolean {
@@ -6421,42 +6489,101 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.catalogId == "media_production" }
         } ?: return false
 
+        val totalCost = budget + promoBudget
+
         // Determine funding allocation
         val creatorCut: Long
         val studioCut: Double
         when (fundingScheme) {
             CoProductionFundingScheme.FULL_CREATOR -> {
-                creatorCut = budget
+                creatorCut = totalCost
                 studioCut = 0.0
                 if (cc.contentCreatorCash < creatorCut) return false
             }
             CoProductionFundingScheme.FULL_STUDIO -> {
                 creatorCut = 0L
-                studioCut = budget.toDouble()
+                studioCut = totalCost.toDouble()
                 if (filmStudio.companyCash < studioCut) return false
             }
             CoProductionFundingScheme.JOINT_VENTURE_50_50 -> {
-                creatorCut = budget / 2
-                studioCut = (budget / 2).toDouble()
+                creatorCut = totalCost / 2
+                studioCut = (totalCost / 2).toDouble()
                 if (cc.contentCreatorCash < creatorCut || filmStudio.companyCash < studioCut) return false
             }
         }
 
         val cleanTitle = title.trim()
-        val genre = when (type) {
-            ContentType.SHORT_FILM -> "Short Film"
-            ContentType.DOCUMENTARY -> "Documentary"
-            ContentType.DEEP_DIVE_ESSAY -> "Drama"
+
+        // Anti-Duplicate checking in Studio
+        if (filmStudio.projectHistory.any { it.title.trim().equals(cleanTitle, ignoreCase = true) }) {
+            return false // duplicate title
         }
 
-        val calculatedScore = ContentProductionEngine.calculateEngagementScore(
-            budget = budget,
-            channelLevel = cc.level,
-            employees = cc.contentCreatorEmployees
-        )
-        val reviewScore = calculatedScore.coerceIn(65, 99)
-        val boxOffice = (budget * (3.5 + (reviewScore / 25.0))).toLong()
-        val netProfit = maxOf(0L, boxOffice - budget)
+        val resolvedGenres = if (genres.isNotEmpty()) {
+            genres
+        } else {
+            listOf(when (type) {
+                ContentType.SHORT_FILM -> "Short Film"
+                ContentType.DOCUMENTARY -> "Documentary"
+                ContentType.DEEP_DIVE_ESSAY -> "Drama"
+            })
+        }
+
+        // Quality / Review Score calculation manipulated by Production Focus
+        val reviewScore = when (productionFocus) {
+            "KUALITAS" -> (65..100).random()
+            "MAHAKARYA" -> (85..100).random()
+            else -> {
+                val lowerBound = minOf(15 + (filmStudio.level * 2), 70)
+                var score = (lowerBound..100).random()
+                if (resolvedGenres.size >= 3) {
+                    if ((0..1).random() == 0) {
+                        score -= (10..25).random()
+                    } else {
+                        score += (10..20).random()
+                    }
+                    score = score.coerceIn(1, 100)
+                }
+                score
+            }
+        }
+
+        val distMult = if (isGlobal) 2.5 else 1.0
+        val levelBonus = 1.0 + (filmStudio.level * 0.05)
+        val promoRatio = if (budget > 0) promoBudget.toDouble() / budget.toDouble() else 0.0
+        val promoMult = 1.0 + (promoRatio * 0.5).coerceAtMost(2.0)
+        val viralMult = if (reviewScore > 85) 1.5 + ((reviewScore - 85) * 0.1) else 1.0
+        val animQualityMult = if (filmStudio.studioType == "ANIMATION" && budget > 50000000) 1.5 else 1.0
+
+        val boxOffice = if (reviewScore < 40) {
+            (totalCost * (0.1 + (promoRatio * 0.1).coerceAtMost(0.4))).toLong()
+        } else if (reviewScore > 85 && isGlobal) {
+            (totalCost * (5..10).random() * levelBonus * promoMult * viralMult * animQualityMult).toLong()
+        } else {
+            val performance = reviewScore / 100.0
+            (totalCost * performance * distMult * levelBonus * 3.0 * promoMult * viralMult * animQualityMult).toLong()
+        }
+
+        val netProfit = boxOffice - totalCost
+        val initMonths = if (isGlobal) 6 else 4
+
+        val baseDelay = when {
+            filmStudio.studioType == "ANIMATION" && filmFormat == "Short Film" -> (14..24).random()
+            filmStudio.studioType == "ANIMATION" && (filmFormat == "Feature Film" || filmFormat.isBlank()) -> (24..60).random()
+            filmStudio.studioType == "LIVE_ACTION" && filmFormat == "Short Film" -> (3..5).random()
+            else -> (12..24).random() // Live-Action Feature
+        }
+        val budgetInTenMillions = (budget / 10000000).toInt()
+        val penalty = minOf(budgetInTenMillions, 12)
+        val focusPenalty = when (productionFocus) {
+            "KUALITAS" -> 6
+            "MAHAKARYA" -> 12
+            else -> 0
+        }
+        val delayMonths = baseDelay + penalty + focusPenalty
+
+        val isScheduledFuture = schedMonth != null && schedYear != null &&
+            (schedYear > currentState.inGameYear || (schedYear == currentState.inGameYear && schedMonth > currentState.inGameMonth))
 
         val fundingTypeStr = when (fundingScheme) {
             CoProductionFundingScheme.FULL_CREATOR -> "100% Kas Creator"
@@ -6464,35 +6591,124 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             CoProductionFundingScheme.JOINT_VENTURE_50_50 -> "50/50"
         }
 
+        val revenueSplit = when (fundingScheme) {
+            CoProductionFundingScheme.JOINT_VENTURE_50_50 -> 0.5
+            else -> 0.0
+        }
+
         val meta = com.example.data.CoProductionMeta(
             isCoProd = true,
             partnerName = cc.name,
-            fundingType = fundingTypeStr
+            fundingType = fundingTypeStr,
+            revenueSplit = revenueSplit
         )
 
-        val newProject = com.example.data.MovieProject(
-            title = cleanTitle,
-            budget = budget,
-            genres = listOf(genre),
-            distributionScale = "Global",
-            reviewScore = reviewScore,
-            boxOffice = boxOffice,
-            netProfit = netProfit,
-            status = "IN_PRODUCTION",
-            remainingMonths = 6,
-            currentRevenue = 0L,
-            targetMaxRevenue = boxOffice,
-            productionPhase = "Pra-Produksi",
-            productionDelayMonths = 6,
-            promoBudget = (budget * 0.25).toLong(),
-            filmFormat = when (type) {
-                ContentType.SHORT_FILM -> "Short Film"
-                ContentType.DOCUMENTARY -> "Documentary"
-                ContentType.DEEP_DIVE_ESSAY -> "Feature Film"
-            },
-            productionFocus = "KUALITAS",
-            coProductionMeta = meta
-        )
+        // For FULL_CREATOR: Studio gets a read-only finished catalog record.
+        // For FULL_STUDIO & JOINT_VENTURE_50_50: Studio gets an active Box Office Pipeline project in production.
+        val newProject = when (fundingScheme) {
+            CoProductionFundingScheme.FULL_CREATOR -> com.example.data.MovieProject(
+                title = cleanTitle,
+                budget = budget,
+                genres = resolvedGenres,
+                distributionScale = if (isGlobal) "Global" else "Local",
+                reviewScore = reviewScore,
+                boxOffice = boxOffice,
+                netProfit = netProfit,
+                status = "FINISHED",
+                remainingMonths = 0,
+                currentRevenue = boxOffice,
+                targetMaxRevenue = boxOffice,
+                productionPhase = "TAYANG",
+                productionDelayMonths = 0,
+                promoBudget = promoBudget,
+                scheduledMonth = schedMonth,
+                scheduledYear = schedYear,
+                filmFormat = filmFormat,
+                productionFocus = productionFocus,
+                coProductionMeta = meta
+            )
+            else -> com.example.data.MovieProject(
+                title = cleanTitle,
+                budget = budget,
+                genres = resolvedGenres,
+                distributionScale = if (isGlobal) "Global" else "Local",
+                reviewScore = reviewScore,
+                boxOffice = boxOffice,
+                netProfit = netProfit,
+                status = "IN_PRODUCTION",
+                remainingMonths = initMonths,
+                currentRevenue = 0L,
+                targetMaxRevenue = boxOffice,
+                productionPhase = if (isScheduledFuture) "ANTREAN" else "Pra-Produksi",
+                productionDelayMonths = delayMonths,
+                promoBudget = promoBudget,
+                scheduledMonth = schedMonth,
+                scheduledYear = schedYear,
+                filmFormat = filmFormat,
+                productionFocus = productionFocus,
+                coProductionMeta = meta
+            )
+        }
+
+        // For FULL_CREATOR: Active in Creator Bank Konten (isShadowRecord = false, score available immediately).
+        // For FULL_STUDIO: Read-only Shadow record in Creator Bank Konten (isShadowRecord = true, score null until released).
+        // For JOINT_VENTURE_50_50: Linked to studio pipeline in Creator Bank Konten (isShadowRecord = false, score null until released).
+        val shadowWork = when (fundingScheme) {
+            CoProductionFundingScheme.FULL_CREATOR -> com.example.data.ContentWork(
+                id = java.util.UUID.randomUUID().toString(),
+                title = cleanTitle,
+                type = type,
+                budget = totalCost,
+                engagementScore = reviewScore.coerceIn(1, 100),
+                status = ContentStatus.AVAILABLE,
+                monthlyRoyalty = 0L,
+                acquiredLumpSum = 0L,
+                acquiredByPH = null,
+                contractDurationMonths = null,
+                remainingContractMonths = null,
+                partnerStudioName = filmStudio.name,
+                partnerStudioId = filmStudio.instanceId,
+                fundingScheme = fundingScheme,
+                isShadowRecord = false,
+                movieProjectId = cleanTitle
+            )
+            CoProductionFundingScheme.FULL_STUDIO -> com.example.data.ContentWork(
+                id = java.util.UUID.randomUUID().toString(),
+                title = cleanTitle,
+                type = type,
+                budget = totalCost,
+                engagementScore = null, // TBD during production
+                status = ContentStatus.AVAILABLE,
+                monthlyRoyalty = 0L,
+                acquiredLumpSum = 0L,
+                acquiredByPH = null,
+                contractDurationMonths = null,
+                remainingContractMonths = null,
+                partnerStudioName = filmStudio.name,
+                partnerStudioId = filmStudio.instanceId,
+                fundingScheme = fundingScheme,
+                isShadowRecord = true, // Read-only shadow record in Creator Bank
+                movieProjectId = cleanTitle
+            )
+            CoProductionFundingScheme.JOINT_VENTURE_50_50 -> com.example.data.ContentWork(
+                id = java.util.UUID.randomUUID().toString(),
+                title = cleanTitle,
+                type = type,
+                budget = totalCost,
+                engagementScore = null, // TBD during production
+                status = ContentStatus.AVAILABLE,
+                monthlyRoyalty = 0L,
+                acquiredLumpSum = 0L,
+                acquiredByPH = null,
+                contractDurationMonths = null,
+                remainingContractMonths = null,
+                partnerStudioName = filmStudio.name,
+                partnerStudioId = filmStudio.instanceId,
+                fundingScheme = fundingScheme,
+                isShadowRecord = false, // Joint venture active link
+                movieProjectId = cleanTitle
+            )
+        }
 
         val targetInstanceId = filmStudio.instanceId
         var isNested = false
@@ -6509,7 +6725,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val updatedBusinesses = currentState.ownedBusinesses.map { biz ->
             when {
                 biz?.catalogId == "content_creator" -> {
-                    biz.copy(contentCreatorCash = biz.contentCreatorCash - creatorCut)
+                    biz.copy(
+                        contentCreatorCash = biz.contentCreatorCash - creatorCut,
+                        contentPortfolio = biz.contentPortfolio + shadowWork
+                    )
                 }
                 !isNested && biz?.instanceId == targetInstanceId -> {
                     biz.copy(

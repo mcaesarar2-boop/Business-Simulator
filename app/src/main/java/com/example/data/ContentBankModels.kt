@@ -33,7 +33,7 @@ data class ContentWork(
     val title: String = "",
     val type: ContentType = ContentType.SHORT_FILM,
     val budget: Long = 0L,
-    val engagementScore: Int = 50, // 1 - 100
+    val engagementScore: Int? = 50, // 1 - 100, or null if unreleased / in production
     val status: ContentStatus = ContentStatus.AVAILABLE,
     val monthlyRoyalty: Long = 0L,
     val acquiredLumpSum: Long = 0L,
@@ -41,7 +41,10 @@ data class ContentWork(
     val contractDurationMonths: Int? = null,
     val remainingContractMonths: Int? = null,
     val partnerStudioName: String? = null,
+    val partnerStudioId: String? = null,
     val fundingScheme: CoProductionFundingScheme? = null,
+    val isShadowRecord: Boolean = false,
+    val movieProjectId: String? = null,
     val createdTimestamp: Long = System.currentTimeMillis()
 )
 
@@ -110,17 +113,30 @@ object ContentProductionEngine {
         channelLevel: Int = 1,
         forceTarget: ContentWork? = null
     ): ProductionHouseOffer? {
-        val availableWorks = portfolio.filter { it.status == ContentStatus.AVAILABLE }
-        if (availableWorks.isEmpty() && forceTarget == null) return null
+        val eligibleWorks = portfolio.filter {
+            it.status == ContentStatus.AVAILABLE &&
+            !it.isShadowRecord &&
+            it.engagementScore != null &&
+            it.engagementScore > 0
+        }
+        if (eligibleWorks.isEmpty() && forceTarget == null) return null
 
-        val targetWork = forceTarget ?: run {
+        val targetWork = if (forceTarget != null) {
+            if (forceTarget.isShadowRecord || forceTarget.status != ContentStatus.AVAILABLE || forceTarget.engagementScore == null || forceTarget.engagementScore <= 0) {
+                return null
+            }
+            forceTarget
+        } else {
             // Weighted random selection based on engagement score squared
-            // Higher engagement score = significantly higher probability of getting targeted
-            val totalWeight = availableWorks.sumOf { (it.engagementScore * it.engagementScore).coerceAtLeast(1) }
+            val totalWeight = eligibleWorks.sumOf {
+                val s = it.engagementScore ?: 50
+                (s * s).coerceAtLeast(1)
+            }
             var randomWeight = Random.nextInt(totalWeight)
-            var selected: ContentWork = availableWorks.first()
-            for (work in availableWorks) {
-                val weight = (work.engagementScore * work.engagementScore).coerceAtLeast(1)
+            var selected: ContentWork = eligibleWorks.first()
+            for (work in eligibleWorks) {
+                val s = work.engagementScore ?: 50
+                val weight = (s * s).coerceAtLeast(1)
                 if (randomWeight < weight) {
                     selected = work
                     break
@@ -131,7 +147,7 @@ object ContentProductionEngine {
         }
 
         val phName = MAJOR_PH_NAMES.random()
-        val score = targetWork.engagementScore
+        val score = targetWork.engagementScore ?: 50
         val budget = targetWork.budget
 
         // Multiplier based on score tier
