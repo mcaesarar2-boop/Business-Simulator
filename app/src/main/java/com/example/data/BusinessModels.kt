@@ -245,6 +245,17 @@ data class MovieProject(
     val isCoProd: Boolean get() = coProductionMeta?.isCoProd == true
 }
 
+data class HealthcareEpidemicEvent(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val title: String = "",
+    val description: String = "",
+    val severityMultiplier: Double = 3.0, // 300% claims increase
+    val durationMonths: Int = 3,
+    val remainingMonths: Int = 3,
+    val icon: String = "🦠",
+    val effectDescription: String = "Lonjakan Klaim Asuransi +300% & Pasien Membludak!"
+)
+
 data class HealthcareUnit(
     val id: String = java.util.UUID.randomUUID().toString(),
     val name: String,
@@ -256,7 +267,28 @@ data class HealthcareUnit(
     val upgradeDelayMonths: Int = 0,
     val companyCash: Double = 0.0,
     val tierCategory: String = "BASIC",
-    val unitCash: Double = 0.0
+    val unitCash: Double = 0.0,
+    
+    // Medical Department Management (HOSPITAL & CLINIC)
+    val igdLevel: Int = 1,
+    val specialistLevel: Int = 1,
+    val pharmacyLevel: Int = 1,
+    val totalBeds: Int = 100,
+    val currentOccupiedBeds: Int = 0,
+    val bor: Double = 0.0, // Bed Occupancy Rate (0% - 100%)
+    val rejectedPatientsLastMonth: Int = 0,
+    
+    // Actuary & Insurance Specifics (INSURANCE)
+    val monthlyPremium: Double = 50.0, // Monthly premium ($20 - $500)
+    val lastMonthClaimsPaid: Double = 0.0,
+    val lastMonthClaimsCount: Long = 0L,
+    val inNetworkClaimsCount: Long = 0L,
+    val outNetworkClaimsCount: Long = 0L,
+    val inNetworkClaimsAmount: Double = 0.0,
+    val outNetworkClaimsAmount: Double = 0.0,
+    val lossRatio: Double = 0.0, // (Claims Paid / Premium Income) * 100
+    val synergyRate: Double = 0.0, // (In-Network / Total Claims) * 100
+    val reserveFund: Double = 0.0
 )
 
 data class ConstructionPhase(
@@ -843,6 +875,7 @@ data class OwnedBusiness(
     val softwareHouseData: SoftwareHouseCompanyData = SoftwareHouseCompanyData(),
     val bankingData: BankingCompanyData = BankingCompanyData(),
     val tvStationData: TvStationData = TvStationData(),
+    val activeEpidemicEvent: HealthcareEpidemicEvent? = null,
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId

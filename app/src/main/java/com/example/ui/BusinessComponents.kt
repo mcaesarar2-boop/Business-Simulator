@@ -70,8 +70,9 @@ fun getSectorIcon(sector: String): androidx.compose.ui.graphics.vector.ImageVect
 
 val com.example.data.HoldingCompany.type: String
     get() {
-        val typesList = listOf("Entertainment Holdings", "F&B Holdings", "Property Holdings", "Retail Holdings", "Tech Holdings", "Finance Holdings", "Daycare Holdings", "Transportation Holdings")
+        val typesList = listOf("Entertainment Holdings", "F&B Holdings", "Property Holdings", "Retail Holdings", "Tech Holdings", "Finance Holdings", "Healthcare & Insurance Holdings", "Transportation Holdings")
         typesList.forEach { if (name.contains(it, ignoreCase = true)) return it }
+        if (name.contains("Healthcare", ignoreCase = true) || name.contains("Daycare", ignoreCase = true) || name.contains("Insurance", ignoreCase = true)) return "Healthcare & Insurance Holdings"
         return typesList[kotlin.math.abs(instanceId.hashCode()) % typesList.size]
     }
 
@@ -84,7 +85,7 @@ fun getHoldingBackgroundImage(type: String?): String {
         "Retail Holdings" -> "https://plus.unsplash.com/premium_photo-1683141052679-942eb9e77760?q=80&w=1170&auto=format&fit=crop"
         "Tech Holdings" -> "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?q=80&w=1170&auto=format&fit=crop"
         "Finance Holdings" -> "https://plus.unsplash.com/premium_photo-1681487769650-a0c3fbaed85a?q=80&w=1255&auto=format&fit=crop"
-        "Daycare Holdings" -> "https://images.unsplash.com/photo-1511632765486-a01980e01a18?q=80&w=1170&auto=format&fit=crop"
+        "Healthcare & Insurance Holdings", "Healthcare Holdings", "Daycare Holdings" -> "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1170&auto=format&fit=crop"
         "Transportation Holdings" -> "https://images.unsplash.com/photo-1591768793355-74d04bb6608f?q=80&w=1172&auto=format&fit=crop"
         else -> "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab"
     }

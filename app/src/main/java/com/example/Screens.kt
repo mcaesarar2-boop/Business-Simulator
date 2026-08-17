@@ -897,7 +897,7 @@ fun BusinessDashboardScreen(navController: NavHostController, viewModel: GameVie
         var mergerType by remember { mutableStateOf("Holding Company") }
         val types = listOf(
             "Entertainment Holdings", "F&B Holdings", "Property Holdings", "Retail Holdings", 
-            "Tech Holdings", "Finance Holdings", "Daycare Holdings", "Transportation Holdings"
+            "Tech Holdings", "Finance Holdings", "Healthcare & Insurance Holdings", "Transportation Holdings"
         )
         var typeExpanded by remember { mutableStateOf(false) }
         
@@ -1859,11 +1859,24 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
 
             com.example.ui.HealthcareDashboard(
                 units = ownedData.healthcareSubsidiaries,
+                activeEpidemic = ownedData.activeEpidemicEvent,
                 playerCash = playerState.cash,
                 useShortFormat = useShortFormat,
                 constructionVendors = constructionVendors,
                 onBuildUnit = { name, type, vendorId, level ->
                     viewModel.buildHealthcareUnit(instanceId, name, type, vendorId, level)
+                },
+                onUpgradeDepartment = { unitId, dept ->
+                    viewModel.upgradeMedicalDepartment(instanceId, unitId, dept)
+                },
+                onUpdatePremium = { unitId, prem ->
+                    viewModel.updateInsurancePremium(instanceId, unitId, prem)
+                },
+                onInjectCash = { unitId, amt ->
+                    viewModel.injectHealthcareUnitCash(instanceId, unitId, amt)
+                },
+                onUpgradeTier = { unitId ->
+                    viewModel.upgradeHealthcareTier(instanceId, unitId)
                 }
             )
             Spacer(modifier = Modifier.height(16.dp))

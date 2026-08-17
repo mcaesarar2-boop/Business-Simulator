@@ -3351,85 +3351,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 
                 businessInternalRevenue += totalStreamingIncome
                 
-                var claimModifiers = 0.0
+                // Healthcare Monthly Simulation
                 var totalDividendsFromHealthcare = 0L
-                val updatedHealthcareUnits = owned.healthcareSubsidiaries.map { unit ->
-                    var currentUnit = unit
-                    var unitRev = 0.0
-                    
-                    if (currentUnit.isUpgrading) {
-                        val newDelay = currentUnit.upgradeDelayMonths - 1
-                        if (newDelay <= 0) {
-                            currentUnit = currentUnit.copy(isUpgrading = false, upgradeDelayMonths = 0)
-                        } else {
-                            currentUnit = currentUnit.copy(upgradeDelayMonths = newDelay)
-                        }
-                    }
-                    
-                    if (!currentUnit.isUpgrading) {
-                        if (currentUnit.type == "HOSPITAL") {
-                            val newPatients = (100 * currentUnit.level).toLong()
-                            currentUnit = currentUnit.copy(members = newPatients)
-                            unitRev = newPatients * 5000.0 // Approx $5k per patient / mo
-                            
-                            extraV += (currentUnit.level * 2_000_000L)
-                        } else if (currentUnit.type == "INSURANCE") {
-                            val premiumMultiplier = when (currentUnit.tierCategory) {
-                                "PREMIUM" -> 1.5
-                                "ELITE" -> 2.5
-                                else -> 1.0
-                            }
-                            val growth = (100..500).random() * currentUnit.level
-                            currentUnit = currentUnit.copy(members = currentUnit.members + growth)
-                            unitRev = currentUnit.members * 50.0 * premiumMultiplier
-                            
-                            val riskProb = when (currentUnit.tierCategory) {
-                                "PREMIUM" -> 0.08
-                                "ELITE" -> 0.12
-                                else -> 0.05
-                            }
-                            
-                            if (kotlin.random.Random.nextDouble() < riskProb) {
-                                val membersMod = currentUnit.members / 1000.0
-                                val claimDeduction = (1_000_000L..10_000_000L).random().toDouble() * maxOf(1.0, membersMod) * premiumMultiplier
-                                if (currentUnit.unitCash >= claimDeduction) {
-                                    currentUnit = currentUnit.copy(unitCash = currentUnit.unitCash - claimDeduction)
-                                } else {
-                                    val remainingClaim = claimDeduction - currentUnit.unitCash
-                                    currentUnit = currentUnit.copy(unitCash = 0.0)
-                                    claimModifiers += remainingClaim
-                                }
-                            }
-                            
-                            extraV += (currentUnit.members * 1_000L) // $1k per member valuation
-                        } else if (currentUnit.type == "CLINIC") {
-                            val newPatients = (50 * currentUnit.level).toLong()
-                            currentUnit = currentUnit.copy(members = newPatients)
-                            unitRev = newPatients * 2000.0
-                            extraV += (currentUnit.level * 250_000L)
-                        }
-                        
-                        val maintenance = unitRev * 0.3
-                        val netUnitProfit = unitRev - maintenance
-                        if (netUnitProfit > 0) {
-                            val dividend = netUnitProfit * 0.2
-                            totalDividendsFromHealthcare += dividend.toLong()
-                            currentUnit = currentUnit.copy(unitCash = currentUnit.unitCash + (netUnitProfit - dividend))
-                        } else {
-                            currentUnit = currentUnit.copy(unitCash = maxOf(0.0, currentUnit.unitCash + netUnitProfit))
-                        }
-                        
-                        currentUnit = currentUnit.copy(monthlyRevenue = unitRev)
-                    }
-                    currentUnit
+                var healthcareUpdatedBiz = owned
+                if (owned.catalogId == "healthcare" || owned.healthcareSubsidiaries.isNotEmpty()) {
+                    val (hBiz, hDiv, hExtraV) = processHealthcareMonthly(owned)
+                    healthcareUpdatedBiz = hBiz
+                    totalDividendsFromHealthcare = hDiv
+                    extraV += hExtraV
                 }
+                val updatedHealthcareUnits = healthcareUpdatedBiz.healthcareSubsidiaries
+                val currentEpidemicEvent = healthcareUpdatedBiz.activeEpidemicEvent
                 
                 businessInternalRevenue += totalDividendsFromHealthcare
                 
                 val netProfit = businessInternalRevenue - businessInternalExpenses
                 val (newCompanyCash, dividendToGlobal) = processDecentralizedCashFlow(netProfit, owned.companyCash)
                 
-                var finalCompanyCash = newCompanyCash - claimModifiers
+                var finalCompanyCash = newCompanyCash
                 if (finalCompanyCash < 0) finalCompanyCash = 0.0
                 val updatedTenders = owned.activeTenders.map { tender ->
                     if (!tender.isFinished && tender.remainingMonths > 0) {
@@ -3495,7 +3434,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     newClientEventRequests = generateEventRequestsForBusiness(owned)
                 }
                 
-                owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = finalActiveTenders, constructionData = finalConstructionData, subsidiaries = updatedSubsidiaries, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
+                owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = finalActiveTenders, constructionData = finalConstructionData, subsidiaries = updatedSubsidiaries, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, activeEpidemicEvent = currentEpidemicEvent, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
             } catch (e: Exception) {
                 e.printStackTrace()
                 owned
@@ -3804,85 +3743,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         
                         businessInternalRevenue += totalStreamingIncome
                         
-                        var claimModifiers = 0.0
+                        // Healthcare Monthly Simulation for Subsidiary
                         var totalDividendsFromHealthcare = 0L
-                        val updatedHealthcareUnits = owned.healthcareSubsidiaries.map { unit ->
-                            var currentUnit = unit
-                            var unitRev = 0.0
-                            
-                            if (currentUnit.isUpgrading) {
-                                val newDelay = currentUnit.upgradeDelayMonths - 1
-                                if (newDelay <= 0) {
-                                    currentUnit = currentUnit.copy(isUpgrading = false, upgradeDelayMonths = 0)
-                                } else {
-                                    currentUnit = currentUnit.copy(upgradeDelayMonths = newDelay)
-                                }
-                            }
-                            
-                            if (!currentUnit.isUpgrading) {
-                                if (currentUnit.type == "HOSPITAL") {
-                                    val newPatients = (100 * currentUnit.level).toLong()
-                                    currentUnit = currentUnit.copy(members = newPatients)
-                                    unitRev = newPatients * 5000.0 // Approx $5k per patient / mo
-                                    
-                                    extraV += (currentUnit.level * 2_000_000L)
-                                } else if (currentUnit.type == "INSURANCE") {
-                                    val premiumMultiplier = when (currentUnit.tierCategory) {
-                                        "PREMIUM" -> 1.5
-                                        "ELITE" -> 2.5
-                                        else -> 1.0
-                                    }
-                                    val growth = (100..500).random() * currentUnit.level
-                                    currentUnit = currentUnit.copy(members = currentUnit.members + growth)
-                                    unitRev = currentUnit.members * 50.0 * premiumMultiplier
-                                    
-                                    val riskProb = when (currentUnit.tierCategory) {
-                                        "PREMIUM" -> 0.08
-                                        "ELITE" -> 0.12
-                                        else -> 0.05
-                                    }
-                                    
-                                    if (kotlin.random.Random.nextDouble() < riskProb) {
-                                        val membersMod = currentUnit.members / 1000.0
-                                        val claimDeduction = (1_000_000L..10_000_000L).random().toDouble() * maxOf(1.0, membersMod) * premiumMultiplier
-                                        if (currentUnit.unitCash >= claimDeduction) {
-                                            currentUnit = currentUnit.copy(unitCash = currentUnit.unitCash - claimDeduction)
-                                        } else {
-                                            val remainingClaim = claimDeduction - currentUnit.unitCash
-                                            currentUnit = currentUnit.copy(unitCash = 0.0)
-                                            claimModifiers += remainingClaim
-                                        }
-                                    }
-                                    
-                                    extraV += (currentUnit.members * 1_000L) // $1k per member valuation
-                                } else if (currentUnit.type == "CLINIC") {
-                                    val newPatients = (50 * currentUnit.level).toLong()
-                                    currentUnit = currentUnit.copy(members = newPatients)
-                                    unitRev = newPatients * 2000.0
-                                    extraV += (currentUnit.level * 250_000L)
-                                }
-                                
-                                val maintenance = unitRev * 0.3
-                                val netUnitProfit = unitRev - maintenance
-                                if (netUnitProfit > 0) {
-                                    val dividend = netUnitProfit * 0.2
-                                    totalDividendsFromHealthcare += dividend.toLong()
-                                    currentUnit = currentUnit.copy(unitCash = currentUnit.unitCash + (netUnitProfit - dividend))
-                                } else {
-                                    currentUnit = currentUnit.copy(unitCash = maxOf(0.0, currentUnit.unitCash + netUnitProfit))
-                                }
-                                
-                                currentUnit = currentUnit.copy(monthlyRevenue = unitRev)
-                            }
-                            currentUnit
+                        var healthcareUpdatedBiz = owned
+                        if (owned.catalogId == "healthcare" || owned.healthcareSubsidiaries.isNotEmpty()) {
+                            val (hBiz, hDiv, hExtraV) = processHealthcareMonthly(owned)
+                            healthcareUpdatedBiz = hBiz
+                            totalDividendsFromHealthcare = hDiv
+                            extraV += hExtraV
                         }
+                        val updatedHealthcareUnits = healthcareUpdatedBiz.healthcareSubsidiaries
+                        val currentEpidemicEvent = healthcareUpdatedBiz.activeEpidemicEvent
                         
                         businessInternalRevenue += totalDividendsFromHealthcare
                         
                         val netProfit = businessInternalRevenue - businessInternalExpenses
                         val (newCompanyCash, dividendToHoldingParent) = processDecentralizedCashFlow(netProfit, owned.companyCash)
                         
-                        var finalCompanyCash = newCompanyCash - claimModifiers
+                        var finalCompanyCash = newCompanyCash
                         if (finalCompanyCash < 0) finalCompanyCash = 0.0
                         val updatedTenders = owned.activeTenders.map { tender ->
                             if (!tender.isFinished && tender.remainingMonths > 0) {
@@ -3948,7 +3826,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             newClientEventRequests = generateEventRequestsForBusiness(owned)
                         }
                         
-                        owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = finalActiveTenders, constructionData = finalConstructionData, subsidiaries = updatedDeepSubs, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
+                        owned.copy(projectHistory = updatedHistory, extraValuation = extraV, companyCash = finalCompanyCash, activeTenders = finalActiveTenders, constructionData = finalConstructionData, subsidiaries = updatedDeepSubs, isUpgrading = isUpgradingNow, upgradeDelayMonths = upgradeDelayNow, availableClientProjects = newClientProjects, healthcareSubsidiaries = updatedHealthcareUnits, activeEpidemicEvent = currentEpidemicEvent, clientEventRequests = newClientEventRequests, themeParkBranches = updatedThemeParkBranches, activeThemeParkBiddings = updatedThemeParkBiddings, hospitalityProperties = updatedHospitalityProperties)
                     } catch (e: Exception) {
                         e.printStackTrace()
                         owned
@@ -8033,6 +7911,238 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun processHealthcareMonthly(owned: com.example.data.OwnedBusiness): Triple<com.example.data.OwnedBusiness, Long, Long> {
+        // 1. Epidemic Event Progression & Random Trigger
+        var currentEpidemic = owned.activeEpidemicEvent
+        if (currentEpidemic != null) {
+            val remain = currentEpidemic.remainingMonths - 1
+            if (remain <= 0) {
+                currentEpidemic = null
+            } else {
+                currentEpidemic = currentEpidemic.copy(remainingMonths = remain)
+            }
+        } else {
+            // 10% RNG chance if healthcare units exist
+            if (owned.healthcareSubsidiaries.isNotEmpty() && kotlin.random.Random.nextDouble() < 0.10) {
+                val epidemicList = listOf(
+                    com.example.data.HealthcareEpidemicEvent(
+                        title = "Musim Demam Berdarah (Dengue Outbreak)",
+                        description = "Penyebaran nyamuk Aedes aegypti menyebabkan lonjakan kasus DBD mendadak di seluruh kota!",
+                        severityMultiplier = 3.0,
+                        durationMonths = 3,
+                        remainingMonths = 3,
+                        icon = "🦟",
+                        effectDescription = "Klaim Asuransi Melonjak +300% & Kapasitas Kasur RS Penuh!"
+                    ),
+                    com.example.data.HealthcareEpidemicEvent(
+                        title = "Wabah Virus Mutasi Baru (Influenza Strain)",
+                        description = "Strain virus saluran pernapasan baru menyebar masif. Pasien IGD dan klaim asuransi meledak!",
+                        severityMultiplier = 3.5,
+                        durationMonths = 3,
+                        remainingMonths = 3,
+                        icon = "🦠",
+                        effectDescription = "Klaim Asuransi Melonjak +350% & BOR RS Mencapai 100%!"
+                    ),
+                    com.example.data.HealthcareEpidemicEvent(
+                        title = "Gelombang Polusi Udara Ekstrem (ISPA)",
+                        description = "Kualitas udara memburuk drastis, memicu lonjakan kasus pernapasan dan rawat inap poli spesialis.",
+                        severityMultiplier = 2.5,
+                        durationMonths = 2,
+                        remainingMonths = 2,
+                        icon = "🌫️",
+                        effectDescription = "Klaim Asuransi +250% & Poli Spesialis Paru Penuh!"
+                    ),
+                    com.example.data.HealthcareEpidemicEvent(
+                        title = "Ledakan Keracunan Makanan Massal",
+                        description = "Kontaminasi pasokan bahan makanan pesta kota menyebabkan ribuan warga dilarikan ke IGD.",
+                        severityMultiplier = 2.8,
+                        durationMonths = 2,
+                        remainingMonths = 2,
+                        icon = "⚠️",
+                        effectDescription = "IGD Darurat Membludak & Klaim Asuransi Naik +280%!"
+                    )
+                )
+                currentEpidemic = epidemicList.random()
+            }
+        }
+
+        val epidemicMultiplier = currentEpidemic?.severityMultiplier ?: 1.0
+
+        // 2. Handle upgrade delays
+        val readyUnits = owned.healthcareSubsidiaries.map { u ->
+            var unit = u
+            if (unit.isUpgrading) {
+                val delay = unit.upgradeDelayMonths - 1
+                if (delay <= 0) {
+                    unit = unit.copy(isUpgrading = false, upgradeDelayMonths = 0)
+                } else {
+                    unit = unit.copy(upgradeDelayMonths = delay)
+                }
+            }
+            unit
+        }
+
+        val hospitals = readyUnits.filter { (it.type == "HOSPITAL" || it.type == "CLINIC") && !it.isUpgrading }
+        val insurances = readyUnits.filter { it.type == "INSURANCE" && !it.isUpgrading }
+
+        // Track hospital available beds and in-network assignments
+        class HospCapacity(
+            val id: String,
+            val totalBeds: Int,
+            var inNetworkPatients: Int = 0,
+            var inNetworkRevenueBonus: Double = 0.0
+        )
+
+        val hospCapacities = hospitals.associate { h ->
+            val baseBeds = if (h.type == "HOSPITAL") (100 + (h.level - 1) * 20) else (30 + (h.level - 1) * 10)
+            val deptBeds = (h.igdLevel * 40) + (h.specialistLevel * 25)
+            val beds = maxOf(h.totalBeds, baseBeds + deptBeds)
+            h.id to HospCapacity(h.id, beds)
+        }.toMutableMap()
+
+        // 3. Process Insurance Units (Payer)
+        val updatedInsuranceMap = mutableMapOf<String, com.example.data.HealthcareUnit>()
+
+        for (ins in insurances) {
+            val premium = ins.monthlyPremium.coerceIn(20.0, 500.0)
+            val baseGrowth = when {
+                premium <= 30.0 -> (1500..3000).random()
+                premium <= 50.0 -> (800..1800).random()
+                premium <= 80.0 -> (300..900).random()
+                premium <= 120.0 -> (100..400).random()
+                premium <= 200.0 -> (20..150).random()
+                else -> (-50..50).random()
+            }
+            val tierMultiplier = when (ins.tierCategory) {
+                "PREMIUM" -> 1.5
+                "ELITE" -> 2.5
+                else -> 1.0
+            }
+            val newMembers = maxOf(100L, ins.members + (baseGrowth * tierMultiplier).toLong())
+            val premiumRevenue = newMembers * premium
+
+            // Claim Attack
+            val baseSickRate = kotlin.random.Random.nextDouble(0.04, 0.07)
+            val effectiveSickRate = (baseSickRate * epidemicMultiplier).coerceAtMost(0.45)
+            val sickPatients = maxOf(1L, (newMembers * effectiveSickRate).toLong())
+            val avgClaimCost = (2500.0 * tierMultiplier)
+            val totalClaimsCost = sickPatients * avgClaimCost
+
+            var inNetCount = 0L
+            var outNetCount = 0L
+            var inNetAmount = 0.0
+            var outNetAmount = 0.0
+
+            // Route sick patients into available In-Network Hospital beds
+            var remainingSick = sickPatients
+            for ((_, cap) in hospCapacities) {
+                if (remainingSick <= 0) break
+                val freeBeds = cap.totalBeds - cap.inNetworkPatients
+                if (freeBeds > 0) {
+                    val take = minOf(remainingSick, freeBeds.toLong()).toInt()
+                    cap.inNetworkPatients += take
+                    val payoutTransfer = take * avgClaimCost
+                    cap.inNetworkRevenueBonus += payoutTransfer
+
+                    inNetCount += take
+                    inNetAmount += payoutTransfer
+                    remainingSick -= take
+                }
+            }
+
+            outNetCount = remainingSick
+            outNetAmount = outNetCount * avgClaimCost
+
+            val insOpEx = premiumRevenue * 0.10
+            val netInsCashFlow = premiumRevenue - insOpEx - totalClaimsCost
+            val newInsCash = ins.unitCash + netInsCashFlow
+
+            val lossRatio = (totalClaimsCost / maxOf(1.0, premiumRevenue)) * 100.0
+            val synergyRate = (inNetCount.toDouble() / maxOf(1L, sickPatients)) * 100.0
+
+            updatedInsuranceMap[ins.id] = ins.copy(
+                members = newMembers,
+                monthlyRevenue = premiumRevenue,
+                unitCash = newInsCash,
+                lastMonthClaimsPaid = totalClaimsCost,
+                lastMonthClaimsCount = sickPatients,
+                inNetworkClaimsCount = inNetCount,
+                outNetworkClaimsCount = outNetCount,
+                inNetworkClaimsAmount = inNetAmount,
+                outNetworkClaimsAmount = outNetAmount,
+                lossRatio = lossRatio,
+                synergyRate = synergyRate
+            )
+        }
+
+        // 4. Process Hospital / Clinic Units (Provider)
+        var totalDividendsFromHealthcare = 0L
+        var extraV = 0L
+        val updatedHospitalMap = mutableMapOf<String, com.example.data.HealthcareUnit>()
+
+        for (hosp in hospitals) {
+            val cap = hospCapacities[hosp.id]
+            val totalBeds = cap?.totalBeds ?: maxOf(hosp.totalBeds, (hosp.igdLevel * 40) + (hosp.specialistLevel * 25) + 100)
+            val inNetPatients = cap?.inNetworkPatients ?: 0
+            val inNetClaimRevenue = cap?.inNetworkRevenueBonus ?: 0.0
+
+            val igdOrganic = (hosp.igdLevel * (30..50).random() * (if (currentEpidemic != null) 2.2 else 1.0)).toInt()
+            val specOrganic = (hosp.specialistLevel * (15..30).random()).toInt()
+
+            val totalIncoming = inNetPatients + igdOrganic + specOrganic
+            val admittedPatients = minOf(totalIncoming, totalBeds)
+            val rejectedPatients = maxOf(0, totalIncoming - totalBeds)
+
+            val bor = (admittedPatients.toDouble() / maxOf(1, totalBeds)) * 100.0
+
+            val igdRev = (minOf(igdOrganic + inNetPatients, admittedPatients)) * 1500.0 * (1.0 + (hosp.igdLevel - 1) * 0.15)
+            val specRev = minOf(specOrganic, maxOf(0, admittedPatients - igdOrganic - inNetPatients)) * 4500.0 * (1.0 + (hosp.specialistLevel - 1) * 0.30)
+            val pharmaRev = (admittedPatients * 600.0 * (1.0 + (hosp.pharmacyLevel - 1) * 0.25)) + (hosp.pharmacyLevel * 8000.0)
+
+            val totalHospRev = igdRev + specRev + pharmaRev + inNetClaimRevenue
+            val hospExpenses = (totalBeds * 200.0) + (hosp.igdLevel * 8000.0) + (hosp.specialistLevel * 20000.0) + (hosp.pharmacyLevel * 4000.0)
+
+            val netHospProfit = totalHospRev - hospExpenses
+            var hospCash = hosp.unitCash
+
+            if (netHospProfit > 0) {
+                val dividend = netHospProfit * 0.20
+                totalDividendsFromHealthcare += dividend.toLong()
+                hospCash += (netHospProfit - dividend)
+            } else {
+                hospCash += netHospProfit
+            }
+
+            extraV += (totalBeds * 15_000L + (hosp.igdLevel + hosp.specialistLevel + hosp.pharmacyLevel) * 400_000L)
+
+            updatedHospitalMap[hosp.id] = hosp.copy(
+                members = admittedPatients.toLong(),
+                totalBeds = totalBeds,
+                currentOccupiedBeds = admittedPatients,
+                bor = bor,
+                rejectedPatientsLastMonth = rejectedPatients,
+                monthlyRevenue = totalHospRev,
+                unitCash = hospCash
+            )
+        }
+
+        for ((_, ins) in updatedInsuranceMap) {
+            extraV += (ins.members * 1200L)
+        }
+
+        val allFinalUnits = readyUnits.map { original ->
+            updatedInsuranceMap[original.id] ?: updatedHospitalMap[original.id] ?: original
+        }
+
+        val updatedBusiness = owned.copy(
+            healthcareSubsidiaries = allFinalUnits,
+            activeEpidemicEvent = currentEpidemic,
+            extraValuation = owned.extraValuation + extraV
+        )
+
+        return Triple(updatedBusiness, totalDividendsFromHealthcare, extraV)
+    }
+
     fun calculateAviationExpenses(owned: com.example.data.OwnedBusiness): Long {
         return owned.calculateTotalExpenses()
     }
@@ -10890,6 +11000,149 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         _playerState.value = state.copy(cash = state.cash - cost.toLong(), ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
         saveState(_playerState.value)
+        return null
+    }
+
+    fun upgradeMedicalDepartment(instanceId: String, unitId: String, department: String): String? {
+        val state = _playerState.value
+        var errorMsg: String? = null
+        
+        val modified = updateEoBusiness(instanceId) { biz ->
+            val updatedUnits = biz.healthcareSubsidiaries.map { unit ->
+                if (unit.id == unitId) {
+                    val cost = when (department) {
+                        "IGD" -> unit.igdLevel * 80_000.0
+                        "SPECIALIST" -> unit.specialistLevel * 150_000.0
+                        "PHARMACY" -> unit.pharmacyLevel * 50_000.0
+                        "BEDS" -> 100_000.0
+                        else -> 100_000.0
+                    }
+                    if (unit.unitCash < cost) {
+                        errorMsg = "Kas internal unit tidak mencukupi untuk upgrade departemen (${cost.toLong()})."
+                        unit
+                    } else {
+                        val newCash = unit.unitCash - cost
+                        when (department) {
+                            "IGD" -> unit.copy(
+                                igdLevel = unit.igdLevel + 1,
+                                totalBeds = unit.totalBeds + 40,
+                                unitCash = newCash
+                            )
+                            "SPECIALIST" -> unit.copy(
+                                specialistLevel = unit.specialistLevel + 1,
+                                totalBeds = unit.totalBeds + 25,
+                                unitCash = newCash
+                            )
+                            "PHARMACY" -> unit.copy(
+                                pharmacyLevel = unit.pharmacyLevel + 1,
+                                unitCash = newCash
+                            )
+                            "BEDS" -> unit.copy(
+                                totalBeds = unit.totalBeds + 50,
+                                unitCash = newCash
+                            )
+                            else -> unit
+                        }
+                    }
+                } else unit
+            }
+            biz.copy(healthcareSubsidiaries = updatedUnits)
+        }
+        
+        if (errorMsg != null) return errorMsg
+        if (!modified) return "Instansi bisnis tidak ditemukan."
+        return null
+    }
+
+    fun updateInsurancePremium(instanceId: String, unitId: String, premium: Double): Boolean {
+        val clamped = premium.coerceIn(20.0, 500.0)
+        return updateEoBusiness(instanceId) { biz ->
+            val updatedUnits = biz.healthcareSubsidiaries.map { unit ->
+                if (unit.id == unitId) unit.copy(monthlyPremium = clamped) else unit
+            }
+            biz.copy(healthcareSubsidiaries = updatedUnits)
+        }
+    }
+
+    fun injectHealthcareUnitCash(instanceId: String, unitId: String, amount: Long): String? {
+        val state = _playerState.value
+        if (state.cash < amount) return "Dana kas pribadi tidak mencukupi."
+        if (amount <= 0) return "Nominal injeksi tidak valid."
+
+        var found = false
+        val newBusinesses = state.ownedBusinesses.map { biz ->
+            if (biz.instanceId == instanceId) {
+                val newUnits = biz.healthcareSubsidiaries.map { u ->
+                    if (u.id == unitId) {
+                        found = true
+                        u.copy(unitCash = u.unitCash + amount, reserveFund = u.reserveFund + amount)
+                    } else u
+                }
+                biz.copy(healthcareSubsidiaries = newUnits)
+            } else biz
+        }
+
+        val newHoldings = state.holdingCompanies.map { h ->
+            val newSubs = h.subsidiaries.map { s ->
+                if (s.instanceId == instanceId) {
+                    val newUnits = s.healthcareSubsidiaries.map { u ->
+                        if (u.id == unitId) {
+                            found = true
+                            u.copy(unitCash = u.unitCash + amount, reserveFund = u.reserveFund + amount)
+                        } else u
+                    }
+                    s.copy(healthcareSubsidiaries = newUnits)
+                } else s
+            }
+            h.copy(subsidiaries = newSubs)
+        }
+
+        if (!found) return "Unit medis tidak ditemukan."
+
+        _playerState.value = state.copy(cash = state.cash - amount, ownedBusinesses = newBusinesses, holdingCompanies = newHoldings)
+        saveState(_playerState.value)
+        return null
+    }
+
+    fun upgradeHealthcareTier(instanceId: String, unitId: String): String? {
+        val state = _playerState.value
+        var errorMsg: String? = null
+        
+        val modified = updateEoBusiness(instanceId) { biz ->
+            val updatedUnits = biz.healthcareSubsidiaries.map { unit ->
+                if (unit.id == unitId) {
+                    if (unit.type == "INSURANCE") {
+                        val (nextTier, cost) = when (unit.tierCategory) {
+                            "BASIC" -> "PREMIUM" to 1_500_000.0
+                            "PREMIUM" -> "ELITE" to 5_000_000.0
+                            else -> null to 0.0
+                        }
+                        if (nextTier == null) {
+                            errorMsg = "Asuransi sudah mencapai tier tertinggi (ELITE)."
+                            unit
+                        } else if (unit.unitCash < cost) {
+                            errorMsg = "Kas internal unit tidak mencukupi (${cost.toLong()})."
+                            unit
+                        } else {
+                            unit.copy(tierCategory = nextTier, unitCash = unit.unitCash - cost)
+                        }
+                    } else {
+                        // General hospital level upgrade
+                        val cost = 100_000.0 * unit.level
+                        if (unit.unitCash < cost) {
+                            errorMsg = "Kas internal unit tidak cukup."
+                            unit
+                        } else {
+                            unit.copy(level = unit.level + 1, totalBeds = unit.totalBeds + 50, unitCash = unit.unitCash - cost)
+                        }
+                    }
+                } else unit
+            }
+            biz.copy(healthcareSubsidiaries = updatedUnits)
+        }
+
+        if (errorMsg != null) return errorMsg
+        if (!modified) return "Instansi bisnis tidak ditemukan."
         return null
     }
 

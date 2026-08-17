@@ -149,7 +149,7 @@ val businessCatalog: List<BusinessCatalogItem> = listOf(
             )
         ),
         BusinessCatalogItem(
-            id = "healthcare", name = "Healthcare & Protection Group", category = BusinessCategory.CORPORATION,
+            id = "healthcare", name = "Healthcare & Insurance Holding", category = BusinessCategory.CORPORATION,
             imageUrl = "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=400&q=80",
             costToBuy = 2000000, monthlyRevenue = 0, monthlyMaintenanceCost = 150000,
             upgrades = emptyList()
