@@ -9,6 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -34,7 +37,7 @@ import androidx.navigation.NavController
 import com.example.data.*
 import com.example.viewmodel.GameViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TvStationDashboardScreen(
     ownedBusiness: OwnedBusiness,
@@ -73,7 +76,7 @@ fun TvStationDashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
@@ -96,16 +99,23 @@ fun TvStationDashboardScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            // FlowRow to wrap badges gracefully with generous padding and whitespace-nowrap
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.primaryContainer,
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
                                         text = "LVL ${ownedBusiness.level}",
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
                                 }
@@ -115,9 +125,10 @@ fun TvStationDashboardScreen(
                                 ) {
                                     Text(
                                         text = "⭐ Reputasi: ${String.format("%.1f", tvData.reputation)}",
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
                                         color = Color(0xFFFFB300)
                                     )
                                 }
@@ -130,14 +141,15 @@ fun TvStationDashboardScreen(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             horizontalAlignment = Alignment.End
                         ) {
-                            Text("Kas Internal TV", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Kas Internal TV", style = MaterialTheme.typography.labelSmall, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 formatMoney(ownedBusiness.companyCash.toLong(), useShortFormat),
                                 fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
                                 color = Color(0xFF4CAF50)
                             )
                         }
@@ -1557,6 +1569,7 @@ fun TvTransmissionCard(
 // -------------------------------------------------------------
 // MODAL TAMBAH PROGRAM TV (TUGAS 4 OVERHAUL)
 // -------------------------------------------------------------
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddTvProgramModal(
     ownedBusiness: OwnedBusiness,
@@ -1653,16 +1666,28 @@ fun AddTvProgramModal(
                         // 2. Pilih Genre / Format
                         item {
                             Text("Pilih Format / Genre:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                items(genres) { (genre, _) ->
+                            Spacer(modifier = Modifier.height(6.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                genres.forEach { (genre, _) ->
                                     FilterChip(
                                         selected = selectedGenre == genre,
                                         onClick = {
                                             selectedGenre = genre
                                             selectedStudioId = null
                                         },
-                                        label = { Text(genre, fontSize = 11.sp) }
+                                        label = {
+                                            Text(
+                                                genre,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (selectedGenre == genre) FontWeight.Bold else FontWeight.Normal,
+                                                maxLines = 1
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
                                     )
                                 }
                             }
@@ -1697,46 +1722,76 @@ fun AddTvProgramModal(
                             }
                         }
 
-                        // 3. Jam Tayang (Tetris Grid)
+                        // 3. Jam Tayang (Tetris Grid - 4 Columns Responsive)
                         item {
-                            Text("Pilih Jam Tayang (Maks 4 Slot / 2 Jam):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Pilih Jam Tayang (Maks 4 Slot / 2 Jam):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text("${selectedSlots.size}/4 Dipilih", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
                             val allTimeSlots = (0..23).flatMap { h ->
                                 val hStr = h.toString().padStart(2, '0')
                                 listOf("$hStr:00", "$hStr:30")
                             }
 
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                items(allTimeSlots) { slot ->
-                                    val isPrime = slot.startsWith("18") || slot.startsWith("19") || slot.startsWith("20") || slot.startsWith("21")
-                                    val isSelected = selectedSlots.contains(slot)
-                                    val isTaken = bookedSlots.contains(slot)
+                            // 4-column structured grid without horizontal scrolling
+                            val chunkedSlots = allTimeSlots.chunked(4)
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                chunkedSlots.forEach { rowSlots ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        rowSlots.forEach { slot ->
+                                            val isPrime = slot.startsWith("18") || slot.startsWith("19") || slot.startsWith("20") || slot.startsWith("21")
+                                            val isSelected = selectedSlots.contains(slot)
+                                            val isTaken = bookedSlots.contains(slot)
 
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = when {
-                                            isSelected -> MaterialTheme.colorScheme.primary
-                                            isTaken -> MaterialTheme.colorScheme.surfaceVariant
-                                            isPrime -> Color(0xFFFFB300).copy(alpha = 0.25f)
-                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                        },
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .clickable {
-                                                if (isSelected) {
-                                                    selectedSlots = selectedSlots - slot
-                                                } else if (selectedSlots.size < 4) {
-                                                    selectedSlots = selectedSlots + slot
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = when {
+                                                    isSelected -> MaterialTheme.colorScheme.primary
+                                                    isTaken -> MaterialTheme.colorScheme.surfaceVariant
+                                                    isPrime -> Color(0xFFFFB300).copy(alpha = 0.25f)
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                                },
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .clickable(enabled = !isTaken) {
+                                                        if (isSelected) {
+                                                            selectedSlots = selectedSlots - slot
+                                                        } else if (selectedSlots.size < 4) {
+                                                            selectedSlots = selectedSlots + slot
+                                                        }
+                                                    }
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = slot,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (isSelected || isPrime) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isSelected) Color.White else if (isTaken) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                                                        textAlign = TextAlign.Center
+                                                    )
                                                 }
                                             }
-                                    ) {
-                                        Text(
-                                            text = slot,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                            fontSize = 10.sp,
-                                            fontWeight = if (isSelected || isPrime) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) Color.White else if (isTaken) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface
-                                        )
+                                        }
+                                        // Fill remaining slots if row has less than 4
+                                        repeat(4 - rowSlots.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
                                     }
                                 }
                             }
@@ -2008,37 +2063,71 @@ fun EditTvScheduleDialog(
         onDismissRequest = onDismiss,
         title = { Text("Ubah Jam Tayang '${program.title}'") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Pilih hingga 4 slot jam tayang (2 jam):", fontSize = 12.sp)
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Pilih hingga 4 slot jam tayang (2 jam):", fontSize = 12.sp)
+                    Text("${selectedSlots.size}/4 Dipilih", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
 
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(allTimeSlots) { slot ->
-                        val isSelected = selectedSlots.contains(slot)
-                        val isBookedByOther = allBookedSlots.contains(slot) && !program.timeSlots.contains(slot)
+                val chunkedSlots = allTimeSlots.chunked(4)
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(chunkedSlots) { rowSlots ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            rowSlots.forEach { slot ->
+                                val isSelected = selectedSlots.contains(slot)
+                                val isBookedByOther = allBookedSlots.contains(slot) && !program.timeSlots.contains(slot)
+                                val isPrime = slot.startsWith("18") || slot.startsWith("19") || slot.startsWith("20") || slot.startsWith("21")
 
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = when {
-                                isSelected -> MaterialTheme.colorScheme.primary
-                                isBookedByOther -> MaterialTheme.colorScheme.surfaceVariant
-                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                            },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable(enabled = !isBookedByOther) {
-                                    if (isSelected) {
-                                        selectedSlots = selectedSlots - slot
-                                    } else if (selectedSlots.size < 4) {
-                                        selectedSlots = selectedSlots + slot
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = when {
+                                        isSelected -> MaterialTheme.colorScheme.primary
+                                        isBookedByOther -> MaterialTheme.colorScheme.surfaceVariant
+                                        isPrime -> Color(0xFFFFB300).copy(alpha = 0.25f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable(enabled = !isBookedByOther) {
+                                            if (isSelected) {
+                                                selectedSlots = selectedSlots - slot
+                                            } else if (selectedSlots.size < 4) {
+                                                selectedSlots = selectedSlots + slot
+                                            }
+                                        }
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = slot,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected || isPrime) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Color.White else if (isBookedByOther) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                                            textAlign = TextAlign.Center
+                                        )
                                     }
                                 }
-                        ) {
-                            Text(
-                                text = slot,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                fontSize = 11.sp,
-                                color = if (isSelected) Color.White else if (isBookedByOther) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface
-                            )
+                            }
+                            repeat(4 - rowSlots.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -2126,34 +2215,40 @@ fun TvQuickStaffModal(
                         border = BorderStroke(1.dp, if (isHired) Color(0xFF16A34A) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(role.displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(role.displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 Text("Gaji: ${formatMoney(role.monthlySalary, useShortFormat)}/bln", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
                                 Text("Buka: ${role.unlockedGenres.joinToString(", ")}", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             if (isHired) {
                                 OutlinedButton(
                                     onClick = { onFireDirector(role) },
-                                    modifier = Modifier.height(32.dp),
-                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier
+                                        .widthIn(min = 80.dp)
+                                        .height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp)
                                 ) {
-                                    Text("Pecat", fontSize = 10.sp)
+                                    Text("Pecat", fontSize = 11.sp, maxLines = 1)
                                 }
                             } else {
                                 Button(
                                     onClick = { onHireDirector(role) },
-                                    modifier = Modifier.height(32.dp),
-                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier
+                                        .widthIn(min = 80.dp)
+                                        .height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp)
                                 ) {
-                                    Text("Rekrut", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("Rekrut", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }
@@ -2194,7 +2289,7 @@ fun TvQuickLicenseModal(
         text = {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
                     Text("Sertifikasi & Lisensi Regulasi", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -2209,25 +2304,29 @@ fun TvQuickLicenseModal(
                         border = BorderStroke(1.dp, if (tvData.dewanPersCertified) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Sertifikasi Dewan Pers", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Sertifikasi Dewan Pers", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 Text("Syarat Program Berita & Investigasi", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
                             }
                             if (tvData.dewanPersCertified) {
-                                Text("✓ Aktif", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 11.sp)
+                                Text("✓ Aktif", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 12.sp)
                             } else {
                                 Button(
                                     onClick = onAcquireDewanPers,
-                                    modifier = Modifier.height(32.dp),
-                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier
+                                        .widthIn(min = 80.dp)
+                                        .height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp)
                                 ) {
-                                    Text("Beli ($50k)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("Beli ($50k)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }
@@ -2243,25 +2342,29 @@ fun TvQuickLicenseModal(
                         border = BorderStroke(1.dp, if (tvData.nationalBroadcastLicense) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Lisensi Nasional Kominfo", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Lisensi Nasional Kominfo", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 Text("+15% Rating Dasar Nasional", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
                             }
                             if (tvData.nationalBroadcastLicense) {
-                                Text("✓ Aktif", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 11.sp)
+                                Text("✓ Aktif", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 12.sp)
                             } else {
                                 Button(
                                     onClick = onAcquireNationalLicense,
-                                    modifier = Modifier.height(32.dp),
-                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier
+                                        .widthIn(min = 80.dp)
+                                        .height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp)
                                 ) {
-                                    Text("Beli ($75k)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("Beli ($75k)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }
@@ -2282,25 +2385,29 @@ fun TvQuickLicenseModal(
                         border = BorderStroke(1.dp, if (isUnlocked) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(region.displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(region.displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 Text("+${(region.adRevenueBoostPercent * 100).toInt()}% Omzet Iklan | Biaya: ${formatMoney(region.buildCost, useShortFormat)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
                             }
                             if (isUnlocked) {
-                                Text("✓ Terhubung", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 11.sp)
+                                Text("✓ Terhubung", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 12.sp)
                             } else {
                                 Button(
                                     onClick = { onBuildTransmission(region.regionKey) },
-                                    modifier = Modifier.height(32.dp),
-                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier
+                                        .widthIn(min = 80.dp)
+                                        .height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp)
                                 ) {
-                                    Text("Bangun", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("Bangun", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }
