@@ -7347,6 +7347,35 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun calculateEventCompanyValuation(business: com.example.data.OwnedBusiness): Long {
+        val internalCash = business.companyCash.toLong()
+        val standardAssetsVal = (business.eoOwnedAssets ?: emptyMap()).entries.sumOf { (assetName, qty) ->
+            (getAssetPurchasePrice(assetName) * qty).toLong()
+        }
+        val customAssetsVal = (business.eoCustomAssets ?: emptyList()).sumOf {
+            (it.quantity * it.priceUnit).toLong()
+        }
+        val totalAssetsInWarehouse = standardAssetsVal + customAssetsVal
+        val prestigeBonus = business.eoPrestige * 10_000L
+        return internalCash + totalAssetsInWarehouse + prestigeBonus
+    }
+
+    fun calculateSoftwareHouseValuation(
+        business: com.example.data.OwnedBusiness,
+        appProjects: List<com.example.data.AppProject> = _playerState.value.appProjects
+    ): Long {
+        val internalCash = business.companyCash.toLong()
+        val liveSaaS = appProjects.filter { 
+            (it.status == com.example.data.ProjectStatus.MAINTENANCE || it.kanbanColumn == "DEPLOYED") && 
+            it.type == com.example.data.ProjectType.INDEPENDENT_SAAS && !it.isBugFixTask 
+        }
+        val totalMRR = liveSaaS.sumOf { it.currentMrr }.toLong()
+        val devCount = business.softwareHouseData.uiUxDesigners + business.softwareHouseData.frontendDevelopers + business.softwareHouseData.backendEngineers
+        val devTeamVal = devCount * 5_000L
+        val annualMrr = totalMRR * 12L
+        return internalCash + annualMrr + devTeamVal
+    }
+
     fun liquidateBusiness(instanceId: String) {
         val currentState = _playerState.value
         var isNested = false
@@ -7368,20 +7397,35 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (business == null) return
         val catalogItem = getCatalogItem(business.catalogId, currentState) ?: return
         
-        val valuation = if (business.catalogId == "aviation_group") {
-            val fleetVal = business.airlineFleetComplex.sumOf { pl ->
-                val pDef = com.example.data.AVIATION_AIRCRAFT_CATALOG.find { it.id == pl.modelId }
-                if (pl.isLeased) 0L else (pDef?.price ?: 0L)
+        val valuation = when (business.catalogId) {
+            "aviation_group" -> {
+                val fleetVal = business.airlineFleetComplex.sumOf { pl ->
+                    val pDef = com.example.data.AVIATION_AIRCRAFT_CATALOG.find { it.id == pl.modelId }
+                    if (pl.isLeased) 0L else (pDef?.price ?: 0L)
+                }
+                val hubsVal = business.airlineHubsComplex.sumOf { it.baseCost }
+                val businessCashVal = business.companyCash.toLong()
+                val baseVal = catalogItem.costToBuy
+                val totalAssets = baseVal + fleetVal + hubsVal + businessCashVal
+                (totalAssets * 0.70).toLong()
             }
-            val hubsVal = business.airlineHubsComplex.sumOf { it.baseCost }
-            val businessCashVal = business.companyCash.toLong()
-            val baseVal = catalogItem.costToBuy
-            val totalAssets = baseVal + fleetVal + hubsVal + businessCashVal
-            (totalAssets * 0.70).toLong()
-        } else {
-            com.example.data.getBusinessValuation(business, catalogItem)
+            "media_radio" -> {
+                calculateEventCompanyValuation(business)
+            }
+            "upper_tech" -> {
+                calculateSoftwareHouseValuation(business, currentState.appProjects)
+            }
+            else -> {
+                com.example.data.getBusinessValuation(business, catalogItem)
+            }
         }
         
+        val newAppProjects = if (business.catalogId == "upper_tech") {
+            currentState.appProjects.filter { it.type != com.example.data.ProjectType.INDEPENDENT_SAAS && it.kanbanColumn != "IN_PROGRESS" }
+        } else {
+            currentState.appProjects
+        }
+
         if (isNested && parentHoldingId != null) {
             val newHoldings = currentState.holdingCompanies.map { holding ->
                 if (holding.instanceId == parentHoldingId) {
@@ -7391,11 +7435,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 } else holding
             }
-            _playerState.value = currentState.copy(holdingCompanies = newHoldings)
+            _playerState.value = currentState.copy(
+                holdingCompanies = newHoldings,
+                appProjects = newAppProjects
+            )
         } else {
             _playerState.value = currentState.copy(
                 cash = currentState.cash + valuation,
-                ownedBusinesses = currentState.ownedBusinesses.filter { it.instanceId != instanceId }
+                ownedBusinesses = currentState.ownedBusinesses.filter { it.instanceId != instanceId },
+                appProjects = newAppProjects
             )
         }
     }

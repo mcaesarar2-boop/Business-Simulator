@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -110,6 +112,7 @@ fun SoftwareHouseDashboardScreen(
     val isServerOverloaded = effectiveUsers > serverCapacity
 
     // UI state
+    val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Kanban Board", "B2B Market", "SaaS Portfolio", "Synergy Hub", "Dev Team", "Tech & Infra")
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
@@ -117,6 +120,9 @@ fun SoftwareHouseDashboardScreen(
 
     var showAssignDialogForProject by remember { mutableStateOf<AppProject?>(null) }
     var showCashDialog by remember { mutableStateOf(false) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
+    var showLiquidationDialog by remember { mutableStateOf(false) }
+    var liquidationConfirmInput by remember { mutableStateOf("") }
 
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let {
@@ -186,7 +192,10 @@ fun SoftwareHouseDashboardScreen(
                                 )
                             }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
                                     color = Color(0x991E293B),
@@ -210,6 +219,47 @@ fun SoftwareHouseDashboardScreen(
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 12.sp
+                                        )
+                                    }
+                                }
+
+                                Box {
+                                    IconButton(
+                                        onClick = { showSettingsMenu = true },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(Color(0x66000000), CircleShape)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Settings,
+                                            contentDescription = "Pengaturan Bisnis",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showSettingsMenu,
+                                        onDismissRequest = { showSettingsMenu = false },
+                                        modifier = Modifier.background(DevCardDark)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        Icons.Default.DeleteForever,
+                                                        contentDescription = null,
+                                                        tint = DevNeonRed,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Likuidasi Bisnis (Jual)", color = DevNeonRed, fontWeight = FontWeight.Bold)
+                                                }
+                                            },
+                                            onClick = {
+                                                showSettingsMenu = false
+                                                liquidationConfirmInput = ""
+                                                showLiquidationDialog = true
+                                            }
                                         )
                                     }
                                 }
@@ -692,6 +742,154 @@ fun SoftwareHouseDashboardScreen(
                     }
                 ) {
                     Text("Tarik Dividen", color = DevNeonAmber)
+                }
+            }
+        )
+    }
+
+    // Modal: Danger Zone Likuidasi Bisnis
+    if (showLiquidationDialog) {
+        val liveSaaS = playerState.appProjects.filter { 
+            (it.status == ProjectStatus.MAINTENANCE || it.kanbanColumn == "DEPLOYED") && 
+            it.type == ProjectType.INDEPENDENT_SAAS && !it.isBugFixTask 
+        }
+        val totalActiveMrr = liveSaaS.sumOf { it.currentMrr }.toLong()
+        val annualArr = totalActiveMrr * 12L
+        val totalDevCount = softData.uiUxDesigners + softData.frontendDevelopers + softData.backendEngineers
+        val devTeamAssetVal = totalDevCount * 5_000L
+        val internalCashVal = ownedBusiness.companyCash.toLong()
+        val totalValuation = viewModel.calculateSoftwareHouseValuation(ownedBusiness, playerState.appProjects)
+
+        AlertDialog(
+            onDismissRequest = { showLiquidationDialog = false },
+            containerColor = Color(0xFF1E1E2E),
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(DevNeonRed.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = "Peringatan", tint = DevNeonRed, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Danger Zone: Likuidasi Bisnis", color = DevNeonRed, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Unit Bisnis: ${ownedBusiness.customName ?: "Software Developer"}",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Valuation Card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DevNeonEmerald.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("TOTAL VALUASI BISNIS ANDA", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "$${String.format("%,d", totalValuation)}",
+                                color = DevNeonEmerald,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Divider(color = Color.DarkGray.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("• Kas Internal Bisnis:", color = Color.LightGray, fontSize = 11.sp)
+                                Text("$${String.format("%,d", internalCashVal)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("• Annual ARR (MRR $${String.format("%,d", totalActiveMrr)}/bln x 12):", color = Color.LightGray, fontSize = 11.sp)
+                                Text("$${String.format("%,d", annualArr)}", color = DevNeonCyan, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("• Aset Tim ($totalDevCount Dev x $5k):", color = Color.LightGray, fontSize = 11.sp)
+                                Text("$${String.format("%,d", devTeamAssetVal)}", color = DevNeonAmber, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Warning Text
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DevNeonRed.copy(alpha = 0.1f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DevNeonRed.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ Tindakan ini permanen. Seluruh aset, proyek, dan tim akan dihapus. Uang valuasi akan ditransfer ke Saldo Perusahaan Utama.",
+                            color = Color(0xFFFF8A9E),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(10.dp),
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Ketik \"JUAL\" untuk mengonfirmasi:",
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = liquidationConfirmInput,
+                        onValueChange = { liquidationConfirmInput = it },
+                        placeholder = { Text("Ketik JUAL di sini", color = Color.DarkGray, fontSize = 13.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = DevNeonRed,
+                            unfocusedBorderColor = Color.DarkGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                val isConfirmationValid = liquidationConfirmInput.trim() == "JUAL"
+                Button(
+                    onClick = {
+                        if (isConfirmationValid) {
+                            viewModel.liquidateBusiness(instanceId)
+                            showLiquidationDialog = false
+                            Toast.makeText(context, "Bisnis berhasil dilikuidasi!", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        }
+                    },
+                    enabled = isConfirmationValid,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DevNeonRed,
+                        disabledContainerColor = Color(0xFF334155),
+                        contentColor = Color.White,
+                        disabledContentColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Ya, Jual Bisnis", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLiquidationDialog = false }) {
+                    Text("Batal", color = Color.Gray)
                 }
             }
         )

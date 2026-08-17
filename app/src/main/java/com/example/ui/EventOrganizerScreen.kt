@@ -89,6 +89,10 @@ fun EventOrganizerScreen(navController: NavHostController, viewModel: GameViewMo
     var transferType by remember { mutableStateOf("DEPOSIT") } // "DEPOSIT" atau "WITHDRAW"
     var transferAmountInput by remember { mutableStateOf("") }
     
+    var showSettingsMenu by remember { mutableStateOf(false) }
+    var showLiquidationDialog by remember { mutableStateOf(false) }
+    var liquidationConfirmInput by remember { mutableStateOf("") }
+    
     var selectedReviewEvent by remember { mutableStateOf<com.example.data.EventProject?>(null) }
 
     // Active Events ticker
@@ -120,6 +124,38 @@ fun EventOrganizerScreen(navController: NavHostController, viewModel: GameViewMo
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) { 
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali") 
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showSettingsMenu = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Pengaturan Bisnis", tint = Color.White)
+                        }
+                        DropdownMenu(
+                            expanded = showSettingsMenu,
+                            onDismissRequest = { showSettingsMenu = false },
+                            modifier = Modifier.background(Color(0xFF1E293B))
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.DeleteForever,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF43F5E),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Likuidasi Bisnis (Jual)", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                onClick = {
+                                    showSettingsMenu = false
+                                    liquidationConfirmInput = ""
+                                    showLiquidationDialog = true
+                                }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -361,6 +397,154 @@ fun EventOrganizerScreen(navController: NavHostController, viewModel: GameViewMo
                 }) { Text("Transfer", fontWeight = FontWeight.Bold, color = Color(0xFF3B82F6)) }
             },
             dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text("Batal", color = Color.Gray) } }
+        )
+    }
+
+    // Modal Dialog: Danger Zone Likuidasi Bisnis
+    if (showLiquidationDialog) {
+        val standardAssetsVal = (ownedData.eoOwnedAssets ?: emptyMap()).entries.sumOf { (assetName, qty) ->
+            (viewModel.getAssetPurchasePrice(assetName) * qty).toLong()
+        }
+        val customAssetsVal = (ownedData.eoCustomAssets ?: emptyList()).sumOf {
+            (it.quantity * it.priceUnit).toLong()
+        }
+        val totalAssetsInWarehouse = standardAssetsVal + customAssetsVal
+        val prestigeBonusVal = ownedData.eoPrestige * 10_000L
+        val internalCashVal = ownedData.companyCash.toLong()
+        val totalValuation = viewModel.calculateEventCompanyValuation(ownedData)
+
+        AlertDialog(
+            onDismissRequest = { showLiquidationDialog = false },
+            containerColor = Color(0xFF1E1E2E),
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFFF43F5E).copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = "Peringatan", tint = Color(0xFFF43F5E), modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Danger Zone: Likuidasi Bisnis", color = Color(0xFFF43F5E), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Unit Bisnis: ${ownedData.customName ?: "Mega Event Organizer"}",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Valuation Card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("TOTAL VALUASI BISNIS ANDA", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "$${String.format("%,d", totalValuation)}",
+                                color = Color(0xFF10B981),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Divider(color = Color.DarkGray.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("• Kas Internal Bisnis:", color = Color.LightGray, fontSize = 11.sp)
+                                Text("$${String.format("%,d", internalCashVal)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("• Nilai Aset di Gudang:", color = Color.LightGray, fontSize = 11.sp)
+                                Text("$${String.format("%,d", totalAssetsInWarehouse)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("• Prestige (${ownedData.eoPrestige} Pt x $10k):", color = Color.LightGray, fontSize = 11.sp)
+                                Text("$${String.format("%,d", prestigeBonusVal)}", color = Color(0xFFFBBF24), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Warning Text
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF43F5E).copy(alpha = 0.1f)),
+                        border = BorderStroke(1.dp, Color(0xFFF43F5E).copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ Tindakan ini permanen. Seluruh aset, proyek, dan tim akan dihapus. Uang valuasi akan ditransfer ke Saldo Perusahaan Utama.",
+                            color = Color(0xFFFF8A9E),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(10.dp),
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Ketik \"JUAL\" untuk mengonfirmasi:",
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = liquidationConfirmInput,
+                        onValueChange = { liquidationConfirmInput = it },
+                        placeholder = { Text("Ketik JUAL di sini", color = Color.DarkGray, fontSize = 13.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFF43F5E),
+                            unfocusedBorderColor = Color.DarkGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                val isConfirmationValid = liquidationConfirmInput.trim() == "JUAL"
+                Button(
+                    onClick = {
+                        if (isConfirmationValid) {
+                            viewModel.liquidateBusiness(instanceId)
+                            showLiquidationDialog = false
+                            Toast.makeText(context, "Bisnis berhasil dilikuidasi!", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        }
+                    },
+                    enabled = isConfirmationValid,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF43F5E),
+                        disabledContainerColor = Color(0xFF334155),
+                        contentColor = Color.White,
+                        disabledContentColor = Color.Gray
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Ya, Jual Bisnis", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLiquidationDialog = false }) {
+                    Text("Batal", color = Color.Gray)
+                }
+            }
         )
     }
 }
