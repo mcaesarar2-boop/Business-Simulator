@@ -2653,12 +2653,27 @@ fun ContentCreatorScreen(
             }
         }
 
-        val filmStudioBusiness = playerState.ownedBusinesses.firstOrNull { it?.catalogId == "media_production" }
-            ?: playerState.holdingCompanies.flatMap { it.subsidiaries }.firstOrNull { it?.catalogId == "media_production" }
-        val hasFilmStudio = filmStudioBusiness != null
+        val allFilmStudios = remember(playerState) {
+            (playerState.ownedBusinesses.filter { it.catalogId == "media_production" } +
+             playerState.holdingCompanies.flatMap { it.subsidiaries }.filter { it.catalogId == "media_production" }).distinctBy { it.instanceId }
+        }
+        val hasFilmStudio = allFilmStudios.isNotEmpty()
         val isSynergyUnlocked = subscribers >= 1_000_000L && hasFilmStudio
 
-        val effectiveMaxBudget = if (!isSynergyUnlocked || !isCoProductionMode) 50_000L else contentCreatorCash
+        val currentSelectedStudio = allFilmStudios.find { it.instanceId == selectedStudioInstanceId } ?: allFilmStudios.firstOrNull()
+        val selectedStudioCash = currentSelectedStudio?.companyCash?.toLong()?.coerceAtLeast(0L) ?: 0L
+
+        var studioDropdownExpanded by remember { mutableStateOf(false) }
+
+        val dynamicMaxBudget: Long = when {
+            !isSynergyUnlocked || !isCoProductionMode -> minOf(50_000L, contentCreatorCash.coerceAtLeast(0L))
+            selectedFundingScheme == CoProductionFundingScheme.FULL_CREATOR -> contentCreatorCash.coerceAtLeast(0L)
+            selectedFundingScheme == CoProductionFundingScheme.FULL_STUDIO -> selectedStudioCash
+            selectedFundingScheme == CoProductionFundingScheme.JOINT_VENTURE_50_50 -> {
+                2L * minOf(contentCreatorCash.coerceAtLeast(0L), selectedStudioCash)
+            }
+            else -> contentCreatorCash.coerceAtLeast(0L)
+        }
 
         AlertDialog(
             onDismissRequest = { showCreateWorkDialog = false },
@@ -2698,7 +2713,11 @@ fun ContentCreatorScreen(
                 }
             },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         text = "Rilis IP original berkualitas tinggi untuk memikat Production House global, atau kolaborasi dengan Studio Film internal milikmu.",
                         color = textGray,
@@ -2805,7 +2824,7 @@ fun ContentCreatorScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // ==========================================
-                    // TUGAS 1 & 2: SYNERGY TOGGLE / INDIE LIMIT NOTICE
+                    // TUGAS 1: SYNERGY TOGGLE & CO-PRODUCTION SETUP
                     // ==========================================
                     if (isSynergyUnlocked) {
                         Text("PARTNER PRODUKSI (B2B SYNERGY)", color = textGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -2870,6 +2889,9 @@ fun ContentCreatorScreen(
                                     .weight(1f)
                                     .clickable {
                                         isCoProductionMode = true
+                                        if (selectedStudioInstanceId == null && allFilmStudios.isNotEmpty()) {
+                                            selectedStudioInstanceId = allFilmStudios.first().instanceId
+                                        }
                                         workBudgetError = null
                                     }
                             ) {
@@ -2879,6 +2901,9 @@ fun ContentCreatorScreen(
                                             selected = isCoProductionMode,
                                             onClick = {
                                                 isCoProductionMode = true
+                                                if (selectedStudioInstanceId == null && allFilmStudios.isNotEmpty()) {
+                                                    selectedStudioInstanceId = allFilmStudios.first().instanceId
+                                                }
                                                 workBudgetError = null
                                             },
                                             colors = RadioButtonDefaults.colors(selectedColor = gold)
@@ -2886,7 +2911,237 @@ fun ContentCreatorScreen(
                                         Spacer(modifier = Modifier.width(2.dp))
                                         Text("Co-Production", color = if (isCoProductionMode) gold else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
-                                    Text("Studio Film (Kas Penuh)", color = if (isCoProductionMode) gold.copy(alpha = 0.8f) else textMuted, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+                                    Text("Studio Film Internal", color = if (isCoProductionMode) gold.copy(alpha = 0.8f) else textMuted, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+                                }
+                            }
+                        }
+
+                        // CONDITIONAL RENDERING IF CO-PRODUCTION IS SELECTED
+                        if (isCoProductionMode) {
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 1. DROPDOWN "PILIH STUDIO INTERNAL ANDA"
+                            Text("PILIH STUDIO INTERNAL ANDA", color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = cardDarkElevated),
+                                    border = BorderStroke(1.dp, gold.copy(alpha = 0.6f)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { studioDropdownExpanded = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Movie,
+                                                contentDescription = null,
+                                                tint = gold,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = currentSelectedStudio?.name ?: "Pilih Studio Film",
+                                                    color = Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Kas Tersedia: ${currFormat.format(selectedStudioCash)}",
+                                                    color = neonGreen,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Dropdown",
+                                            tint = gold
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = studioDropdownExpanded,
+                                    onDismissRequest = { studioDropdownExpanded = false },
+                                    modifier = Modifier
+                                        .background(cardDark)
+                                        .border(1.dp, Color(0xFF2B3248), RoundedCornerShape(4.dp))
+                                ) {
+                                    allFilmStudios.forEach { studio ->
+                                        val studioBalance = studio.companyCash.toLong().coerceAtLeast(0L)
+                                        val isCurrent = studio.instanceId == (currentSelectedStudio?.instanceId)
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(
+                                                        text = studio.name,
+                                                        color = if (isCurrent) gold else Color.White,
+                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                        fontSize = 12.sp
+                                                    )
+                                                    Text(
+                                                        text = "Kas: ${currFormat.format(studioBalance)}",
+                                                        color = neonGreen,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Theaters,
+                                                    contentDescription = null,
+                                                    tint = if (isCurrent) gold else textGray,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedStudioInstanceId = studio.instanceId
+                                                studioDropdownExpanded = false
+                                                workBudgetError = null
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 2. RADIO BUTTONS "SUMBER PENDANAAN (FUNDING)"
+                            Text("SUMBER PENDANAAN (FUNDING)", color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                // Opsi A: 100% Kas Creator
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedFundingScheme == CoProductionFundingScheme.FULL_CREATOR) neonPurple.copy(alpha = 0.18f) else cardDarkElevated
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedFundingScheme == CoProductionFundingScheme.FULL_CREATOR) neonPurple else Color(0xFF2B3248)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedFundingScheme = CoProductionFundingScheme.FULL_CREATOR
+                                            workBudgetError = null
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = selectedFundingScheme == CoProductionFundingScheme.FULL_CREATOR,
+                                            onClick = {
+                                                selectedFundingScheme = CoProductionFundingScheme.FULL_CREATOR
+                                                workBudgetError = null
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = neonPurple)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Column {
+                                            Text("100% Kas Creator", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = "Mengambil saldo unit Creator (Tersedia: ${currFormat.format(contentCreatorCash)}).",
+                                                color = textGray,
+                                                fontSize = 9.5.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Opsi B: 100% Kas Studio Partner
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedFundingScheme == CoProductionFundingScheme.FULL_STUDIO) gold.copy(alpha = 0.18f) else cardDarkElevated
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedFundingScheme == CoProductionFundingScheme.FULL_STUDIO) gold else Color(0xFF2B3248)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedFundingScheme = CoProductionFundingScheme.FULL_STUDIO
+                                            workBudgetError = null
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = selectedFundingScheme == CoProductionFundingScheme.FULL_STUDIO,
+                                            onClick = {
+                                                selectedFundingScheme = CoProductionFundingScheme.FULL_STUDIO
+                                                workBudgetError = null
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = gold)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Column {
+                                            Text("100% Kas Studio Partner", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = "Mengambil saldo studio ${currentSelectedStudio?.name ?: "Studio"} (Tersedia: ${currFormat.format(selectedStudioCash)}).",
+                                                color = textGray,
+                                                fontSize = 9.5.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Opsi C: Joint Venture (50/50)
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedFundingScheme == CoProductionFundingScheme.JOINT_VENTURE_50_50) neonBlue.copy(alpha = 0.18f) else cardDarkElevated
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedFundingScheme == CoProductionFundingScheme.JOINT_VENTURE_50_50) neonBlue else Color(0xFF2B3248)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedFundingScheme = CoProductionFundingScheme.JOINT_VENTURE_50_50
+                                            workBudgetError = null
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = selectedFundingScheme == CoProductionFundingScheme.JOINT_VENTURE_50_50,
+                                            onClick = {
+                                                selectedFundingScheme = CoProductionFundingScheme.JOINT_VENTURE_50_50
+                                                workBudgetError = null
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = neonBlue)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Column {
+                                            Text("Joint Venture (50/50)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = "Memotong kas kedua belah pihak secara seimbang (Maks. Budget: ${currFormat.format(2L * minOf(contentCreatorCash.coerceAtLeast(0L), selectedStudioCash))}).",
+                                                color = textGray,
+                                                fontSize = 9.5.sp
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2935,7 +3190,9 @@ fun ContentCreatorScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // 3. Input Budget Produksi
+                    // ==========================================
+                    // TUGAS 2: LOGIKA VALIDASI BUDGET DINAMIS
+                    // ==========================================
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2948,7 +3205,12 @@ fun ContentCreatorScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Saldo: ${currFormat.format(contentCreatorCash)}",
+                            text = when {
+                                !isSynergyUnlocked || !isCoProductionMode -> "Kas: ${currFormat.format(contentCreatorCash)}"
+                                selectedFundingScheme == CoProductionFundingScheme.FULL_CREATOR -> "Kas Creator: ${currFormat.format(contentCreatorCash)}"
+                                selectedFundingScheme == CoProductionFundingScheme.FULL_STUDIO -> "Kas Studio: ${currFormat.format(selectedStudioCash)}"
+                                else -> "Maks 50/50: ${currFormat.format(dynamicMaxBudget)}"
+                            },
                             color = neonGreen,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -2961,8 +3223,41 @@ fun ContentCreatorScreen(
                         onValueChange = { input ->
                             workBudgetInput = input
                             val num = input.toLongOrNull()
-                            if (num != null && num > 50_000L && (!isSynergyUnlocked || !isCoProductionMode)) {
-                                workBudgetError = "Status Indie: Budget maksimal dibatasi $50,000! (Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k)"
+                            if (num != null) {
+                                if ((!isSynergyUnlocked || !isCoProductionMode) && num > 50_000L) {
+                                    workBudgetError = "Status Indie: Budget maksimal dibatasi $50,000! (Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k)"
+                                } else if (isCoProductionMode) {
+                                    when (selectedFundingScheme) {
+                                        CoProductionFundingScheme.FULL_CREATOR -> {
+                                            if (num > contentCreatorCash) {
+                                                workBudgetError = "Saldo Kas Creator tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
+                                            } else {
+                                                workBudgetError = null
+                                            }
+                                        }
+                                        CoProductionFundingScheme.FULL_STUDIO -> {
+                                            if (num > selectedStudioCash) {
+                                                workBudgetError = "Saldo Kas Studio (${currentSelectedStudio?.name}) tidak mencukupi (Tersedia: ${currFormat.format(selectedStudioCash)})!"
+                                            } else {
+                                                workBudgetError = null
+                                            }
+                                        }
+                                        CoProductionFundingScheme.JOINT_VENTURE_50_50 -> {
+                                            val half = num / 2
+                                            if (half > contentCreatorCash) {
+                                                workBudgetError = "Kas Creator tidak mencukupi untuk 50% porsi (Dibutuhkan: ${currFormat.format(half)}, Kas: ${currFormat.format(contentCreatorCash)})!"
+                                            } else if (half > selectedStudioCash) {
+                                                workBudgetError = "Kas Studio (${currentSelectedStudio?.name}) tidak mencukupi untuk 50% porsi (Dibutuhkan: ${currFormat.format(half)}, Kas: ${currFormat.format(selectedStudioCash)})!"
+                                            } else {
+                                                workBudgetError = null
+                                            }
+                                        }
+                                    }
+                                } else if (num > contentCreatorCash) {
+                                    workBudgetError = "Saldo Kas Usaha tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
+                                } else {
+                                    workBudgetError = null
+                                }
                             } else {
                                 workBudgetError = null
                             }
@@ -2986,49 +3281,59 @@ fun ContentCreatorScreen(
                         Text(workBudgetError!!, color = crimson, fontSize = 9.5.sp, modifier = Modifier.padding(top = 2.dp), lineHeight = 13.sp)
                     }
 
-                    // Quick Budget Chips
+                    // Quick Budget Chips & Dynamic MAX button
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         listOf(5_000L, 20_000L, 50_000L).forEach { preset ->
+                            val isPresetValid = preset <= dynamicMaxBudget
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(cardDarkElevated)
-                                    .border(0.8.dp, Color(0xFF2B3248), RoundedCornerShape(6.dp))
+                                    .border(0.8.dp, if (isPresetValid) Color(0xFF2B3248) else crimson.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                     .clickable {
                                         workBudgetInput = preset.toString()
-                                        workBudgetError = null
+                                        if (!isPresetValid) {
+                                            workBudgetError = "Budget $preset melampaui batas kas pendanaan yang dipilih!"
+                                        } else {
+                                            workBudgetError = null
+                                        }
                                     }
                                     .padding(vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = if (preset >= 1000) "${preset / 1000}k" else "$preset",
-                                    color = textGray,
+                                    color = if (isPresetValid) textGray else crimson.copy(alpha = 0.8f),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
 
-                        // 100k Chip (Disabled / Cap in Indie mode)
+                        // 100k Chip (Disabled / Cap in Indie mode, reacts to dynamicMaxBudget)
                         val is100kDisabled = (!isSynergyUnlocked || !isCoProductionMode)
+                        val is100kAffordable = dynamicMaxBudget >= 100_000L
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(if (is100kDisabled) Color(0xFF13151F) else cardDarkElevated)
-                                .border(0.8.dp, if (is100kDisabled) Color(0xFF202434) else Color(0xFF2B3248), RoundedCornerShape(6.dp))
+                                .border(0.8.dp, if (is100kDisabled) Color(0xFF202434) else if (is100kAffordable) Color(0xFF2B3248) else crimson.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                 .clickable {
                                     if (is100kDisabled) {
                                         workBudgetError = "Status Indie: Tombol 100k terkunci. Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k"
                                     } else {
                                         workBudgetInput = "100000"
-                                        workBudgetError = null
+                                        if (!is100kAffordable) {
+                                            workBudgetError = "Budget $100,000 melebihi kas pendanaan yang tersedia!"
+                                        } else {
+                                            workBudgetError = null
+                                        }
                                     }
                                 }
                                 .padding(vertical = 4.dp),
@@ -3036,13 +3341,13 @@ fun ContentCreatorScreen(
                         ) {
                             Text(
                                 text = "100k",
-                                color = if (is100kDisabled) textMuted.copy(alpha = 0.4f) else textGray,
+                                color = if (is100kDisabled) textMuted.copy(alpha = 0.4f) else if (is100kAffordable) textGray else crimson.copy(alpha = 0.8f),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
 
-                        // Max button
+                        // Dynamic Max button (Tugas 2)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -3050,16 +3355,11 @@ fun ContentCreatorScreen(
                                 .background(cardDarkElevated)
                                 .border(0.8.dp, neonGreen.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                 .clickable {
-                                    if (!isSynergyUnlocked || !isCoProductionMode) {
-                                        val cappedMax = minOf(50_000L, contentCreatorCash.coerceAtLeast(1000L))
-                                        workBudgetInput = cappedMax.toString()
-                                        if (contentCreatorCash > 50_000L) {
-                                            workBudgetError = "Status Indie: Budget dikunci maksimal $50,000. Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k"
-                                        } else {
-                                            workBudgetError = null
-                                        }
+                                    val finalMax = maxOf(1_000L, dynamicMaxBudget)
+                                    workBudgetInput = finalMax.toString()
+                                    if ((!isSynergyUnlocked || !isCoProductionMode) && contentCreatorCash > 50_000L) {
+                                        workBudgetError = "Status Indie: Budget dikunci maksimal $50,000. Aktifkan Co-Production untuk skala penuh."
                                     } else {
-                                        workBudgetInput = contentCreatorCash.coerceAtLeast(1000L).toString()
                                         workBudgetError = null
                                     }
                                 }
@@ -3076,7 +3376,7 @@ fun ContentCreatorScreen(
                     }
 
                     // ==========================================
-                    // TUGAS 3: DROPDOWN / SELECTOR IP ROUTING
+                    // TUGAS 3: IP ROUTING DESTINATION
                     // ==========================================
                     if (isSynergyUnlocked && isCoProductionMode) {
                         Spacer(modifier = Modifier.height(10.dp))
@@ -3174,7 +3474,7 @@ fun ContentCreatorScreen(
                                         }
                                     }
                                     Text(
-                                        text = "Karya DIHAPUS dari Creator dan otomatis di-push ke unit bisnis Studio Film (${filmStudioBusiness?.name ?: "Film Studio"}) untuk pipeline Pra-Produksi Bioskop Global.",
+                                        text = "Karya otomatis di-push ke unit bisnis ${currentSelectedStudio?.name ?: "Studio Film"} untuk pipeline Pra-Produksi Bioskop Global dengan metadata Co-Production.",
                                         color = textGray,
                                         fontSize = 9.sp,
                                         lineHeight = 12.sp
@@ -3250,9 +3550,37 @@ fun ContentCreatorScreen(
                             workBudgetError = "Status Indie: Budget maksimal dibatasi $50,000! (Dibutuhkan 1 Juta Subs & Studio Film Eksternal untuk budget > $50k)"
                             return@Button
                         }
-                        if (budget > contentCreatorCash) {
-                            workBudgetError = "Saldo Kas Usaha tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
-                            return@Button
+                        if (isCoProductionMode) {
+                            when (selectedFundingScheme) {
+                                CoProductionFundingScheme.FULL_CREATOR -> {
+                                    if (budget > contentCreatorCash) {
+                                        workBudgetError = "Saldo Kas Creator tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
+                                        return@Button
+                                    }
+                                }
+                                CoProductionFundingScheme.FULL_STUDIO -> {
+                                    if (budget > selectedStudioCash) {
+                                        workBudgetError = "Saldo Kas Studio (${currentSelectedStudio?.name}) tidak mencukupi (Tersedia: ${currFormat.format(selectedStudioCash)})!"
+                                        return@Button
+                                    }
+                                }
+                                CoProductionFundingScheme.JOINT_VENTURE_50_50 -> {
+                                    val half = budget / 2
+                                    if (half > contentCreatorCash) {
+                                        workBudgetError = "Kas Creator tidak mencukupi untuk 50% porsi (Dibutuhkan: ${currFormat.format(half)}, Kas: ${currFormat.format(contentCreatorCash)})!"
+                                        return@Button
+                                    }
+                                    if (half > selectedStudioCash) {
+                                        workBudgetError = "Kas Studio (${currentSelectedStudio?.name}) tidak mencukupi untuk 50% porsi (Dibutuhkan: ${currFormat.format(half)}, Kas: ${currFormat.format(selectedStudioCash)})!"
+                                        return@Button
+                                    }
+                                }
+                            }
+                        } else {
+                            if (budget > contentCreatorCash) {
+                                workBudgetError = "Saldo Kas Usaha tidak mencukupi (Tersedia: ${currFormat.format(contentCreatorCash)})!"
+                                return@Button
+                            }
                         }
 
                         // Close form, launch animated production sequence
@@ -3287,11 +3615,13 @@ fun ContentCreatorScreen(
                                 val success = gameViewModel.routeContentWorkToFilmStudio(
                                     title = title,
                                     type = selectedContentType,
-                                    budget = budget
+                                    budget = budget,
+                                    targetStudioInstanceId = currentSelectedStudio?.instanceId,
+                                    fundingScheme = selectedFundingScheme
                                 )
                                 isProducing = false
                                 if (success) {
-                                    dealFeedbackMsg = "🎬 IP Karya \"$title\" berhasil ditransfer ke Pipeline Pra-Produksi Studio Film (${filmStudioBusiness?.name ?: "Film Studio"})!"
+                                    dealFeedbackMsg = "🎬 IP Karya \"$title\" berhasil ditransfer ke Pipeline Pra-Produksi Studio Film (${currentSelectedStudio?.name ?: "Film Studio"})!"
                                     dealFeedbackIsPositive = true
                                 }
                             } else {

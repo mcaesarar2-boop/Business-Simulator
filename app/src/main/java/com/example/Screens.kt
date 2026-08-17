@@ -4574,10 +4574,80 @@ fun IPLibraryHistoryScreen(navController: NavHostController, viewModel: GameView
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                        border = BorderStroke(1.dp, if (proj.isCoProd) Color(0xFFFFC727).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f))
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(proj.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    proj.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (proj.isCoProd) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        color = Color(0xFFFFC727).copy(alpha = 0.2f),
+                                        border = BorderStroke(1.dp, Color(0xFFFFC727)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "🤝 Co-Production",
+                                                color = Color(0xFFFFC727),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Co-Production details box if co-produced
+                            if (proj.isCoProd) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                val meta = proj.coProductionMeta
+                                val fundingLabel = when (meta?.fundingType) {
+                                    CoProductionFundingScheme.FULL_CREATOR.name, "FULL_CREATOR" -> "100% Kas Creator"
+                                    CoProductionFundingScheme.FULL_STUDIO.name, "FULL_STUDIO" -> "100% Kas Studio"
+                                    CoProductionFundingScheme.JOINT_VENTURE_50_50.name, "JOINT_VENTURE_50_50" -> "Joint Venture (50/50)"
+                                    else -> meta?.fundingType ?: "Co-Production"
+                                }
+                                val profitShareLabel = when (meta?.fundingType) {
+                                    CoProductionFundingScheme.FULL_CREATOR.name, "FULL_CREATOR" -> "100% Creator"
+                                    CoProductionFundingScheme.FULL_STUDIO.name, "FULL_STUDIO" -> "100% Studio"
+                                    else -> "50% Creator / 50% Studio"
+                                }
+                                Surface(
+                                    color = Color(0xFF262012),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(0.8.dp, Color(0xFF664D00)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(8.dp)) {
+                                        Text(
+                                            text = "✨ Hasil Kolaborasi: Content Creator × Studio Film",
+                                            color = Color(0xFFFFE082),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Skema Dana: $fundingLabel | Bagi Hasil: $profitShareLabel",
+                                            color = Color(0xFFFFCA28),
+                                            fontSize = 9.5.sp
+                                        )
+                                    }
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(4.dp))
                             val releaseText = if (proj.releaseMonth != null && proj.releaseYear != null) " | Rilis: Bln ${proj.releaseMonth}, ${proj.releaseYear}" else ""
                             val focusText = when (proj.productionFocus) {
@@ -4621,7 +4691,7 @@ fun IPLibraryHistoryScreen(navController: NavHostController, viewModel: GameView
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Text("🟢 Disewa oleh: ${proj.licenseeName}", color = Color.White, fontWeight = FontWeight.Bold)
-                                        Text("Sisa Kontrak: ${proj.licenseRemainingMonths} Bulan | Pendapatan: +$${com.example.ui.formatCurrencyRingkas(proj.licenseMonthlyFee ?: 0L, useShortFormat)}/bln", color = Color(0xFF00FF00), fontSize = 12.sp)
+                                        Text("Sisa Kontrak: ${proj.licenseRemainingMonths} Bulan | Pendapatan: +${com.example.ui.formatCurrencyRingkas(proj.licenseMonthlyFee ?: 0L, useShortFormat)}/bln", color = Color(0xFF00FF00), fontSize = 12.sp)
                                     }
                                 }
                             } else {
@@ -4634,7 +4704,12 @@ fun IPLibraryHistoryScreen(navController: NavHostController, viewModel: GameView
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha=0.2f), contentColor = Color(0xFFFF5555))
                                     ) {
-                                        Text("Jual IP\n(+$${com.example.ui.formatCurrencyRingkas(sellPrice, useShortFormat)})", textAlign = androidx.compose.ui.text.style.TextAlign.Center, fontSize = 12.sp)
+                                        val sellLabel = if (proj.isCoProd) {
+                                            "Jual IP (Bagi Hasil)\n(+${com.example.ui.formatCurrencyRingkas(sellPrice, useShortFormat)})"
+                                        } else {
+                                            "Jual IP\n(+${com.example.ui.formatCurrencyRingkas(sellPrice, useShortFormat)})"
+                                        }
+                                        Text(sellLabel, textAlign = androidx.compose.ui.text.style.TextAlign.Center, fontSize = 12.sp)
                                     }
                                     
                                     Button(

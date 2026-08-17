@@ -205,6 +205,12 @@ data class ActiveUpgrade(
     val finishTimeMs: Long
 )
 
+data class CoProductionMeta(
+    val isCoProd: Boolean = false,
+    val partnerName: String = "",
+    val fundingType: String = ""
+)
+
 data class MovieProject(
     val title: String,
     val budget: Long,
@@ -232,8 +238,11 @@ data class MovieProject(
     var licenseeName: String? = null,
     var licenseMonthlyFee: Long? = null,
     var licenseRemainingMonths: Int? = null,
-    var productionFocus: String? = "REGULER"
-)
+    var productionFocus: String? = "REGULER",
+    val coProductionMeta: CoProductionMeta? = null
+) {
+    val isCoProd: Boolean get() = coProductionMeta?.isCoProd == true
+}
 
 data class HealthcareUnit(
     val id: String = java.util.UUID.randomUUID().toString(),

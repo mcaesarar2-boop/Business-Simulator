@@ -6458,6 +6458,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val boxOffice = (budget * (3.5 + (reviewScore / 25.0))).toLong()
         val netProfit = maxOf(0L, boxOffice - budget)
 
+        val fundingTypeStr = when (fundingScheme) {
+            CoProductionFundingScheme.FULL_CREATOR -> "100% Kas Creator"
+            CoProductionFundingScheme.FULL_STUDIO -> "100% Kas Studio Partner"
+            CoProductionFundingScheme.JOINT_VENTURE_50_50 -> "50/50"
+        }
+
+        val meta = com.example.data.CoProductionMeta(
+            isCoProd = true,
+            partnerName = cc.name,
+            fundingType = fundingTypeStr
+        )
+
         val newProject = com.example.data.MovieProject(
             title = cleanTitle,
             budget = budget,
@@ -6478,7 +6490,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 ContentType.DOCUMENTARY -> "Documentary"
                 ContentType.DEEP_DIVE_ESSAY -> "Feature Film"
             },
-            productionFocus = "KUALITAS"
+            productionFocus = "KUALITAS",
+            coProductionMeta = meta
         )
 
         val targetInstanceId = filmStudio.instanceId
@@ -8971,25 +8984,72 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             projectHistory = newHistory,
             extraValuation = maxOf(0L, owned.extraValuation - valueToDeduct)
         )
-        
-        if (isNested && holdingId != null) {
-            val newHoldings = currentState.holdingCompanies.map { holding ->
-                if (holding.instanceId == holdingId) {
-                    val newSubs = holding.subsidiaries.map { if (it.instanceId == instanceId) newOwned else it }
-                    holding.copy(subsidiaries = newSubs)
-                } else holding
+
+        // Split revenue based on Co-Production funding scheme if applicable
+        val meta = proj.coProductionMeta
+        val (creatorShare, studioShare) = if (meta != null && meta.isCoProd) {
+            when {
+                meta.fundingType.contains("Creator", ignoreCase = true) -> Pair(sellPrice, 0L)
+                meta.fundingType.contains("Studio", ignoreCase = true) -> Pair(0L, sellPrice)
+                else -> {
+                    val half = sellPrice / 2
+                    Pair(half, sellPrice - half) // 50/50 split
+                }
             }
-            _playerState.value = currentState.copy(
-                holdingCompanies = newHoldings,
-                cash = currentState.cash + sellPrice
-            )
         } else {
-            val newBusinesses = currentState.ownedBusinesses.map { if (it.instanceId == instanceId) newOwned else it }
-            _playerState.value = currentState.copy(
-                ownedBusinesses = newBusinesses,
-                cash = currentState.cash + sellPrice
-            )
+            Pair(0L, sellPrice)
         }
+        
+        val updatedBusinesses = currentState.ownedBusinesses.map { biz ->
+            when {
+                biz.instanceId == instanceId -> newOwned
+                biz.catalogId == "content_creator" && creatorShare > 0 -> {
+                    biz.copy(contentCreatorCash = biz.contentCreatorCash + creatorShare)
+                }
+                else -> biz
+            }
+        }
+
+        val updatedHoldings = if (isNested && holdingId != null) {
+            currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == holdingId) {
+                    val newSubs = holding.subsidiaries.map { sub ->
+                        when {
+                            sub.instanceId == instanceId -> newOwned
+                            sub.catalogId == "content_creator" && creatorShare > 0 -> {
+                                sub.copy(contentCreatorCash = sub.contentCreatorCash + creatorShare)
+                            }
+                            else -> sub
+                        }
+                    }
+                    holding.copy(subsidiaries = newSubs)
+                } else {
+                    holding.copy(
+                        subsidiaries = holding.subsidiaries.map { sub ->
+                            if (sub.catalogId == "content_creator" && creatorShare > 0) {
+                                sub.copy(contentCreatorCash = sub.contentCreatorCash + creatorShare)
+                            } else sub
+                        }
+                    )
+                }
+            }
+        } else {
+            currentState.holdingCompanies.map { holding ->
+                holding.copy(
+                    subsidiaries = holding.subsidiaries.map { sub ->
+                        if (sub.catalogId == "content_creator" && creatorShare > 0) {
+                            sub.copy(contentCreatorCash = sub.contentCreatorCash + creatorShare)
+                        } else sub
+                    }
+                )
+            }
+        }
+
+        _playerState.value = currentState.copy(
+            ownedBusinesses = updatedBusinesses,
+            holdingCompanies = updatedHoldings,
+            cash = currentState.cash + studioShare
+        )
         saveState(_playerState.value)
     }
 
