@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +54,8 @@ fun TvStationDashboardScreen(
     var showAddProgramModal by remember { mutableStateOf(false) }
     var showBiddingModal by remember { mutableStateOf(false) }
     var showBuildFacilityDialog by remember { mutableStateOf(false) }
+    var showQuickStaffModal by remember { mutableStateOf(false) }
+    var showQuickLicenseModal by remember { mutableStateOf(false) }
     var showEditScheduleDialog by remember { mutableStateOf<TvProgram?>(null) }
     var showRenameFacilityDialog by remember { mutableStateOf<TvStudioFacility?>(null) }
 
@@ -179,30 +184,158 @@ fun TvStationDashboardScreen(
             }
         }
 
-        // Navigation Tabs Row
-        ScrollableTabRow(
-            selectedTabIndex = selectedTab,
-            edgePadding = 16.dp,
-            modifier = Modifier.fillMaxWidth(),
-            containerColor = Color.Transparent,
-            divider = {}
+        // Horizontal Scrollable Navigation Tabs Container (No squishing, full horizontal scroll)
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .testTag("tv_navigation_tab_container"),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            tabTitles.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
+            itemsIndexed(tabTitles) { index, title ->
+                val isSelected = selectedTab == index
+                Surface(
                     onClick = { selectedTab = index },
-                    text = {
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                    shadowElevation = if (isSelected) 2.dp else 0.dp,
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .testTag("tv_tab_button_$index")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = title,
-                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 13.sp
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
-                )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // -------------------------------------------------------------
+        // DYNAMIC ACTION AREA (CALL-TO-ACTION) PER ACTIVE TAB
+        // -------------------------------------------------------------
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .testTag("tv_dynamic_cta_area")
+        ) {
+            when (selectedTab) {
+                0 -> {
+                    // TAB 0: PROGRAM SIARAN -> Tombol Besar Kuning
+                    Button(
+                        onClick = { showAddProgramModal = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("tv_cta_add_program"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFF59E0B), // Vibrant Amber / Yellow-500
+                            contentColor = Color(0xFF111827)   // High contrast dark/black text
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 6.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color(0xFF111827))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "📺 Produksi Program TV Baru",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                1 -> {
+                    // TAB 1: MANAJEMEN FASILITAS -> Tombol Biru/Teal
+                    Button(
+                        onClick = { showBuildFacilityDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("tv_cta_build_facility"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0284C7), // Sky-600 / Blue-Teal
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "🏗️ Bangun Studio Fisik Baru",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                2 -> {
+                    // TAB 2: STRUKTUR ORGANISASI -> Tombol Hijau
+                    Button(
+                        onClick = { showQuickStaffModal = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("tv_cta_recruit_staff"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF16A34A), // Green-600
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "👥 Rekrut Direksi & Staf",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                3 -> {
+                    // TAB 3: LISENSI & TRANSMISI -> Tombol Ungu
+                    Button(
+                        onClick = { showQuickLicenseModal = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("tv_cta_buy_license"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF8B5CF6), // Purple-500 / Violet
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "📡 Beli Lisensi / Transmisi",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Content per Tab
         Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -336,6 +469,54 @@ fun TvStationDashboardScreen(
                 val res = viewModel.buildTvFacility(ownedBusiness.instanceId, type, customName)
                 Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
                 if (res.first) showBuildFacilityDialog = false
+            }
+        )
+    }
+
+    // Modal Rekrut Direksi & Staf (Dynamic CTA)
+    if (showQuickStaffModal) {
+        TvQuickStaffModal(
+            ownedBusiness = ownedBusiness,
+            tvData = tvData,
+            useShortFormat = useShortFormat,
+            onDismiss = { showQuickStaffModal = false },
+            onHireDirector = { role ->
+                val res = viewModel.hireTvDirector(ownedBusiness.instanceId, role)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+            },
+            onFireDirector = { role ->
+                val res = viewModel.fireTvDirector(ownedBusiness.instanceId, role)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+            },
+            onHireCrews = { amount ->
+                val res = viewModel.hireTvCrews(ownedBusiness.instanceId, amount)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+            },
+            onLayoffCrews = { amount ->
+                val res = viewModel.layoffTvCrews(ownedBusiness.instanceId, amount)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // Modal Beli Lisensi & Transmisi (Dynamic CTA)
+    if (showQuickLicenseModal) {
+        TvQuickLicenseModal(
+            ownedBusiness = ownedBusiness,
+            tvData = tvData,
+            useShortFormat = useShortFormat,
+            onDismiss = { showQuickLicenseModal = false },
+            onAcquireDewanPers = {
+                val res = viewModel.acquireDewanPersCertification(ownedBusiness.instanceId)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+            },
+            onAcquireNationalLicense = {
+                val res = viewModel.acquireNationalBroadcastLicense(ownedBusiness.instanceId)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+            },
+            onBuildTransmission = { regionKey ->
+                val res = viewModel.buildRegionalTransmissionTower(ownedBusiness.instanceId, regionKey)
+                Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -1873,6 +2054,264 @@ fun EditTvScheduleDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+// -------------------------------------------------------------
+// MODAL REKRUT DIREKSI & KRU (DYNAMIC CTA TAB 2)
+// -------------------------------------------------------------
+@Composable
+fun TvQuickStaffModal(
+    ownedBusiness: OwnedBusiness,
+    tvData: TvStationData,
+    useShortFormat: Boolean,
+    onDismiss: () -> Unit,
+    onHireDirector: (TvDirectorRole) -> Unit,
+    onFireDirector: (TvDirectorRole) -> Unit,
+    onHireCrews: (Int) -> Unit,
+    onLayoffCrews: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Rekrutmen Direksi & Kru Staf", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    Text("1. Tambah Kru Produksi Lapangan", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Total Kru Saat Ini: ${tvData.totalCrews} Orang (Gaji: ${formatMoney(tvData.totalCrewSalaries, useShortFormat)}/bln)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            onClick = { onHireCrews(5) },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+                        ) {
+                            Text("+5 Kru ($5k)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { onHireCrews(10) },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+                        ) {
+                            Text("+10 Kru ($10k)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                item {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("2. Rekrut Direktur Program (Membuka Format)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                items(TvDirectorRole.values().toList(), key = { it.name }) { role ->
+                    val isHired = tvData.hiredDirectors.contains(role.name)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, if (isHired) Color(0xFF16A34A) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(role.displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Gaji: ${formatMoney(role.monthlySalary, useShortFormat)}/bln", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                                Text("Buka: ${role.unlockedGenres.joinToString(", ")}", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (isHired) {
+                                OutlinedButton(
+                                    onClick = { onFireDirector(role) },
+                                    modifier = Modifier.height(32.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Pecat", fontSize = 10.sp)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { onHireDirector(role) },
+                                    modifier = Modifier.height(32.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Rekrut", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Selesai")
+            }
+        }
+    )
+}
+
+// -------------------------------------------------------------
+// MODAL BELI LISENSI & TRANSMISI (DYNAMIC CTA TAB 3)
+// -------------------------------------------------------------
+@Composable
+fun TvQuickLicenseModal(
+    ownedBusiness: OwnedBusiness,
+    tvData: TvStationData,
+    useShortFormat: Boolean,
+    onDismiss: () -> Unit,
+    onAcquireDewanPers: () -> Unit,
+    onAcquireNationalLicense: () -> Unit,
+    onBuildTransmission: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Beli Lisensi & Transmisi", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text("Sertifikasi & Lisensi Regulasi", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                // Dewan Pers
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, if (tvData.dewanPersCertified) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Sertifikasi Dewan Pers", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Syarat Program Berita & Investigasi", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                            }
+                            if (tvData.dewanPersCertified) {
+                                Text("✓ Aktif", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 11.sp)
+                            } else {
+                                Button(
+                                    onClick = onAcquireDewanPers,
+                                    modifier = Modifier.height(32.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Beli ($50k)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Lisensi Nasional
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, if (tvData.nationalBroadcastLicense) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Lisensi Nasional Kominfo", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("+15% Rating Dasar Nasional", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                            }
+                            if (tvData.nationalBroadcastLicense) {
+                                Text("✓ Aktif", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 11.sp)
+                            } else {
+                                Button(
+                                    onClick = onAcquireNationalLicense,
+                                    modifier = Modifier.height(32.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Beli ($75k)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Jaringan Pemancar Transmisi Daerah", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                items(TvRegionalTransmission.values().toList(), key = { it.regionKey }) { region ->
+                    val isUnlocked = tvData.unlockedTransmissions.contains(region.regionKey)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, if (isUnlocked) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(region.displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("+${(region.adRevenueBoostPercent * 100).toInt()}% Omzet Iklan | Biaya: ${formatMoney(region.buildCost, useShortFormat)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                            }
+                            if (isUnlocked) {
+                                Text("✓ Terhubung", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50), fontSize = 11.sp)
+                            } else {
+                                Button(
+                                    onClick = { onBuildTransmission(region.regionKey) },
+                                    modifier = Modifier.height(32.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text("Bangun", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Tutup")
+            }
         }
     )
 }
