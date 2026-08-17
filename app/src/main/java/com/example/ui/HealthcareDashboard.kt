@@ -609,9 +609,7 @@ fun HealthcareUnitDetailScreen(
     var showInjectModal by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+        modifier = Modifier.fillMaxWidth()
     ) {
         // TOP BAR
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -950,7 +948,9 @@ fun InsuranceDetailSection(
     onUpdatePremium: (Double) -> Unit,
     onUpgradeTier: () -> Unit
 ) {
-    var sliderValue by remember { mutableStateOf(unit.monthlyPremium.toFloat()) }
+    var sliderValue by remember(unit.id, unit.monthlyPremium) {
+        mutableStateOf(unit.monthlyPremium.toFloat().coerceIn(20f, 500f))
+    }
 
     // TIER BADGE & UPGRADE CARD
     Card(
