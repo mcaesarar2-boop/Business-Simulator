@@ -708,6 +708,19 @@ interface BusinessEntity {
                     }
                     eventAssetsVal + hqVal
                 }
+                "media_tv" -> {
+                    val facilityVal = owned.tvStationData.facilities.sumOf { it.buildCost }
+                    val towerVal = owned.tvStationData.unlockedTransmissions.sumOf { regionKey ->
+                        try {
+                            TvRegionalTransmission.valueOf(regionKey).buildCost
+                        } catch (e: Exception) {
+                            0L
+                        }
+                    }
+                    val licenseVal = (if (owned.tvStationData.dewanPersCertified) 50000L else 0L) +
+                            (if (owned.tvStationData.nationalBroadcastLicense) 75000L else 0L)
+                    facilityVal + towerVal + licenseVal
+                }
                 else -> 0L
             }
             uCost + specializedAssets
@@ -829,6 +842,7 @@ data class OwnedBusiness(
     val constructionData: ConstructionFirmData = ConstructionFirmData(),
     val softwareHouseData: SoftwareHouseCompanyData = SoftwareHouseCompanyData(),
     val bankingData: BankingCompanyData = BankingCompanyData(),
+    val tvStationData: TvStationData = TvStationData(),
     override val ownershipPercent: Double = 100.0
 ) : BusinessEntity {
     override val id: String get() = instanceId
@@ -1041,9 +1055,9 @@ data class OwnedBusiness(
             }
             "media_tv" -> {
                 val cat = businessCatalog.find { it.id == catalogId }
-                val baseMaint = cat?.monthlyMaintenanceCost ?: 350000L
-                val staffExpenses = level * 40000L
-                baseMaint + staffExpenses
+                val baseMaint = cat?.monthlyMaintenanceCost ?: 15000L
+                val tvExpenses = tvStationData.totalMonthlyExpenses
+                baseMaint + (level * 5000L) + tvExpenses
             }
             "media_production" -> {
                 val cat = businessCatalog.find { it.id == catalogId }

@@ -3983,6 +3983,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val newIpLibraryItems = mutableListOf<com.example.data.TvProgram>()
         var tvProgHasChanges = false
         val rawActiveTvPrograms = if (currentState.activeTvPrograms != null) currentState.activeTvPrograms else emptyList()
+        val tvBiz = currentState.ownedBusinesses.find { it.catalogId == "media_tv" }
+            ?: currentState.holdingCompanies.flatMap { it.subsidiaries }.find { it.catalogId == "media_tv" }
+        val tvData = tvBiz?.tvStationData ?: com.example.data.TvStationData()
+        val towerRatingBonus = tvData.totalTransmissionRatingBonus
+        val towerRevMultiplier = tvData.totalTransmissionRevenueMultiplier
+
         val updatedTvProgs = rawActiveTvPrograms.mapNotNull { prog ->
             try {
                 if (prog.active) {
@@ -3997,10 +4003,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         "Reality Show" -> 30.0
                         "Hiburan / Musik" -> 25.0
                         "Investigasi Kriminal" -> 25.0
-                        "Berita Terkini", "Talkshow" -> 20.0
+                        "Berita Terkini", "Berita", "Talkshow" -> 20.0
                         else -> 30.0
                     }
-                    newRating = newRating.coerceIn(0.1, maxRating)
+                    val effectiveMaxRating = maxRating + towerRatingBonus
+                    newRating = newRating.coerceIn(0.1, effectiveMaxRating)
 
                     val marketTrend = 0.7 + Math.random() * 0.7
 
@@ -4017,10 +4024,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     val avgMultiplier = if (timeMuls.isNotEmpty()) timeMuls.average() else 1.0
 
-                    val newAdRev = ((prog.productionCost ?: 0.0) * (newRating / 10.0)) * marketTrend * avgMultiplier
+                    val newAdRev = ((prog.productionCost ?: 0.0) * (newRating / 10.0)) * marketTrend * avgMultiplier * towerRevMultiplier
 
                     val opsPercentage = 0.10 + Math.random() * 0.15
-                    val newOpsCost = (prog.productionCost ?: 0.0) * opsPercentage
+                    val crewOps = (prog.requiredCrews ?: 10) * tvData.crewSalaryPerPerson.toDouble()
+                    val newOpsCost = ((prog.productionCost ?: 0.0) * opsPercentage) + crewOps
 
                     val netIncome = newAdRev - newOpsCost
                     val newProfit = (prog.totalAccumulatedProfit ?: 0.0) + netIncome
@@ -9034,7 +9042,218 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         saveState(_playerState.value)
     }
 
-    fun addTvProgram(instanceId: String, title: String, type: String, productionCost: Double, isPremiumRights: Boolean = false, finalCost: Long = productionCost.toLong(), durationMonths: Int = -1, timeSlots: List<String> = emptyList()): Boolean {
+    fun updateTvStation(instanceId: String, costCompanyCash: Long = 0L, mapper: (com.example.data.TvStationData) -> com.example.data.TvStationData): Boolean {
+        val currentState = _playerState.value
+        var found = false
+        
+        val newBusinesses = currentState.ownedBusinesses.map { biz ->
+            if (biz.instanceId == instanceId) {
+                if (biz.companyCash < costCompanyCash) return false
+                found = true
+                val newTvData = mapper(biz.tvStationData)
+                biz.copy(
+                    companyCash = biz.companyCash - costCompanyCash,
+                    tvStationData = newTvData
+                )
+            } else biz
+        }
+        
+        if (found) {
+            _playerState.value = syncTvValuation(currentState.copy(ownedBusinesses = newBusinesses))
+            saveState(_playerState.value)
+            return true
+        }
+        
+        val newHoldings = currentState.holdingCompanies.map { holding ->
+            val newSubs = holding.subsidiaries.map { biz ->
+                if (biz.instanceId == instanceId) {
+                    if (biz.companyCash < costCompanyCash) return false
+                    found = true
+                    val newTvData = mapper(biz.tvStationData)
+                    biz.copy(
+                        companyCash = biz.companyCash - costCompanyCash,
+                        tvStationData = newTvData
+                    )
+                } else biz
+            }
+            holding.copy(subsidiaries = newSubs)
+        }
+        
+        if (found) {
+            _playerState.value = syncTvValuation(currentState.copy(holdingCompanies = newHoldings))
+            saveState(_playerState.value)
+            return true
+        }
+        return false
+    }
+
+    fun buildTvFacility(instanceId: String, type: com.example.data.TvFacilityType, customName: String): Pair<Boolean, String> {
+        val facilityName = customName.trim().ifEmpty { type.displayName }
+        val newFacility = com.example.data.TvStudioFacility(
+            name = facilityName,
+            type = type
+        )
+        val success = updateTvStation(instanceId, costCompanyCash = type.buildCost) { currentData ->
+            currentData.copy(facilities = currentData.facilities + newFacility)
+        }
+        return if (success) {
+            Pair(true, "Berhasil membangun ${newFacility.name} (${type.buildCost})")
+        } else {
+            Pair(false, "Kas internal stasiun TV tidak mencukupi untuk biaya pembangunan (${type.buildCost})")
+        }
+    }
+
+    fun demolishTvFacility(instanceId: String, facilityId: String): Pair<Boolean, String> {
+        val currentState = _playerState.value
+        val activeProg = currentState.activeTvPrograms.find { it.active && it.assignedStudioId == facilityId }
+        if (activeProg != null) {
+            return Pair(false, "Tidak bisa membongkar fasilitas! Studio ini sedang digunakan oleh program aktif '${activeProg.title}'.")
+        }
+        val success = updateTvStation(instanceId, costCompanyCash = 0L) { currentData ->
+            currentData.copy(facilities = currentData.facilities.filter { it.id != facilityId })
+        }
+        return if (success) Pair(true, "Fasilitas studio berhasil dibongkar.") else Pair(false, "Gagal membongkar studio.")
+    }
+
+    fun renameTvFacility(instanceId: String, facilityId: String, newName: String): Pair<Boolean, String> {
+        if (newName.isBlank()) return Pair(false, "Nama studio tidak boleh kosong.")
+        val success = updateTvStation(instanceId, costCompanyCash = 0L) { currentData ->
+            currentData.copy(facilities = currentData.facilities.map { 
+                if (it.id == facilityId) it.copy(name = newName.trim()) else it 
+            })
+        }
+        return if (success) Pair(true, "Nama studio berhasil diperbarui.") else Pair(false, "Gagal mengubah nama.")
+    }
+
+    fun hireTvDirector(instanceId: String, role: com.example.data.TvDirectorRole): Pair<Boolean, String> {
+        val success = updateTvStation(instanceId, costCompanyCash = 0L) { currentData ->
+            currentData.copy(hiredDirectors = currentData.hiredDirectors + role.name)
+        }
+        return if (success) Pair(true, "Berhasil merekrut ${role.displayName}!") else Pair(false, "Gagal merekrut direktur.")
+    }
+
+    fun fireTvDirector(instanceId: String, role: com.example.data.TvDirectorRole): Pair<Boolean, String> {
+        val currentState = _playerState.value
+        val reliantProgs = currentState.activeTvPrograms.filter { it.active && com.example.data.getRequiredDirectorRole(it.type) == role }
+        if (reliantProgs.isNotEmpty()) {
+            val names = reliantProgs.take(2).joinToString { it.title }
+            return Pair(false, "Tidak bisa memberhentikan direktur! Program aktif ($names) masih berjalan di bawah divisinya.")
+        }
+        val success = updateTvStation(instanceId, costCompanyCash = 0L) { currentData ->
+            currentData.copy(hiredDirectors = currentData.hiredDirectors - role.name)
+        }
+        return if (success) Pair(true, "${role.displayName} berhasil diberhentikan.") else Pair(false, "Gagal memberhentikan direktur.")
+    }
+
+    fun hireTvCrews(instanceId: String, amount: Int): Pair<Boolean, String> {
+        if (amount <= 0) return Pair(false, "Jumlah kru tidak valid.")
+        val hiringCost = amount * 1_000L
+        val success = updateTvStation(instanceId, costCompanyCash = hiringCost) { currentData ->
+            currentData.copy(totalCrews = currentData.totalCrews + amount)
+        }
+        return if (success) {
+            Pair(true, "Berhasil merekrut $amount kru produksi baru (Biaya rekrut: $hiringCost).")
+        } else {
+            Pair(false, "Kas internal tidak cukup untuk biaya perekrutan kru ($hiringCost).")
+        }
+    }
+
+    fun layoffTvCrews(instanceId: String, amount: Int): Pair<Boolean, String> {
+        val currentState = _playerState.value
+        var biz = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+        if (biz == null) {
+            for (h in currentState.holdingCompanies) {
+                biz = h.subsidiaries.find { it.instanceId == instanceId }
+                if (biz != null) break
+            }
+        }
+        val currentCrews = biz?.tvStationData?.totalCrews ?: 0
+        val usedCrews = currentState.activeTvPrograms.filter { it.active }.sumOf { it.requiredCrews }
+        if (currentCrews - amount < usedCrews) {
+            return Pair(false, "Tidak bisa memangkas kru! Minimal $usedCrews kru masih bertugas di program aktif.")
+        }
+        if (currentCrews - amount < 5) {
+            return Pair(false, "Stasiun TV wajib mempertahankan minimal 5 kru operasional.")
+        }
+        val success = updateTvStation(instanceId, costCompanyCash = 0L) { currentData ->
+            currentData.copy(totalCrews = maxOf(5, currentData.totalCrews - amount))
+        }
+        return if (success) Pair(true, "Berhasil merampingkan $amount kru operasional.") else Pair(false, "Gagal merampingkan kru.")
+    }
+
+    fun acquireDewanPersCertification(instanceId: String): Pair<Boolean, String> {
+        val certCost = 50_000L
+        val currentState = _playerState.value
+        var biz = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+        if (biz == null) {
+            for (h in currentState.holdingCompanies) {
+                biz = h.subsidiaries.find { it.instanceId == instanceId }
+                if (biz != null) break
+            }
+        }
+        val tvData = biz?.tvStationData ?: com.example.data.TvStationData()
+        if (tvData.reputation < 50.0) {
+            return Pair(false, "Reputasi stasiun TV minimal 50.0 untuk Sertifikasi Dewan Pers (Saat ini: ${tvData.reputation.toInt()}).")
+        }
+        val hasNewsroom = tvData.facilities.any { it.type == com.example.data.TvFacilityType.NEWSROOM }
+        if (!hasNewsroom) {
+            return Pair(false, "Wajib memiliki minimal 1 fasilitas 'Newsroom & Studio Berita'!")
+        }
+        val success = updateTvStation(instanceId, costCompanyCash = certCost) { currentData ->
+            currentData.copy(
+                dewanPersCertified = true,
+                reputation = currentData.reputation + 10.0
+            )
+        }
+        return if (success) Pair(true, "Selamat! Stasiun TV resmi tersertifikasi Dewan Pers.") else Pair(false, "Kas internal tidak cukup ($certCost).")
+    }
+
+    fun acquireNationalBroadcastLicense(instanceId: String): Pair<Boolean, String> {
+        val licenseCost = 75_000L
+        val currentState = _playerState.value
+        var biz = currentState.ownedBusinesses.find { it.instanceId == instanceId }
+        if (biz == null) {
+            for (h in currentState.holdingCompanies) {
+                biz = h.subsidiaries.find { it.instanceId == instanceId }
+                if (biz != null) break
+            }
+        }
+        if ((biz?.level ?: 1) < 2) {
+            return Pair(false, "Stasiun TV harus minimal Level 2 untuk Lisensi Penyiaran Nasional!")
+        }
+        val success = updateTvStation(instanceId, costCompanyCash = licenseCost) { currentData ->
+            currentData.copy(nationalBroadcastLicense = true)
+        }
+        return if (success) Pair(true, "Lisensi Penyiaran Terestrial Nasional Resmi Terbit!") else Pair(false, "Kas internal tidak cukup ($licenseCost).")
+    }
+
+    fun buildRegionalTransmissionTower(instanceId: String, regionKey: String): Pair<Boolean, String> {
+        val region = try {
+            com.example.data.TvRegionalTransmission.valueOf(regionKey)
+        } catch (e: Exception) {
+            return Pair(false, "Wilayah transmisi tidak ditemukan.")
+        }
+        val success = updateTvStation(instanceId, costCompanyCash = region.buildCost) { currentData ->
+            currentData.copy(unlockedTransmissions = currentData.unlockedTransmissions + regionKey)
+        }
+        return if (success) {
+            Pair(true, "Berhasil membangun ${region.displayName}! Jangkauan +${region.populationCoverage}.")
+        } else {
+            Pair(false, "Kas internal tidak cukup untuk pembangunan menara ini (${region.buildCost}).")
+        }
+    }
+
+    fun addTvProgramWithDetails(
+        instanceId: String,
+        title: String,
+        type: String,
+        productionCost: Double,
+        isPremiumRights: Boolean = false,
+        finalCost: Long = productionCost.toLong(),
+        durationMonths: Int = -1,
+        timeSlots: List<String> = emptyList(),
+        assignedStudioId: String? = null
+    ): Pair<Boolean, String> {
         val currentState = _playerState.value
         
         var owned = currentState.ownedBusinesses.find { it.instanceId == instanceId }
@@ -9046,78 +9265,164 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (owned != null) { isNested = true; holdingId = holding.instanceId; break }
             }
         }
-        if (owned == null) return false
+        if (owned == null) return Pair(false, "Unit bisnis TV tidak ditemukan.")
         
-        if (currentState.activeTvPrograms.any { it.title.equals(title, ignoreCase = true) } || 
-            currentState.ipLibraryHistory.any { it.title.equals(title, ignoreCase = true) }) {
-            return false // duplicate
+        if (title.isBlank()) return Pair(false, "Judul program tidak boleh kosong.")
+        if (timeSlots.isEmpty()) return Pair(false, "Pilih minimal 1 slot jam tayang!")
+
+        if (currentState.activeTvPrograms.any { it.title.equals(title.trim(), ignoreCase = true) } || 
+            currentState.ipLibraryHistory.any { it.title.equals(title.trim(), ignoreCase = true) }) {
+            return Pair(false, "Judul program '$title' sudah pernah digunakan.")
         }
 
-        if (owned.companyCash >= finalCost) {
-            val rating = if (isPremiumRights) {
-                80.0 + (Math.random() * 15.0) // 80 - 95%
-            } else {
-                when (type) {
-                    "Pencarian Bakat (Talent Show)" -> 40.0 + (Math.random() * 40.0) // 40 - 80% (High risk high reward)
-                    "Investigasi Kriminal" -> Math.random() * 20.0 // 0 - 20%
-                    "Sinetron" -> 10.0 + (Math.random() * 30.0) // 10 - 40%
-                    "Reality Show" -> 5.0 + (Math.random() * 40.0)
-                    else -> Math.random() * 40.0 // 0 - 40%
-                }
+        if (owned.companyCash < finalCost) {
+            return Pair(false, "Kas internal stasiun TV tidak mencukupi ($finalCost dibutuhkan).")
+        }
+
+        val tvData = owned.tvStationData
+
+        // 1. Director requirement check
+        if (!isPremiumRights) {
+            val reqDirector = com.example.data.getRequiredDirectorRole(type)
+            if (reqDirector != null && !tvData.hiredDirectors.contains(reqDirector.name)) {
+                return Pair(false, "Wajib merekrut ${reqDirector.displayName} (${reqDirector.titleRole}) di tab Struktur Organisasi!")
             }
+
+            // 2. Dewan Pers certification check
+            if (com.example.data.isDewanPersRequired(type) && !tvData.dewanPersCertified) {
+                return Pair(false, "Wajib memiliki Sertifikasi Dewan Pers di tab Lisensi & Transmisi untuk program Berita / Investigasi!")
+            }
+
+            // 3. Physical Studio check
+            if (assignedStudioId == null) {
+                return Pair(false, "Pilih Studio Fisik yang tersedia untuk memproduksi program ini!")
+            }
+            val studio = tvData.facilities.find { it.id == assignedStudioId }
+                ?: return Pair(false, "Studio yang dipilih tidak ditemukan.")
+
+            val compatTypes = com.example.data.getCompatibleStudioTypes(type)
+            if (!compatTypes.contains(studio.type)) {
+                return Pair(false, "Studio '${studio.name}' (${studio.type.displayName}) tidak kompatibel untuk genre $type!")
+            }
+
+            // Schedule clash check on the same studio
+            val clashProg = currentState.activeTvPrograms.find { prog ->
+                prog.active && prog.assignedStudioId == assignedStudioId && prog.timeSlots.any { slot -> timeSlots.contains(slot) }
+            }
+            if (clashProg != null) {
+                return Pair(false, "Jadwal Bentrok! Studio '${studio.name}' sudah digunakan oleh '${clashProg.title}' pada jam tersebut.")
+            }
+
+            // 4. Crew requirement check
+            val reqCrews = com.example.data.getRequiredCrewsForProgram(type)
+            val usedCrews = currentState.activeTvPrograms.filter { it.active }.sumOf { it.requiredCrews }
+            if (usedCrews + reqCrews > tvData.totalCrews) {
+                val availableCrews = maxOf(0, tvData.totalCrews - usedCrews)
+                return Pair(false, "Kru produksi tidak cukup! Butuh $reqCrews kru (Tersedia: $availableCrews kru standby). Rekrut kru di tab Struktur Organisasi.")
+            }
+
+            // 5. Broadcast simultaneous program capacity
+            val activeCount = currentState.activeTvPrograms.count { it.active }
+            if (activeCount >= tvData.maxSimultaneousPrograms) {
+                return Pair(false, "Kapasitas transmisi penuh! Bangun Master Control Room tambahan di tab Manajemen Fasilitas.")
+            }
+        }
+
+        val baseRating = if (isPremiumRights) {
+            80.0 + (Math.random() * 15.0) // 80 - 95%
+        } else {
+            when (type) {
+                "Pencarian Bakat (Talent Show)" -> 40.0 + (Math.random() * 40.0)
+                "Investigasi Kriminal" -> 20.0 + (Math.random() * 20.0)
+                "Sinetron" -> 25.0 + (Math.random() * 35.0)
+                "Reality Show" -> 20.0 + (Math.random() * 40.0)
+                "Berita" -> 25.0 + (Math.random() * 25.0)
+                else -> 15.0 + (Math.random() * 35.0)
+            }
+        }
+
+        val effectiveRating = (baseRating + tvData.totalTransmissionRatingBonus).coerceIn(1.0, 99.0)
+        
+        val timeMuls = timeSlots.map { slot ->
+            val hour = slot.substringBefore(":").toIntOrNull() ?: 12
+            val isHalfHour = slot.substringAfter(":") == "30"
+            val minutes = hour * 60 + (if (isHalfHour) 30 else 0)
             
-            // Calculate initial average multiplier from time slots
-            val timeMuls = timeSlots.map { slot ->
-                val hour = slot.substringBefore(":").toInt()
-                val isHalfHour = slot.substringAfter(":") == "30"
-                val minutes = hour * 60 + (if (isHalfHour) 30 else 0)
-                
-                if (minutes in 6 * 60..11 * 60 + 30) 1.0
-                else if (minutes in 12 * 60..17 * 60 + 30) 0.6
-                else if (minutes in 18 * 60..22 * 60 + 30) 2.5
-                else 0.3
+            if (minutes in 6 * 60..11 * 60 + 30) 1.0
+            else if (minutes in 12 * 60..17 * 60 + 30) 0.6
+            else if (minutes in 18 * 60..22 * 60 + 30) 2.5
+            else 0.3
+        }
+        val avgMultiplier = if (timeMuls.isNotEmpty()) timeMuls.average() else 1.0
+
+        val adRevenue = (productionCost * (effectiveRating / 10.0)) * avgMultiplier * tvData.totalTransmissionRevenueMultiplier
+
+        val selectedStudio = tvData.facilities.find { it.id == assignedStudioId }
+        val reqCrews = if (isPremiumRights) 10 else com.example.data.getRequiredCrewsForProgram(type)
+
+        val newProgram = com.example.data.TvProgram(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title.trim(),
+            type = type,
+            productionCost = productionCost,
+            monthlyAdRevenue = adRevenue,
+            rating = effectiveRating,
+            active = true,
+            remainingMonths = durationMonths,
+            timeSlots = timeSlots,
+            assignedStudioId = assignedStudioId,
+            assignedStudioName = selectedStudio?.name,
+            requiredCrews = reqCrews
+        )
+        val newList = currentState.activeTvPrograms + newProgram
+        
+        val newOwned = owned.copy(companyCash = owned.companyCash - finalCost)
+
+        if (isNested && holdingId != null) {
+            val newHoldings = currentState.holdingCompanies.map { holding ->
+                if (holding.instanceId == holdingId) {
+                    holding.copy(subsidiaries = holding.subsidiaries.map { if (it.instanceId == instanceId) newOwned else it })
+                } else holding
             }
-            val avgMultiplier = if (timeMuls.isNotEmpty()) timeMuls.average() else 1.0
-
-            val adRevenue = (productionCost * (rating / 10.0)) * avgMultiplier
-
-            val newProgram = com.example.data.TvProgram(
-                id = java.util.UUID.randomUUID().toString(),
-                title = title,
-                type = type,
-                productionCost = productionCost,
-                monthlyAdRevenue = adRevenue,
-                rating = rating,
-                active = true,
-                remainingMonths = durationMonths,
-                timeSlots = timeSlots
+            _playerState.value = currentState.copy(
+                activeTvPrograms = newList,
+                holdingCompanies = newHoldings
             )
-            val newList = currentState.activeTvPrograms + newProgram
-            
-            val newOwned = owned.copy(companyCash = owned.companyCash - finalCost)
-
-            if (isNested && holdingId != null) {
-                val newHoldings = currentState.holdingCompanies.map { holding ->
-                    if (holding.instanceId == holdingId) {
-                        holding.copy(subsidiaries = holding.subsidiaries.map { if (it.instanceId == instanceId) newOwned else it })
-                    } else holding
-                }
-                _playerState.value = currentState.copy(
-                    activeTvPrograms = newList,
-                    holdingCompanies = newHoldings
-                )
-            } else {
-                _playerState.value = currentState.copy(
-                    activeTvPrograms = newList,
-                    ownedBusinesses = currentState.ownedBusinesses.map { if (it.instanceId == instanceId) newOwned else it }
-                )
-            }
-
-            _playerState.value = syncTvValuation(_playerState.value)
-            saveState(_playerState.value)
-            return true
+        } else {
+            _playerState.value = currentState.copy(
+                activeTvPrograms = newList,
+                ownedBusinesses = currentState.ownedBusinesses.map { if (it.instanceId == instanceId) newOwned else it }
+            )
         }
-        return false
+
+        _playerState.value = syncTvValuation(_playerState.value)
+        saveState(_playerState.value)
+        return Pair(true, "Program '$title' berhasil mengudara!")
+    }
+
+    fun addTvProgram(
+        instanceId: String,
+        title: String,
+        type: String,
+        productionCost: Double,
+        isPremiumRights: Boolean = false,
+        finalCost: Long = productionCost.toLong(),
+        durationMonths: Int = -1,
+        timeSlots: List<String> = emptyList(),
+        assignedStudioId: String? = null
+    ): Boolean {
+        val result = addTvProgramWithDetails(
+            instanceId = instanceId,
+            title = title,
+            type = type,
+            productionCost = productionCost,
+            isPremiumRights = isPremiumRights,
+            finalCost = finalCost,
+            durationMonths = durationMonths,
+            timeSlots = timeSlots,
+            assignedStudioId = assignedStudioId
+        )
+        return result.first
     }
 
     fun cancelTvProgram(programId: String) {

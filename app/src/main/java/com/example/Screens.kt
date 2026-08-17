@@ -1763,32 +1763,13 @@ fun BusinessDetailScreen(navController: NavHostController, viewModel: GameViewMo
         }
 
         if (catalogItem.category == BusinessCategory.ENTERTAINMENT && catalogItem.id == "media_tv") {
-            com.example.ui.TvStationDashboard(
-                activePrograms = playerState.activeTvPrograms,
-                playerCash = ownedData.companyCash.toLong(),
+            com.example.ui.TvStationDashboardScreen(
+                ownedBusiness = ownedData,
+                playerState = playerState,
                 useShortFormat = useShortFormat,
-                inGameYear = playerState.inGameYear,
-                businessLevel = ownedData.level,
-                bookedTimeSlots = viewModel.getBookedTimeSlots(),
-                onAddProgram = { title, type, cost, isPremium, finalCost, duration, timeSlots ->
-                    viewModel.addTvProgram(instanceId, title, type, cost, isPremium, finalCost, duration, timeSlots)
-                },
-                onCancelProgram = { progId ->
-                    viewModel.cancelTvProgram(progId)
-                },
-                onEditSchedule = { progId, newSlots ->
-                    viewModel.updateTvProgramSchedule(progId, newSlots)
-                }
+                viewModel = viewModel,
+                navController = navController
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { navController.navigate("tv_ip_library") },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-            ) {
-                Text("📺 Buka Gudang IP & Histori Program", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
         }
 
         if (catalogItem.id == "upper_tech") {

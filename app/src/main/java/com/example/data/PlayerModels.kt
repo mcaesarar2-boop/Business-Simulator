@@ -30,7 +30,10 @@ data class TvProgram(
     val monthsAired: Int = 0,
     val currentOperationalCost: Double = productionCost * 0.15,
     val previousRating: Double = rating,
-    val timeSlots: List<String> = emptyList()
+    val timeSlots: List<String> = emptyList(),
+    val assignedStudioId: String? = null,
+    val assignedStudioName: String? = null,
+    val requiredCrews: Int = 10
 )
 
 data class TimeDeposit(
